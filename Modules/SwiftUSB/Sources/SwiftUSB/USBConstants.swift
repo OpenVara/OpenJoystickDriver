@@ -76,7 +76,7 @@ public enum USBConstants {
     case transferTypeMask = 0x03
   }
 
-  /// bmRequestType type field values (bits 5–6).
+  /// bmRequestType type field values (bits 5-6).
   public enum ControlRequestType: UInt8 {
     case standard = 0x00
     case classType = 0x20
@@ -84,7 +84,7 @@ public enum USBConstants {
     case reserved = 0x60
   }
 
-  /// bmRequestType recipient field values (bits 0–4).
+  /// bmRequestType recipient field values (bits 0-4).
   public enum ControlRecipient: UInt8 {
     case device = 0
     case interface = 1
