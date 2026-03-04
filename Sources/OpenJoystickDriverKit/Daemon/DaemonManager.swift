@@ -68,6 +68,9 @@ public enum DaemonManager: Sendable {
   }
 
   private static func makePlist(daemonPath: String) -> String {
+    // MachServices must be declared so launchd allows NSXPCListener to register
+    // service. Without this entry, launchd kills process with SIGKILL
+    // exactly when NSXPCListener.resume() is called.
     """
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -80,6 +83,11 @@ public enum DaemonManager: Sendable {
       <array>
         <string>\(daemonPath)</string>
       </array>
+      <key>MachServices</key>
+      <dict>
+        <key>\(xpcServiceName)</key>
+        <true/>
+      </dict>
       <key>KeepAlive</key>
       <true/>
       <key>RunAtLoad</key>
