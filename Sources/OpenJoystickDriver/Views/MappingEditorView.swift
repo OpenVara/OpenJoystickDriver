@@ -18,20 +18,73 @@ struct MappingEditorView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      mappingList
+      ScrollView {
+        VStack(alignment: .leading, spacing: 16) {
+          mappingCard(
+            title: "Face Buttons",
+            systemImage: "circle.grid.2x2",
+            buttons: [.a, .b, .x, .y]
+          )
+          mappingCard(
+            title: "Shoulders",
+            systemImage: "l1.rectangle.roundedbottom",
+            buttons: [.leftBumper, .rightBumper]
+          )
+          mappingCard(
+            title: "System",
+            systemImage: "ellipsis.circle",
+            buttons: [.start, .back, .guide]
+          )
+          mappingCard(
+            title: "D-Pad",
+            systemImage: "dpad",
+            buttons: [.dpadUp, .dpadDown, .dpadLeft, .dpadRight]
+          )
+          axesCard
+        }
+        .padding()
+      }
       errorBanner
       Divider()
       resetBar
-    }.onAppear { profile = defaultProfile }
+    }
+    .onAppear { profile = defaultProfile }
   }
 
-  private var mappingList: some View {
-    List {
-      mappingSection(title: "Face Buttons", buttons: [.a, .b, .x, .y])
-      mappingSection(title: "Shoulders", buttons: [.leftBumper, .rightBumper])
-      mappingSection(title: "System", buttons: [.start, .back, .guide])
-      mappingSection(title: "D-Pad", buttons: [.dpadUp, .dpadDown, .dpadLeft, .dpadRight])
-      axesSection
+  private func mappingCard(
+    title: String,
+    systemImage: String,
+    buttons: [OpenJoystickDriverKit.Button]
+  ) -> some View {
+    GroupBox {
+      VStack(spacing: 0) {
+        ForEach(Array(buttons.enumerated()), id: \.element) { index, button in
+          if index > 0 { Divider() }
+          KeyCaptureRow(
+            label: button.displayName,
+            keyCode: currentProfile.buttonMappings[button.rawValue] ?? 0
+          ) { code in updateMapping(button: button, keyCode: code) }
+          .padding(.vertical, 4)
+        }
+      }
+    } label: {
+      Label(title, systemImage: systemImage)
+        .fontWeight(.semibold)
+    }
+  }
+
+  private var axesCard: some View {
+    GroupBox {
+      VStack(spacing: 0) {
+        deadzoneSlider
+        Divider()
+        mouseSensitivitySlider
+        Divider()
+        scrollSensitivitySlider
+      }
+    } label: {
+      Label("Axes", systemImage: "dial.medium")
+        .fontWeight(.semibold)
     }
   }
 
@@ -46,14 +99,6 @@ struct MappingEditorView: View {
     }
   }
 
-  private var axesSection: some View {
-    Section("Axes") {
-      deadzoneSlider
-      mouseSensitivitySlider
-      scrollSensitivitySlider
-    }
-  }
-
   private var deadzoneSlider: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text("Stick Deadzone: " + String(format: "%.2f", currentProfile.stickDeadzone))
@@ -65,6 +110,7 @@ struct MappingEditorView: View {
         in: 0...0.5
       )
     }
+    .padding(.vertical, 4)
   }
 
   private var mouseSensitivitySlider: some View {
@@ -78,6 +124,7 @@ struct MappingEditorView: View {
         in: 1...20
       )
     }
+    .padding(.vertical, 4)
   }
 
   private var scrollSensitivitySlider: some View {
@@ -91,17 +138,7 @@ struct MappingEditorView: View {
         in: 1...10
       )
     }
-  }
-
-  private func mappingSection(title: String, buttons: [OpenJoystickDriverKit.Button]) -> some View {
-    Section(title) {
-      ForEach(buttons, id: \.self) { button in
-        KeyCaptureRow(
-          label: button.displayName,
-          keyCode: currentProfile.buttonMappings[button.rawValue] ?? 0
-        ) { code in updateMapping(button: button, keyCode: code) }
-      }
-    }
+    .padding(.vertical, 4)
   }
 
   private func updateMapping(button: OpenJoystickDriverKit.Button, keyCode: UInt16) {

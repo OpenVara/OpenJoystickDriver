@@ -6,27 +6,55 @@ struct SidebarView: View {
 
   var body: some View {
     List(selection: $selection) {
-      Section("Devices") {
+      Section {
         if model.devices.isEmpty {
-          Text("No controllers connected").foregroundStyle(.secondary).font(.caption)
+          Text("No controllers connected")
+            .foregroundStyle(.secondary)
+            .font(.caption)
         } else {
           ForEach(model.devices) { device in
-            Label(device.name, systemImage: "gamecontroller.fill").tag(SidebarItem.device(device))
+            deviceRow(device)
+              .tag(SidebarItem.device(device))
           }
         }
+      } header: {
+        Label("Devices", systemImage: "gamecontroller")
+          .font(.caption)
+          .fontWeight(.semibold)
+          .foregroundStyle(.secondary)
       }
-      Section("System") {
-        Label("Permissions", systemImage: "lock.shield.fill").tag(SidebarItem.permissions)
-        Label("Diagnostics", systemImage: "stethoscope").tag(SidebarItem.diagnostics)
+      Section {
+        Label("Permissions", systemImage: "lock.shield.fill")
+          .tag(SidebarItem.permissions)
+        Label("Diagnostics", systemImage: "stethoscope")
+          .tag(SidebarItem.diagnostics)
+      } header: {
+        Label("System", systemImage: "gearshape")
+          .font(.caption)
+          .fontWeight(.semibold)
+          .foregroundStyle(.secondary)
       }
-    }.toolbar {
-      ToolbarItem(placement: .automatic) {
-        HStack(spacing: 4) {
-          StatusBadge(status: model.daemonConnected ? .ok : .error)
-          Text(model.daemonConnected ? "Daemon" : "No Daemon").font(.caption).foregroundStyle(
-            .secondary
+    }
+    .listStyle(.sidebar)
+  }
+
+  private func deviceRow(_ device: DeviceViewModel) -> some View {
+    HStack(spacing: 8) {
+      Image(systemName: protocolIcon(for: device.parser))
+        .foregroundStyle(protocolColor(for: device.parser))
+        .imageScale(.medium)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(device.name)
+          .lineLimit(1)
+        Text(device.parser)
+          .font(.caption2)
+          .padding(.horizontal, 5)
+          .padding(.vertical, 1)
+          .background(
+            protocolColor(for: device.parser).opacity(0.15)
           )
-        }
+          .foregroundStyle(protocolColor(for: device.parser))
+          .clipShape(Capsule())
       }
     }
   }

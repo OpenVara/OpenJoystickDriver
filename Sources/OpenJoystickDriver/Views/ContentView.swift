@@ -16,7 +16,12 @@ struct ContentView: View {
       SidebarView(selection: $selection)
     } detail: {
       detailView
-    }.navigationSplitViewStyle(.balanced)
+    }.safeAreaInset(edge: .bottom, spacing: 0) {
+      VStack(spacing: 0) {
+        Divider()
+        StatusFooter().environmentObject(model)
+      }
+    }
   }
 
   @ViewBuilder private var detailView: some View {
@@ -24,7 +29,7 @@ struct ContentView: View {
     case .device(let device): DeviceDetailView(device: device)
     case .permissions: PermissionsView()
     case .diagnostics: DiagnosticsView()
-    case nil: Text("Select item").foregroundStyle(.secondary)
+    case nil: Text("Select any item").foregroundStyle(.secondary)
     }
   }
 }
