@@ -1,6 +1,10 @@
 import CLibUSB
 import Foundation
 
+/// Describes one alternate setting of a USB interface (USB spec section 9.6.5).
+///
+/// Obtained from a ``USBConfigurationDescriptor``. Use ``endpoints()`` to list
+/// the endpoints available on this interface.
 public struct USBInterface: Sendable {
   public let bLength: UInt8
   public let bDescriptorType: UInt8
@@ -15,6 +19,7 @@ public struct USBInterface: Sendable {
 
   private var cachedEndpoints: [USBEndpoint]?
 
+  /// Creates an interface from a raw libusb descriptor pointer.
   public init(descriptor: UnsafePointer<libusb_interface_descriptor>) {
     self.bLength = descriptor.pointee.bLength
     self.bDescriptorType = descriptor.pointee.bDescriptorType
@@ -50,11 +55,13 @@ public struct USBInterface: Sendable {
     cachedEndpoints = endpoints
   }
 
+  /// Returns all endpoints for this interface, or an empty array when none are available.
   public func endpoints() -> [USBEndpoint] {
     if let endpoints = cachedEndpoints { return endpoints }
     return []
   }
 
+  /// Returns the endpoint at the given index, or nil when the index is out of range.
   public func endpoint(at index: Int) -> USBEndpoint? {
     guard index >= 0, index < Int(bNumEndpoints) else { return nil }
 
@@ -62,6 +69,7 @@ public struct USBInterface: Sendable {
     return nil
   }
 
+  /// Activates this alternate setting on the given device handle.
   public func setAltSetting(on handle: USBDeviceHandle) throws {
     try handle.setInterfaceAltSetting(
       interface: Int(bInterfaceNumber),
@@ -69,6 +77,7 @@ public struct USBInterface: Sendable {
     )
   }
 
+  /// Returns a short single-line description (e.g. `"INTERFACE 0: Human Interface Device"`).
   public func interfaceDescription() -> String {
     var result = "INTERFACE \(bInterfaceNumber)"
 
@@ -92,6 +101,7 @@ public struct USBInterface: Sendable {
     0xEF: "Miscellaneous", 0xFE: "Application Specific", 0xFF: "Vendor Specific",
   ]
 
+  /// Returns a multi-line formatted description with all USB descriptor field values.
   public func detailedDescription() -> String {
     var result = ""
 

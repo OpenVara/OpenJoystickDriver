@@ -1,6 +1,12 @@
 import CoreGraphics
 
+/// Built-in button and axis mapping used when no saved profile exists for a device.
+///
+/// These values are applied by ``Profile/makeDefault(for:)`` and serve as a
+/// fallback inside ``Profile/keyCode(for:)``.
 public enum DefaultMapping {
+  /// Maps each ``Button`` to a macOS virtual key code.
+  /// Unmapped buttons produce no key event.
   public static let buttonKeyCodes: [Button: CGKeyCode] = [
     .a: 36,  // Return
     .b: 53,  // Escape
@@ -15,7 +21,10 @@ public enum DefaultMapping {
     .square: 49, .triangle: 48, .l1: 33, .r1: 30, .share: 120, .options: 122,
   ]
 
+  /// Minimum stick deflection (0...1) before any output is produced.
   public static let stickDeadzone: Float = 0.15
+  /// Multiplier applied to left-stick input when moving the mouse cursor.
   public static let stickMouseSensitivity: Float = 8.0
+  /// Multiplier applied to right-stick input when scrolling.
   public static let stickScrollSensitivity: Float = 3.0
 }

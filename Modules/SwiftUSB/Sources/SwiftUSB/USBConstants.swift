@@ -1,5 +1,8 @@
 import Foundation
 
+/// USB specification constants organized by category.
+///
+/// All values match the USB 2.0/3.x specification.
 public enum USBConstants {
   public static let usbVersion: UInt16 = 0x0200
   // swiftlint:disable:next identifier_name
@@ -7,6 +10,7 @@ public enum USBConstants {
   // swiftlint:disable:next identifier_name
   public static let usbVersion3_1: UInt16 = 0x0310
 
+  /// Standard USB descriptor type codes (USB spec table 9-5).
   public enum DescriptorType: UInt8 {
     case device = 0x01
     case configuration = 0x02
@@ -24,6 +28,7 @@ public enum USBConstants {
     case superspeedIsoEndpointCompanion = 0x31
   }
 
+  /// USB 2.0 descriptor type codes (subset of ``DescriptorType``).
   public enum LegacyDescriptorType: UInt8 {
     case device = 0x01
     case configuration = 0x02
@@ -32,14 +37,17 @@ public enum USBConstants {
     case endpoint = 0x05
   }
 
+  /// HID class descriptor type codes (HID spec section 7.1).
   public enum HIDDescriptorType: UInt8 {
     case hid = 0x21
     case report = 0x22
     case physical = 0x23
   }
 
+  /// Hub class descriptor type code.
   public enum HubDescriptorType: UInt8 { case hub = 0x29 }
 
+  /// Endpoint address direction bit (bit 7 of bEndpointAddress).
   public enum EndpointDirection: UInt8 {
     case out = 0x00
     case inDirection = 0x80
@@ -53,6 +61,7 @@ public enum USBConstants {
     }
   }
 
+  /// Endpoint transfer type (low 2 bits of bmAttributes).
   public enum EndpointTransferType: UInt8 {
     case control = 0x00
     case isochronous = 0x01
@@ -60,12 +69,14 @@ public enum USBConstants {
     case interrupt = 0x03
   }
 
+  /// Bit masks for extracting fields from endpoint address and attribute bytes.
   public enum EndpointMask: UInt8 {
     case addressMask = 0x0F
     case directionMask = 0x80
     case transferTypeMask = 0x03
   }
 
+  /// bmRequestType type field values (bits 5–6).
   public enum ControlRequestType: UInt8 {
     case standard = 0x00
     case classType = 0x20
@@ -73,6 +84,7 @@ public enum USBConstants {
     case reserved = 0x60
   }
 
+  /// bmRequestType recipient field values (bits 0–4).
   public enum ControlRecipient: UInt8 {
     case device = 0
     case interface = 1
@@ -80,17 +92,20 @@ public enum USBConstants {
     case other = 3
   }
 
+  /// bmRequestType direction bit (bit 7).
   public enum ControlDirection: UInt8 {
     case out = 0x00
     case inDirection = 0x80
   }
 
+  /// Builds a bmRequestType byte from its three component fields.
   public static func makeRequestType(
     direction: ControlDirection,
     type: ControlRequestType,
     recipient: ControlRecipient
   ) -> UInt8 { direction.rawValue | type.rawValue | recipient.rawValue }
 
+  /// Standard USB feature selector values for ClearFeature/SetFeature requests.
   public enum FeatureSelector: UInt8 {
     case endpointHalt = 0
     case deviceRemoteWakeup = 1
@@ -100,6 +115,7 @@ public enum USBConstants {
     case ltmEnable = 50
   }
 
+  /// USB device class codes (USB spec table 3-1).
   public enum DeviceClass: UInt8 {
     case audio = 1
     case communications = 2
@@ -119,6 +135,7 @@ public enum USBConstants {
     case vendorSpecific = 0xFF
   }
 
+  /// Standard USB request codes (USB spec table 9-5).
   public enum StandardRequest: UInt8 {
     case getStatus = 0
     case clearFeature = 1
@@ -135,6 +152,7 @@ public enum USBConstants {
     case synchFrame = 12
   }
 
+  /// bmRequestType recipient values (USB spec table 9-3).
   public enum RequestRecipient: UInt8 {
     case device = 0
     case interface = 1
@@ -142,6 +160,7 @@ public enum USBConstants {
     case other = 3
   }
 
+  /// bmRequestType type values (USB spec table 9-3).
   public enum RequestType: UInt8 {
     case standard = 0
     case classType = 32
@@ -149,13 +168,19 @@ public enum USBConstants {
     case reserved = 96
   }
 
+  /// Implementation-defined limits for USB descriptor structures.
   public enum Limits {
+    /// Maximum number of alternate settings per interface.
     public static let maxAlternateSetting: Int = 128
+    /// Maximum number of configurations per device.
     public static let maxConfiguration: Int = 8
+    /// Maximum number of endpoints per device.
     public static let maxEndpoints: Int = 32
+    /// Maximum number of interfaces per configuration.
     public static let maxInterfaces: Int = 32
   }
 
+  /// USB bus speed values.
   public enum USBSpeed: UInt8 {
     case lowSpeed = 1
     case fullSpeed = 2

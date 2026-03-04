@@ -28,6 +28,10 @@ private final class AtomicFlag: @unchecked Sendable {
   }
 }
 
+/// Entry point for finding and opening USB devices via libusb.
+///
+/// Create one context per process. A background thread runs the libusb
+/// event loop for the lifetime of the context and is stopped cleanly on dealloc.
 public final class USBContext: @unchecked Sendable {
   private let context: OpaquePointer
   private let eventQueue: DispatchQueue
@@ -36,6 +40,8 @@ public final class USBContext: @unchecked Sendable {
 
   private static let TIMEOUT = -7
 
+  /// Creates a libusb context and starts the internal event loop.
+  /// Throws ``USBError`` when libusb cannot be initialized.
   public init() throws {
     var ctx: OpaquePointer?
     let result = libusb_init(&ctx)
@@ -72,6 +78,10 @@ public final class USBContext: @unchecked Sendable {
     }
   }
 
+  /// Returns an async stream of USB devices that match the given filters.
+  ///
+  /// All filters are optional — omit them to match every connected device.
+  /// Set `findAll` to false to stop the stream after the first match.
   public func findDevices(
     vendorId: UInt16? = nil,
     productId: UInt16? = nil,
@@ -113,6 +123,8 @@ public final class USBContext: @unchecked Sendable {
     }
   }
 
+  /// Returns the first connected device with the given vendor and product ID,
+  /// or nil when no matching device is found.
   public func findDevice(vendorId: UInt16, productId: UInt16) async -> USBDevice? {
     var found: USBDevice?
     for await device in findDevices(vendorId: vendorId, productId: productId, findAll: false) {

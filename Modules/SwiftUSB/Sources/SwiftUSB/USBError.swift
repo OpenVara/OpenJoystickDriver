@@ -1,6 +1,11 @@
 import CLibUSB
 import Foundation
 
+/// A libusb error wrapped as a Swift error.
+///
+/// Use the `is*` boolean properties (e.g. ``isTimeout``, ``isNoDevice``) to check
+/// the kind of failure without matching on the numeric ``code``.
+/// The static ``check(_:)`` helpers throw on negative libusb return values.
 public struct USBError: Error, Sendable {
   public static let success: Int32 = 0
   public static let errorIO: Int32 = -1
@@ -17,8 +22,11 @@ public struct USBError: Error, Sendable {
   public static let errorNotSupported: Int32 = -12
   public static let errorOther: Int32 = -99
 
+  /// The raw libusb error code. Negative values indicate failure.
   public let code: Int32
+  /// Human-readable description of the error.
   public let message: String
+  /// Optional context string added by the caller to aid debugging.
   public let context: String?
 
   public var isSuccess: Bool { code == Self.success }
@@ -101,13 +109,16 @@ public struct USBError: Error, Sendable {
     }
   }
 
+  /// Throws `self` when `result` is negative. No-op on success.
   public static func check(_ result: Int32) throws { if result < 0 { throw Self(code: result) } }
 
+  /// Throws `self` with `context` when `result` is negative. Returns `result` on success.
   @discardableResult public static func check(_ result: Int32, context: String) throws -> Int32 {
     if result < 0 { throw Self(code: result, context: context) }
     return result
   }
 
+  /// Throws when `result` is anything other than zero (strict success check).
   public static func checkSuccess(_ result: Int32, context: String = "") throws {
     if result != success {
       guard context.isEmpty else { throw Self(code: result, context: context) }
@@ -116,7 +127,11 @@ public struct USBError: Error, Sendable {
   }
 }
 
+/// A timeout-specific error wrapping a ``USBError``.
+///
+/// Useful when you want to catch only timeout failures separately from other USB errors.
 public struct USBTimeoutError: Error, Sendable {
+  /// The original ``USBError`` with the timeout code.
   public let underlyingError: USBError
 
   public init(underlyingError: USBError) { self.underlyingError = underlyingError }

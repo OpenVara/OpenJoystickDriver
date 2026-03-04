@@ -1,13 +1,17 @@
-// Sources/OpenJoystickDriverKit/HID/HIDDeviceStream.swift
-
 import Foundation
 import IOKit
 import IOKit.hid
 
+/// Watches for HID-class game controllers using Apple's IOKit HID framework.
+///
+/// Creates an `AsyncStream` of device connect, disconnect, and input report
+/// events. IOKit delivers callbacks on the main run loop, and this class
+/// forwards them into the stream for safe async consumption.
 public final class HIDDeviceStream: @unchecked Sendable {
   private let manager: IOHIDManager
   private var continuation: AsyncStream<HIDDeviceEvent>.Continuation?
 
+  /// Creates a new stream that matches HID gamepad devices.
   public init() {
     manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
     let matching: [String: Any] = [
@@ -16,6 +20,10 @@ public final class HIDDeviceStream: @unchecked Sendable {
     IOHIDManagerSetDeviceMatching(manager, matching as CFDictionary)
   }
 
+  /// Returns a live stream of HID device events (connect, disconnect, input report).
+  ///
+  /// Only one stream can be active at a time. The stream ends when its
+  /// consuming task is cancelled.
   public func deviceEvents() -> AsyncStream<HIDDeviceEvent> {
     AsyncStream { continuation in
       self.continuation = continuation
@@ -26,6 +34,8 @@ public final class HIDDeviceStream: @unchecked Sendable {
 
   // MARK: - Callback registration
 
+  /// Registers IOKit callbacks for device matching, removal, and input reports,
+  /// then opens the HID manager on the main run loop.
   private func registerCallbacks() {
     let context = Unmanaged.passUnretained(self).toOpaque()
     IOHIDManagerRegisterDeviceMatchingCallback(manager, Self.matchingCallback, context)
@@ -36,6 +46,8 @@ public final class HIDDeviceStream: @unchecked Sendable {
     IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
   }
 
+  /// Unschedules the HID manager from the run loop, closes it, and finishes
+  /// the async stream.
   private func cleanup() {
     IOHIDManagerUnscheduleFromRunLoop(
       manager,
@@ -49,6 +61,7 @@ public final class HIDDeviceStream: @unchecked Sendable {
 
   // MARK: - Event handlers
 
+  /// Reads device properties and yields a `.connected` event into the stream.
   private func handleDeviceAdded(_ device: IOHIDDevice) {
     let vid = deviceProperty(device, kIOHIDVendorIDKey)
     let pid = deviceProperty(device, kIOHIDProductIDKey)
@@ -66,6 +79,7 @@ public final class HIDDeviceStream: @unchecked Sendable {
     )
   }
 
+  /// Yields a `.disconnected` event when IOKit reports a device removal.
   private func handleDeviceRemoved(_ device: IOHIDDevice) {
     let vid = deviceProperty(device, kIOHIDVendorIDKey)
     let pid = deviceProperty(device, kIOHIDProductIDKey)
@@ -79,6 +93,7 @@ public final class HIDDeviceStream: @unchecked Sendable {
     )
   }
 
+  /// Copies raw report bytes and yields an `.inputReport` event.
   private func handleInputReport(
     locationID: UInt32,
     report: UnsafePointer<UInt8>,
@@ -88,6 +103,7 @@ public final class HIDDeviceStream: @unchecked Sendable {
     continuation?.yield(.inputReport(locationID: locationID, data: data))
   }
 
+  /// Reads an integer property from an IOKit HID device. Returns 0 if missing.
   private func deviceProperty(_ device: IOHIDDevice, _ key: String) -> Int {
     IOHIDDeviceGetProperty(device, key as CFString) as? Int ?? 0
   }

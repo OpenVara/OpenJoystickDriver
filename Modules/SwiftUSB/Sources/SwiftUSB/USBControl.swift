@@ -1,11 +1,16 @@
 import Foundation
 
+/// The target of a USB control transfer.
 public enum USBControlRecipient {
+  /// The whole device.
   case device
+  /// One interface on the device.
   case interface
+  /// One endpoint on the device.
   case endpoint
 }
 
+/// Static helpers for sending standard USB control transfers (USB spec section 9.4).
 public enum USBControl {
   public static let endpointHalt: UInt16 = 0
   public static let deviceRemoteWakeup: UInt16 = 1

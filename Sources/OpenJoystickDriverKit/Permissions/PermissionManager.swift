@@ -6,13 +6,18 @@ import IOKit.hid
 private let permissionPollNanoseconds: UInt64 = 1_000_000_000
 
 /// Manages Input Monitoring and Accessibility permission
-/// state for  daemon.
+/// state for the daemon.
 public actor PermissionManager {
+  /// The three possible states for a macOS permission.
   public enum AccessState: Sendable, Equatable {
+    /// The user has allowed access.
     case granted
+    /// The user has denied access, or the system rejected the request.
     case denied
+    /// The permission has not been checked yet in this session.
     case unknown
 
+    /// A short status tag suitable for log output or CLI display.
     public var label: String {
       switch self {
       case .granted: return "[OK]"
@@ -22,7 +27,9 @@ public actor PermissionManager {
     }
   }
 
+  /// Current state of the Input Monitoring permission. Updated by ``startPolling()`` and ``requestAccess()``.
   public private(set) var inputMonitoringState: AccessState = .unknown
+  /// Current state of the Accessibility permission. Updated by ``startPolling()`` and ``checkAccessibilityState()``.
   public private(set) var accessibilityState: AccessState = .unknown
   private var pollingTask: Task<Void, Never>?
 
@@ -72,6 +79,7 @@ public actor PermissionManager {
     }
   }
 
+  /// Stops the background polling task started by ``startPolling()``.
   public func stopPolling() {
     pollingTask?.cancel()
     pollingTask = nil

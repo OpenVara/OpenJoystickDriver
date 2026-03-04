@@ -16,6 +16,8 @@ extension USBDeviceHandle {
 }
 
 extension USBDeviceHandle {
+  /// Sends bytes to an OUT endpoint via an interrupt transfer.
+  /// Returns the number of bytes actually transferred.
   public func interruptTransfer(endpoint: UInt8, data: [UInt8], timeout: UInt32 = kDefaultTimeout)
     throws -> Int
   {
@@ -38,6 +40,8 @@ extension USBDeviceHandle {
     return Int(transferred)
   }
 
+  /// Reads up to `length` bytes from an IN endpoint via an interrupt transfer.
+  /// Returns only the bytes actually received (may be fewer than `length`).
   public func readInterrupt(endpoint: UInt8, length: Int, timeout: UInt32 = kDefaultTimeout) throws
     -> [UInt8]
   {

@@ -49,6 +49,7 @@ extension USBDeviceHandle {
   }
 }
 
+/// USB bmRequestType bit masks for control transfers (direction and transfer type).
 public enum USBRequestType {}
 
 extension USBRequestType {
@@ -64,6 +65,7 @@ extension USBRequestType {
   public static let other: UInt8 = 0x03
 }
 
+/// Standard USB bRequest codes for control transfers (USB spec table 9-5).
 public enum USBRequest {}
 
 extension USBRequest {
@@ -80,6 +82,7 @@ extension USBRequest {
   public static let synchFrame: UInt8 = 0x0C
 }
 
+/// USB descriptor type codes (USB spec table 9-5).
 public enum USBDescriptorType {}
 
 extension USBDescriptorType {

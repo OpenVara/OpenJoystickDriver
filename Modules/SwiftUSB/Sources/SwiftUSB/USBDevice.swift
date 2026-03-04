@@ -1,6 +1,11 @@
 import CLibUSB
 import Foundation
 
+/// A USB device discovered by ``USBContext``.
+///
+/// Exposes the raw USB descriptor fields (USB spec names, e.g. `idVendor`, `bDeviceClass`)
+/// plus methods for opening the device, reading string descriptors, and querying driver state.
+/// Call ``open()`` to get a ``USBDeviceHandle`` for sending and receiving data.
 public final class USBDevice: @unchecked Sendable {
   let device: OpaquePointer
   public let bLength: UInt8
@@ -68,6 +73,8 @@ public final class USBDevice: @unchecked Sendable {
     return nil
   }
 
+  /// Opens the device and returns a handle for transfers.
+  /// Throws ``USBError`` when the OS denies access or the device cannot be opened.
   public func open() throws -> USBDeviceHandle {
     var handle: OpaquePointer?
     let result = libusb_open(device, &handle)
@@ -76,6 +83,8 @@ public final class USBDevice: @unchecked Sendable {
     return USBDeviceHandle(handle: h)
   }
 
+  /// Opens the device and detaches any kernel driver from interface 0, then returns a handle.
+  /// Use this when the OS has a built-in driver loaded for the device (e.g. HID class).
   public func openWithCapture() throws -> USBDeviceHandle {
     var handle: OpaquePointer?
     let result = libusb_open(device, &handle)
@@ -87,6 +96,7 @@ public final class USBDevice: @unchecked Sendable {
     return handleObj
   }
 
+  /// Returns true when the OS kernel has a driver loaded for the given interface number.
   public func isKernelDriverActive(interface: Int) throws -> Bool {
     var handle: OpaquePointer?
     let openResult = libusb_open(device, &handle)
@@ -101,6 +111,7 @@ public final class USBDevice: @unchecked Sendable {
     return result == 1
   }
 
+  /// Resets the device on the USB bus. All open handles become invalid after a reset.
   public func reset() throws {
     var handle: OpaquePointer?
     let openResult = libusb_open(device, &handle)
@@ -112,6 +123,7 @@ public final class USBDevice: @unchecked Sendable {
     try USBError.check(result)
   }
 
+  /// Clears a halt/stall condition on the given endpoint address.
   public func clearHalt(endpoint: UInt8) throws {
     var handle: OpaquePointer?
     let openResult = libusb_open(device, &handle)
@@ -123,6 +135,8 @@ public final class USBDevice: @unchecked Sendable {
     try USBError.check(result)
   }
 
+  /// Reads a string descriptor by its index number.
+  /// Pass nil for `langID` to use ASCII encoding (no language selection).
   public func getStringDescriptor(index: Int, langID: UInt16? = nil) throws -> String {
     var handle: OpaquePointer?
     let openResult = libusb_open(device, &handle)
@@ -144,21 +158,28 @@ public final class USBDevice: @unchecked Sendable {
     throw USBError(message: "Failed to decode string descriptor")
   }
 
+  /// Reads the manufacturer name string from the device.
+  /// Throws when the device has no manufacturer string descriptor.
   public func getManufacturer() throws -> String {
     guard iManufacturer > 0 else { throw USBError(message: "No manufacturer string descriptor") }
     return try getStringDescriptor(index: Int(iManufacturer))
   }
 
+  /// Reads the product name string from the device.
+  /// Throws when the device has no product string descriptor.
   public func getProduct() throws -> String {
     guard iProduct > 0 else { throw USBError(message: "No product string descriptor") }
     return try getStringDescriptor(index: Int(iProduct))
   }
 
+  /// Reads the serial number string from the device.
+  /// Throws when the device has no serial number string descriptor.
   public func getSerialNumber() throws -> String {
     guard iSerialNumber > 0 else { throw USBError(message: "No serial number string descriptor") }
     return try getStringDescriptor(index: Int(iSerialNumber))
   }
 
+  /// Returns the index of the currently active USB configuration.
   public func getActiveConfiguration() throws -> Int {
     var handle: OpaquePointer?
     let openResult = libusb_open(device, &handle)
@@ -172,6 +193,7 @@ public final class USBDevice: @unchecked Sendable {
     return Int(configuration)
   }
 
+  /// Reads the configuration descriptor at the given index (0-based).
   public func getConfigurationDescriptor(index: Int) throws -> USBConfigurationDescriptor {
     var handle: OpaquePointer?
     let openResult = libusb_open(device, &handle)
@@ -243,12 +265,19 @@ public final class USBDevice: @unchecked Sendable {
   deinit { cachedHandle = nil }
 }
 
+/// USB bus speed reported by libusb.
 public enum USBSpeed {
+  /// Speed is not known.
   case unknown
+  /// USB 1.0 Low Speed (1.5 Mbps).
   case low
+  /// USB 1.1 Full Speed (12 Mbps).
   case full
+  /// USB 2.0 High Speed (480 Mbps).
   case high
+  /// USB 3.0 Super Speed (5 Gbps).
   case superSpeed
+  /// USB 3.1 Super Speed+ (10 Gbps).
   case superSpeedPlus
 
   init(_ libusbSpeed: Int32) {
@@ -284,6 +313,8 @@ public enum USBSpeed {
   }
 }
 
+/// A parsed USB configuration descriptor (USB spec section 9.6.3).
+/// Returned by ``USBDevice/getConfigurationDescriptor(index:)``.
 public struct USBConfigurationDescriptor: @unchecked Sendable {
   let descriptor: libusb_config_descriptor
 
@@ -307,6 +338,8 @@ public struct USBConfigurationDescriptor: @unchecked Sendable {
 }
 
 extension USBDevice {
+  /// Returns all connected USB devices matching the given filters.
+  /// Creates a temporary ``USBContext`` internally; prefer a shared context for repeated calls.
   public static func findAll(
     vendorId: UInt16? = nil,
     productId: UInt16? = nil,
@@ -323,6 +356,8 @@ extension USBDevice {
     return devices
   }
 
+  /// Returns the first connected USB device matching the given filters, or nil.
+  /// Creates a temporary ``USBContext`` internally; prefer a shared context for repeated calls.
   public static func find(
     vendorId: UInt16? = nil,
     productId: UInt16? = nil,

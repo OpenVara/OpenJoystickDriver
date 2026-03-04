@@ -1,19 +1,27 @@
 import CLibUSB
 import Foundation
 
+/// Namespace for low-level USB utility helpers.
+/// Most callers should use ``USBDevice`` and ``USBDeviceHandle`` instead.
 public enum USBUtil {}
 
+/// The minimum fields shared by all USB descriptors.
 public protocol USBDescriptor {
+  /// Total size of this descriptor in bytes.
   var bLength: UInt8 { get }
+  /// Descriptor type code (e.g. `0x01` = device, `0x04` = interface).
   var bDescriptorType: UInt8 { get }
 }
 
+/// Returns the endpoint number from a raw endpoint address byte (low 4 bits).
 public func endpointAddress(_ address: UInt8) -> Int { Int(address & 0x0F) }
 
+/// Returns the data flow direction encoded in an endpoint address byte.
 public func endpointDirection(_ address: UInt8) -> USBConstants.EndpointDirection {
   (address & 0x80) != 0 ? .inDirection : .out
 }
 
+/// Returns the transfer type encoded in an endpoint bmAttributes byte.
 public func endpointType(_ attributes: UInt8) -> USBConstants.EndpointTransferType {
   switch attributes & 0x03 {
   case 0x00: return .control
@@ -27,16 +35,19 @@ public func endpointType(_ attributes: UInt8) -> USBConstants.EndpointTransferTy
   default: return .control
   }
 }
+/// Returns the control transfer direction from a bmRequestType byte.
 public func controlDirection(_ requestType: UInt8) -> USBConstants.ControlDirection {
   (requestType & 0x80) != 0 ? .inDirection : .out
 }
 
+/// Builds a bmRequestType byte from its three component fields.
 public func buildRequestType(
   direction: USBConstants.ControlDirection,
   type: USBConstants.ControlRequestType,
   recipient: USBConstants.ControlRecipient
 ) -> UInt8 { recipient.rawValue | type.rawValue | direction.rawValue }
 
+/// Returns the first descriptor in `container` that satisfies `criteria`, or nil.
 public func findDescriptor<T: USBDescriptor>(
   in container: any Sequence<T>,
   matching criteria: (T) -> Bool
@@ -45,6 +56,7 @@ public func findDescriptor<T: USBDescriptor>(
   return nil
 }
 
+/// Returns the language IDs the device supports for string descriptors.
 public func getLanguageIDs(from device: USBDevice) throws -> [UInt16] {
   let handle = try openDeviceHandle(for: device)
   defer { libusb_close(handle) }
@@ -116,6 +128,8 @@ private func validateDescriptor(_ buffer: [UInt8], transferResult: Int) -> Bool 
   return true
 }
 
+/// Reads a string descriptor by index. Returns nil when the index is 0 or decoding fails.
+/// Pass `nil` for `languageID` to use the first language the device supports.
 public func getString(from device: USBDevice, index: Int, languageID: UInt16? = nil) throws
   -> String?
 {
@@ -210,12 +224,15 @@ private func decodeUTF16String(from buffer: [UInt8]) throws -> String? {
   return str
 }
 
+/// Reads a string descriptor using the first language the device supports.
 public func getString(from device: USBDevice, index: Int) throws -> String? {
   try getString(from: device, index: index, languageID: nil)
 }
 
+/// Allocates a zeroed byte buffer of the given length.
 public func createBuffer(length: Int) -> [UInt8] { [UInt8](repeating: 0, count: length) }
 
+/// Releases all claimed interfaces on a handle without closing it.
 public func disposeResources(for handle: USBDeviceHandle) {
   for interface in handle.claimedInterfaces {
     let result = libusb_release_interface(handle.handle, Int32(interface))
@@ -226,16 +243,21 @@ public func disposeResources(for handle: USBDeviceHandle) {
   handle.claimedInterfaces.removeAll()
 }
 
+/// Returns the direction bit from an endpoint address byte (raw, not typed).
 public func legacyEndpointDirection(_ address: UInt8) -> UInt8 { address & 0x80 }
 
+/// Returns the transfer type bits from a bmAttributes byte (raw, not typed).
 public func legacyEndpointType(_ attributes: UInt8) -> UInt8 { attributes & 0x03 }
 
+/// Returns the direction bit from a bmRequestType byte (raw, not typed).
 public func legacyControlDirection(_ requestType: UInt8) -> UInt8 { requestType & 0x80 }
 
+/// Builds a bmRequestType byte from raw component bytes.
 public func legacyBuildRequestType(direction: UInt8, type: UInt8, recipient: UInt8) -> UInt8 {
   recipient | type | direction
 }
 
+/// Reads extra descriptor data from raw memory immediately following a USB descriptor struct.
 public func extractExtraDescriptors(from descriptor: UnsafeRawPointer) -> Data? {
   let extraLength = descriptor.load(fromByteOffset: 0, as: Int32.self)
   guard extraLength > 0 else { return nil }
@@ -246,12 +268,14 @@ public func extractExtraDescriptors(from descriptor: UnsafeRawPointer) -> Data? 
   return Data(bytes: extraPointer, count: Int(extraLength))
 }
 
+/// Reads extra descriptor data from a (length, pointer) pair stored in a libusb descriptor struct.
 public func extractExtraDescriptors(from info: (Int32, UnsafePointer<UInt8>?)) -> Data? {
   let (extraLength, extraPointer) = info
   guard extraLength > 0, let pointer = extraPointer else { return nil }
   return Data(bytes: pointer, count: Int(extraLength))
 }
 
+/// Sends bulk data to an OUT endpoint. Returns the number of bytes written.
 public func bulkWrite(
   on handle: OpaquePointer,
   to endpoint: UInt8,
@@ -279,6 +303,7 @@ public func bulkWrite(
   return Int(transferred)
 }
 
+/// Reads bulk data from an IN endpoint. Returns only the bytes actually received.
 public func bulkRead(
   on handle: OpaquePointer,
   from endpoint: UInt8,
@@ -299,6 +324,7 @@ public func bulkRead(
   return Data(buffer[0..<Int(transferred)])
 }
 
+/// Opens a device handle, runs `operation` with it, then closes the handle automatically.
 public func withDeviceHandle<T>(for device: OpaquePointer, _ operation: (OpaquePointer) throws -> T)
   throws -> T
 {
