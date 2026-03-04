@@ -5,8 +5,8 @@ import OpenJoystickDriverKit
 import SwiftUI
 
 private enum WindowMetrics {
-  static let size = NSSize(width: 900, height: 580)
-  static let minSize = NSSize(width: 700, height: 480)
+  static let size = NSSize(width: 820, height: 520)
+  static let minSize = NSSize(width: 660, height: 440)
 }
 
 /// Application delegate: sets up menu bar icon and manages main window.
@@ -14,7 +14,9 @@ private enum WindowMetrics {
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
   private var statusItem: NSStatusItem?
   private var mainWindow: NSWindow?
-  private(set) var model = AppModel()
+  private(set) var model: AppModel
+
+  init(developerMode: Bool = false) { self.model = AppModel(developerMode: developerMode) }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.accessory)
