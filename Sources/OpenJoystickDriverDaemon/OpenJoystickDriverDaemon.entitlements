@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Daemon must not be sandboxed to access USB and inject CGEvents -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+
+    <!-- Allows IOKit USB device access (class 0xFF / vendor-specific) -->
+    <!-- without running as root. Requires Developer ID signing.       -->
+    <key>com.apple.security.device.usb</key>
+    <true/>
+
+    <!-- Allows loading third-party signed dylibs such as libusb from  -->
+    <!-- Homebrew, which carries Homebrew's certificate, not ours.     -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>

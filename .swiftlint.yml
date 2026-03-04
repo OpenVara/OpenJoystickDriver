@@ -1,0 +1,177 @@
+disabled_rules:
+  # Disable purely cosmetic, non-Google length/complexity metrics
+  - attributes
+  - closure_parameter_position
+  - cyclomatic_complexity
+  - file_length
+  - function_body_length
+  - type_body_length
+  - nesting
+  - identifier_name
+  - opening_brace
+  - type_name
+  - function_parameter_count
+  - large_tuple
+
+  # Disable rules that contradict Google Style Guide
+  - explicit_acl
+  - explicit_top_level_acl
+  - explicit_self
+  - vertical_parameter_alignment # Google strictly forbids horizontal alignment
+  - pattern_matching_keywords # SwiftLint prefers "case let", Google explicitly forbids it
+  - fallthrough # Google allows fallthrough if block is not empty; SwiftLint forbids it completely
+  - todo
+  - file_header
+
+opt_in_rules:
+  - array_init
+  - async_without_await
+  - attributes
+  - closure_end_indentation
+  - closure_spacing
+  - collection_alignment
+  - compiler_protocol_init
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - contains_over_range_nil_comparison
+  - convenience_type
+  - direct_return
+  - discarded_notification_center_observer
+  - duplicate_imports
+  - empty_collection_literal
+  - empty_count
+  - empty_string
+  - empty_xctest_method
+  - explicit_init
+  - fatal_error_message
+  - first_where
+  - flatmap_over_map_reduce
+  - force_unwrapping
+  - identical_operands
+  - implicit_return
+  - implicitly_unwrapped_optional
+  - incompatible_concurrency_annotation
+  - joined_default_parameter
+  - last_where
+  - legacy_multiple
+  - legacy_objc_type
+  - legacy_random
+  - local_doc_comment
+  - lower_acl_than_parent
+  - modifier_order
+  - multiline_arguments
+  - multiline_parameters
+  - operator_usage_whitespace
+  - overridden_super_call
+  - override_in_extension
+  - prefer_self_in_static_references
+  - prefer_self_type_over_type_of_self
+  - prefer_zero_over_explicit_init
+  - private_action
+  - private_outlet
+  - prohibited_super_call
+  - reduce_into
+  - redundant_nil_coalescing
+  - redundant_type_annotation
+  - redundant_void_return
+  - return_value_from_void_function
+  - self_binding
+  - shorthand_optional_binding
+  - sorted_first_last
+  - sorted_imports
+  - static_operator
+  - strict_fileprivate
+  - superfluous_else
+  - switch_case_alignment
+  - toggle_bool
+  - trailing_closure
+  - trailing_comma
+  - unavailable_function
+  - unhandled_throwing_task
+  - unneeded_parentheses_in_closure_argument
+  - unowned_variable_capture
+  - weak_delegate
+  - yoda_condition
+
+analyzer_rules:
+  - capture_variable
+  - unused_declaration
+  - unused_import
+
+# Google enforces rigid 100-character line limit
+line_length:
+  warning: 100
+  error: 100
+  ignores_comments: true
+  ignores_urls: true
+
+# Google enforces trailing commas on multi-line elements
+trailing_comma:
+  mandatory_comma: true
+
+# Google requires cases to NOT be indented relative to their switch statements
+switch_case_alignment:
+  indented_cases: false
+
+force_try:
+  severity: error
+force_cast:
+  severity: error
+force_unwrapping:
+  severity: error
+implicitly_unwrapped_optional:
+  severity: error
+
+unused_declaration:
+  severity: error
+unused_import:
+  severity: error
+
+trailing_whitespace:
+  severity: error
+  ignores_empty_lines: false
+
+# Google permits multiple blank lines but doesn't encourage them.
+# Capped to 2 to prevent messy files, but kept as a warning to avoid being overly cosmetic.
+vertical_whitespace:
+  severity: warning
+  max_empty_lines: 2
+
+comma:
+  severity: error
+
+colon:
+  severity: error
+  apply_to_dictionaries: false
+
+statement_position:
+  statement_mode: default
+
+overridden_super_call:
+  severity: error
+
+private_action:
+  severity: error
+
+private_outlet:
+  severity: error
+
+implicit_getter:
+  severity: error
+
+last_where:
+  severity: warning
+
+first_where:
+  severity: warning
+
+empty_count:
+  severity: error
+
+excluded:
+  - .build
+  - .swiftpm
+  - "**/Generated"
+
+reporter: "xcode"

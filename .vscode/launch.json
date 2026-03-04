@@ -1,0 +1,44 @@
+{
+	"configurations": [
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:OpenJoystickDriver}",
+			"name": "Debug OpenJoystickDriverDaemon",
+			"target": "OpenJoystickDriverDaemon",
+			"configuration": "debug",
+			"preLaunchTask": "swift: Build Debug OpenJoystickDriverDaemon"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:OpenJoystickDriver}",
+			"name": "Release OpenJoystickDriverDaemon",
+			"target": "OpenJoystickDriverDaemon",
+			"configuration": "release",
+			"preLaunchTask": "swift: Build Release OpenJoystickDriverDaemon"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:OpenJoystickDriver}",
+			"name": "Debug OpenJoystickDriver",
+			"target": "OpenJoystickDriver",
+			"configuration": "debug",
+			"preLaunchTask": "swift: Build Debug OpenJoystickDriver"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:OpenJoystickDriver}",
+			"name": "Release OpenJoystickDriver",
+			"target": "OpenJoystickDriver",
+			"configuration": "release",
+			"preLaunchTask": "swift: Build Release OpenJoystickDriver"
+		}
+	]
+}

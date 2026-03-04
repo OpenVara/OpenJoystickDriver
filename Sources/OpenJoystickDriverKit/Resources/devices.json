@@ -1,0 +1,30 @@
+{
+	"$schema": "../../../../Resources/Schemas/devices.schema.json",
+	"version": "1.0.0",
+	"devices": [
+		{
+			"vendor_id": 13623,
+			"product_id": 4112,
+			"name": "GameSir-G7 SE Controller for Xbox",
+			"short_name": "G7SE",
+			"parser": "GIP",
+			"usb_class": 255
+		},
+		{
+			"vendor_id": 1356,
+			"product_id": 1476,
+			"name": "DualShock 4 v1",
+			"short_name": "DS4v1",
+			"parser": "DS4",
+			"usb_class": 3
+		},
+		{
+			"vendor_id": 1356,
+			"product_id": 2508,
+			"name": "DualShock 4 v2",
+			"short_name": "DS4v2",
+			"parser": "DS4",
+			"usb_class": 3
+		}
+	]
+}
