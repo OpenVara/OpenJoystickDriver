@@ -12,11 +12,12 @@ struct ProfileCommand {
     switch sub {
     case "list": listProfiles(store: store)
     case "show": showProfile(store: store, args: Array(args.dropFirst()))
+    case "set": setMapping(store: store, args: Array(args.dropFirst()))
     case "reset": resetProfile(store: store, args: Array(args.dropFirst()))
     default:
       print("Unknown profile subcommand: \(sub)")
       print(
-        "Usage: OpenJoystickDriver --headless" + " profile [list|show VID:PID|reset VID:PID]"
+        "Usage: OpenJoystickDriver --headless" + " profile [list|show VID:PID|set VID:PID BUTTON KEYCODE|reset VID:PID]"
       )
     }
   }
@@ -53,7 +54,37 @@ struct ProfileCommand {
       print("  Scroll sens: " + "\(profile.stickScrollSensitivity)")
       print("  Button mappings:")
       let sorted = profile.buttonMappings.sorted { $0.key < $1.key }
-      for (btn, kc) in sorted { print("    \(btn) -> keyCode \(kc)") }
+      for (key, kc) in sorted {
+        let buttonLabel = Button(rawValue: key)?.displayName ?? key
+        let keyLabel = KeyNames.name(for: kc)
+        print("    \(buttonLabel) -> \(keyLabel) (\(kc))")
+      }
+    }
+  }
+
+  private func setMapping(store: ProfileStore, args: [String]) {
+    guard args.count == 3,
+      let (vid, pid) = parseVidPid(args[0]),
+      let button = resolveButton(args[1]),
+      let keyCode = resolveKeyCode(args[2])
+    else {
+      print(
+        "Usage: profile set VID:PID BUTTON KEYCODE"
+          + "  (e.g. profile set 13623:4112 a 36)"
+      )
+      print("  BUTTON: a, b, x, y, start, back, guide, lb, rb, dpadup, dpaddown, dpadleft, dpadright")
+      print("  KEYCODE: numeric (e.g. 36) or key name (e.g. return, escape, space)")
+      return
+    }
+    let identifier = DeviceIdentifier(vendorID: vid, productID: pid)
+    runSync {
+      do {
+        var profile = await store.profile(for: identifier)
+        profile.buttonMappings[button.rawValue] = keyCode
+        try await store.save(profile)
+        let keyLabel = KeyNames.name(for: keyCode)
+        print("Set \(button.displayName) -> \(keyLabel) (\(keyCode)) for \(args[0])")
+      } catch { print("Failed to save profile: \(error)") }
     }
   }
 
@@ -77,5 +108,26 @@ struct ProfileCommand {
       return nil
     }
     return (vid, pid)
+  }
+
+  private func resolveButton(_ input: String) -> Button? {
+    let lower = input.lowercased()
+    let aliases: [String: Button] = [
+      "lb": .leftBumper, "rb": .rightBumper,
+      "lsb": .leftStick, "rsb": .rightStick,
+      "dpadup": .dpadUp, "dpaddown": .dpadDown,
+      "dpadleft": .dpadLeft, "dpadright": .dpadRight,
+    ]
+    if let aliased = aliases[lower] { return aliased }
+    return Button.allCases.first { $0.rawValue.lowercased() == lower }
+  }
+
+  private func resolveKeyCode(_ input: String) -> UInt16? {
+    if let numeric = UInt16(input) { return numeric }
+    let lower = input.lowercased()
+    for (code, name) in KeyNames.lookup {
+      if name.lowercased().hasPrefix(lower) { return code }
+    }
+    return nil
   }
 }
