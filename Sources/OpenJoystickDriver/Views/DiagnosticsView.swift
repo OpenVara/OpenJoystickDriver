@@ -4,34 +4,35 @@ import SwiftUI
 struct DiagnosticsView: View {
   @EnvironmentObject var model: AppModel
   @State private var showTips = false
-  @State private var managingDaemon = false
+  @State private var daemonAction: String?
+  @State private var showUninstallConfirm = false
 
   private let daemonLogPath = "/tmp/com.openjoystickdriver.daemon.out"
 
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 16) {
-        systemCard
-        daemonLifecycleCard
-        permissionsCard
+        statusCard
         controllersCard
-        logPathCard
-        troubleshootingSection
+        daemonLifecycleCard
+        logCard
+      }.padding()
+    }.navigationTitle("Diagnostics").toolbar {
+      ToolbarItem {
+        SwiftUI.Button {
+          showTips.toggle()
+        } label: {
+          Label("Troubleshooting Tips", systemImage: "lightbulb")
+        }.help("Show troubleshooting tips").popover(isPresented: $showTips, arrowEdge: .bottom) {
+          tipsPopover
+        }
       }
-      .padding()
-    }
-    .navigationTitle("Diagnostics")
-    .toolbar {
       ToolbarItem {
         SwiftUI.Button {
           copyDiagnostics()
         } label: {
-          Label(
-            "Copy Diagnostics",
-            systemImage: "doc.on.doc"
-          )
-        }
-        .help("Copy diagnostics to clipboard")
+          Label("Copy Diagnostics", systemImage: "doc.on.doc")
+        }.help("Copy diagnostics to clipboard")
       }
     }
   }
@@ -39,14 +40,14 @@ struct DiagnosticsView: View {
   // MARK: - Status Helpers
 
   private var daemonStatusText: String {
+    if let action = daemonAction { return action }
     if model.daemonConnected { return "Running" }
-    if model.daemonInstalled {
-      return "Installed (not running)"
-    }
+    if model.daemonInstalled { return "Installed (not running)" }
     return "Not installed"
   }
 
   private var daemonStatusColor: Color {
+    if daemonAction != nil { return .orange }
     if model.daemonConnected { return .green }
     if model.daemonInstalled { return .orange }
     return .secondary
@@ -54,269 +55,233 @@ struct DiagnosticsView: View {
 
   // MARK: - Cards
 
-  private var systemCard: some View {
+  /// Merged system + permissions overview card.
+  private var statusCard: some View {
     GroupBox {
       VStack(spacing: 8) {
-        labeledRow("macOS Version") {
-          Text(
-            ProcessInfo.processInfo
-              .operatingSystemVersionString
-          )
+        labeledRow("macOS") {
+          Text(ProcessInfo.processInfo.operatingSystemVersionString).foregroundStyle(.secondary)
         }
         Divider()
         labeledRow("Daemon") {
           HStack(spacing: 4) {
-            Circle()
-              .fill(daemonStatusColor)
-              .frame(width: 7, height: 7)
-            Text(daemonStatusText)
-              .foregroundStyle(daemonStatusColor)
+            Circle().fill(daemonStatusColor).frame(width: 7, height: 7)
+            Text(daemonStatusText).foregroundStyle(daemonStatusColor)
           }
+        }
+        Divider()
+        labeledRow("Input Monitoring") {
+          PermissionStatusIcon(isGranted: model.inputMonitoring.lowercased() == "granted")
+        }
+        Divider()
+        labeledRow("Accessibility") {
+          PermissionStatusIcon(isGranted: model.accessibility.lowercased() == "granted")
         }
       }
     } label: {
-      Label("System", systemImage: "desktopcomputer")
-        .fontWeight(.semibold)
+      Label("Status", systemImage: "checkmark.shield").fontWeight(.semibold)
     }
   }
 
   private var daemonLifecycleCard: some View {
     GroupBox {
-      VStack(alignment: .leading, spacing: 10) {
+      VStack(spacing: 10) {
         if !model.daemonInstalled {
-          SwiftUI.Button("Install LaunchAgent") {
-            managingDaemon = true
-            Task {
-              await model.installDaemon()
-              managingDaemon = false
-            }
-          }
-          .disabled(managingDaemon)
+          installButton
         } else {
-          if !model.daemonConnected {
-            SwiftUI.Button("Start Daemon") {
-              managingDaemon = true
-              Task {
-                await model.startDaemon()
-                managingDaemon = false
-              }
-            }
-            .disabled(managingDaemon)
-          }
-          if model.daemonInstalled {
-            SwiftUI.Button("Restart Daemon") {
-              managingDaemon = true
-              Task {
-                await model.restartDaemon()
-                managingDaemon = false
-              }
-            }
-            .disabled(managingDaemon)
-          }
-          SwiftUI.Button(
-            "Uninstall LaunchAgent",
-            role: .destructive
-          ) {
-            managingDaemon = true
-            Task {
-              await model.uninstallDaemon()
-              managingDaemon = false
-            }
-          }
-          .disabled(managingDaemon)
+          if !model.daemonConnected { startButton }
+          if model.daemonInstalled { restartButton }
+          uninstallButton
         }
-        if let err = model.daemonError {
-          Text(err)
-            .font(.caption)
-            .foregroundStyle(.red)
-        }
+        if let err = model.daemonError { Text(err).font(.caption).foregroundStyle(.red) }
       }
     } label: {
-      Label("Daemon Lifecycle", systemImage: "arrow.triangle.2.circlepath")
-        .fontWeight(.semibold)
+      Label("Daemon Lifecycle", systemImage: "arrow.triangle.2.circlepath").fontWeight(.semibold)
+    }.confirmationDialog(
+      "Uninstall Daemon?",
+      isPresented: $showUninstallConfirm,
+      titleVisibility: .visible
+    ) {
+      SwiftUI.Button("Uninstall", role: .destructive) {
+        daemonAction = "Uninstalling..."
+        Task {
+          await model.uninstallDaemon()
+          daemonAction = nil
+        }
+      }
+      SwiftUI.Button("Cancel", role: .cancel) {}
+    } message: {
+      Text("This removes the LaunchAgent plist. You can reinstall later.")
     }
   }
 
-  private var permissionsCard: some View {
-    GroupBox {
-      VStack(spacing: 8) {
-        labeledRow("Input Monitoring") {
-          permissionPill(model.inputMonitoring)
-        }
-        Divider()
-        labeledRow("Accessibility") {
-          permissionPill(model.accessibility)
-        }
+  private var installButton: some View {
+    SwiftUI.Button {
+      daemonAction = "Installing..."
+      Task {
+        await model.installDaemon()
+        daemonAction = nil
       }
     } label: {
-      Label("Permissions", systemImage: "lock.shield")
-        .fontWeight(.semibold)
-    }
+      Text("Install LaunchAgent").frame(maxWidth: .infinity)
+    }.buttonStyle(.borderedProminent).controlSize(.large).disabled(daemonAction != nil)
+  }
+
+  private var startButton: some View {
+    SwiftUI.Button {
+      daemonAction = "Starting..."
+      Task {
+        await model.startDaemon()
+        daemonAction = nil
+      }
+    } label: {
+      Text("Start Daemon").frame(maxWidth: .infinity)
+    }.buttonStyle(.borderedProminent).controlSize(.large).disabled(daemonAction != nil)
+  }
+
+  private var restartButton: some View {
+    SwiftUI.Button {
+      daemonAction = "Restarting..."
+      Task {
+        await model.restartDaemon()
+        daemonAction = nil
+      }
+    } label: {
+      Text("Restart Daemon").frame(maxWidth: .infinity)
+    }.buttonStyle(.bordered).controlSize(.large).disabled(daemonAction != nil)
+  }
+
+  private var uninstallButton: some View {
+    SwiftUI.Button(role: .destructive) {
+      showUninstallConfirm = true
+    } label: {
+      Text("Uninstall LaunchAgent").frame(maxWidth: .infinity)
+    }.buttonStyle(.bordered).controlSize(.large).disabled(daemonAction != nil)
   }
 
   private var controllersCard: some View {
     GroupBox {
       if model.devices.isEmpty {
-        Text("No devices connected")
-          .foregroundStyle(.secondary)
-          .font(.callout)
+        HStack {
+          Image(systemName: "gamecontroller").foregroundStyle(.tertiary)
+          Text("No controllers connected").foregroundStyle(.secondary).font(.callout)
+        }
       } else {
-        VStack(spacing: 8) {
-          ForEach(
-            Array(model.devices.enumerated()),
-            id: \.element.id
-          ) { index, device in
+        VStack(spacing: 0) {
+          ForEach(Array(model.devices.enumerated()), id: \.element.id) { index, device in
             if index > 0 { Divider() }
-            labeledRow(device.name) {
-              Text(device.parser)
-                .font(.caption)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.blue.opacity(0.15))
-                .foregroundStyle(.blue)
-                .clipShape(Capsule())
-            }
+            VStack(alignment: .leading, spacing: 4) {
+              HStack {
+                Text(device.name).fontWeight(.medium)
+                Spacer()
+                protocolBadge(device.parser)
+              }
+              HStack(spacing: 12) {
+                Text(String(format: "VID 0x%04X  PID 0x%04X", device.vendorID, device.productID))
+                  .font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+                Text(device.connection).font(.caption).foregroundStyle(.tertiary)
+                if let sn = device.serialNumber {
+                  Text("SN: \(sn)").font(.caption).foregroundStyle(.tertiary).textSelection(
+                    .enabled
+                  )
+                }
+              }
+            }.padding(.vertical, 6)
           }
         }
       }
     } label: {
-      Label("Controllers", systemImage: "gamecontroller")
-        .fontWeight(.semibold)
+      Label("Controllers", systemImage: "gamecontroller").fontWeight(.semibold)
     }
   }
 
-  private var logPathCard: some View {
+  private func protocolBadge(_ parser: String) -> some View {
+    HStack(spacing: 3) {
+      Image(systemName: protocolIcon(for: parser)).imageScale(.small)
+      Text(parser)
+    }.font(.caption).fontWeight(.medium).padding(.horizontal, 8).padding(.vertical, 3).background(
+      protocolColor(for: parser).opacity(0.15)
+    ).foregroundStyle(protocolColor(for: parser)).clipShape(Capsule())
+  }
+
+  private var logCard: some View {
     GroupBox {
-      VStack(alignment: .leading, spacing: 4) {
-        Text("Daemon stdout/stderr log:")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-        Text(daemonLogPath)
-          .font(.system(.caption, design: .monospaced))
+      VStack(alignment: .leading, spacing: 8) {
+        Text(daemonLogPath).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
           .textSelection(.enabled)
+        SwiftUI.Button("Show in Finder") {
+          NSWorkspace.shared.selectFile(daemonLogPath, inFileViewerRootedAtPath: "")
+        }.font(.caption).buttonStyle(.plain).foregroundStyle(Color.accentColor)
       }
     } label: {
-      Label("Log Path", systemImage: "doc.text")
-        .fontWeight(.semibold)
+      Label("Daemon Log", systemImage: "doc.text").fontWeight(.semibold)
     }
   }
 
   // MARK: - Troubleshooting
 
-  private var troubleshootingSection: some View {
-    DisclosureGroup(
-      "Troubleshooting Tips",
-      isExpanded: $showTips
-    ) {
-      VStack(alignment: .leading, spacing: 8) {
-        tipRow(
-          "USB access denied",
-          detail: "Run daemon with sudo, or sign"
-            + " with USB Device entitlement"
-            + " (scripts/build-release.sh)."
-        )
-        tipRow(
-          "Accessibility not granted",
-          detail: "Go to System Settings >"
-            + " Privacy > Accessibility"
-            + " and add daemon."
-        )
-        tipRow(
-          "Daemon not running",
-          detail: "Use 'Start Daemon' above."
-            + " Running with sudo puts daemon"
-            + " in root's bootstrap namespace,"
-            + " preventing XPC communication."
-        )
-        tipRow(
-          "No events in games",
-          detail: "Game may need to be focused."
-            + " CGEvents only work when"
-            + " target app is active."
-        )
-      }
-      .padding(.top, 4)
-    }
+  private var tipsPopover: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text("Troubleshooting Tips").font(.headline)
+      Divider()
+      tipRow(
+        "USB access denied",
+        detail: "Run daemon with sudo, or sign with the USB Device"
+          + " entitlement (scripts/build-release.sh)."
+      )
+      tipRow(
+        "Accessibility not granted",
+        detail: "System Settings › Privacy › Accessibility — add the daemon binary."
+      )
+      tipRow(
+        "Daemon not running",
+        detail: "Use Start Daemon in the Daemon Lifecycle card."
+          + " Running with sudo puts the daemon in root's bootstrap namespace,"
+          + " which breaks XPC communication."
+      )
+      tipRow(
+        "No events in games",
+        detail: "The target app must be focused."
+          + " CGEvents only dispatch to the active application."
+      )
+    }.padding().frame(width: 320)
   }
 
   // MARK: - Helpers
 
-  private func labeledRow<V: View>(
-    _ title: String,
-    @ViewBuilder value: () -> V
-  ) -> some View {
+  private func labeledRow<V: View>(_ title: String, @ViewBuilder value: () -> V) -> some View {
     HStack {
-      Text(title)
-        .foregroundStyle(.primary)
+      Text(title).foregroundStyle(.primary)
       Spacer()
       value()
     }
   }
 
-  private func permissionPill(_ status: String) -> some View {
-    let granted = status.lowercased() == "granted"
-    let label: String
-    switch status.lowercased() {
-    case "granted": label = "Granted"
-    case "denied": label = "Denied"
-    case "notdetermined": label = "Not Determined"
-    default: label = status
-    }
-    return Text(label)
-      .font(.caption)
-      .fontWeight(.medium)
-      .padding(.horizontal, 8)
-      .padding(.vertical, 3)
-      .background(
-        granted
-          ? Color.green.opacity(0.15)
-          : Color.red.opacity(0.15)
-      )
-      .foregroundStyle(granted ? .green : .red)
-      .clipShape(Capsule())
-  }
-
-  private func tipRow(
-    _ title: String,
-    detail: String
-  ) -> some View {
+  private func tipRow(_ title: String, detail: String) -> some View {
     VStack(alignment: .leading, spacing: 2) {
       Text("\u{2022} \(title)").fontWeight(.medium)
-      Text(detail)
-        .font(.caption)
-        .foregroundStyle(.secondary)
+      Text(detail).font(.caption).foregroundStyle(.secondary)
     }
   }
 
   private func copyDiagnostics() {
-    let version = ProcessInfo.processInfo
-      .operatingSystemVersionString
+    let version = ProcessInfo.processInfo.operatingSystemVersionString
     var lines: [String] = [
-      "OpenJoystickDriver Diagnostics",
-      "==============================",
-      "macOS: \(version)",
-      "Daemon: \(daemonStatusText)",
-      "Input Monitoring: \(model.inputMonitoring)",
-      "Accessibility: \(model.accessibility)",
-      "",
-      "Controllers:",
+      "OpenJoystickDriver Diagnostics", "==============================", "macOS: \(version)",
+      "Daemon: \(daemonStatusText)", "Input Monitoring: \(model.inputMonitoring)",
+      "Accessibility: \(model.accessibility)", "", "Controllers:",
     ]
     if model.devices.isEmpty {
       lines.append("  (none)")
     } else {
       for device in model.devices {
         lines.append(
-          "  \(device.name)"
-            + " \u{2014} VID: \(device.vendorID),"
-            + " PID: \(device.productID),"
+          "  \(device.name)" + " \u{2014} VID: \(device.vendorID)," + " PID: \(device.productID),"
             + " Parser: \(device.parser)"
         )
       }
     }
     NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(
-      lines.joined(separator: "\n"),
-      forType: .string
-    )
+    NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
   }
 }
