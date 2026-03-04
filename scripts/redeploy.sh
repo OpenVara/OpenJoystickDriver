@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build debug binaries, deploy to INSTALL_DIR, and restart the daemon.
+# Build, kill running instances, deploy new binaries, and restart everything.
 # Use this for fast iteration when the LaunchAgent is already installed.
 #
 # Requires the LaunchAgent to be registered first (scripts/install.sh).
@@ -15,6 +15,13 @@ source "$(dirname "$0")/lib.sh"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 INSTALLED_DAEMON="$INSTALL_DIR/OpenJoystickDriverDaemon"
 INSTALLED_GUI="$INSTALL_DIR/OpenJoystickDriver"
+
+echo "Stopping running processes..."
+# Kill GUI app first so it releases any IPC connections to the daemon.
+pkill -x OpenJoystickDriver 2>/dev/null || true
+# Kill any directly-running daemon (non-launchd, e.g. via run-dev.sh with sudo).
+pkill -x OpenJoystickDriverDaemon 2>/dev/null || true
+sudo pkill -x OpenJoystickDriverDaemon 2>/dev/null || true
 
 echo "Building debug binaries..."
 cd "$PROJECT_DIR"
@@ -34,7 +41,11 @@ sudo install -m 755 "$GUI_DEBUG" "$INSTALLED_GUI"
 echo "Restarting daemon..."
 "$INSTALLED_GUI" --headless restart
 
+echo "Launching GUI..."
+"$INSTALLED_GUI" &
+disown
+
 echo ""
-echo "Done. Daemon restarted with new debug binaries."
+echo "Done. Both binaries replaced and restarted."
 echo "  Daemon: $INSTALLED_DAEMON"
 echo "  GUI:    $INSTALLED_GUI"
