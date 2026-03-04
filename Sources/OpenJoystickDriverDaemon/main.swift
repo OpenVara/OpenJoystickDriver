@@ -1,4 +1,3 @@
-import ApplicationServices
 import Foundation
 import OpenJoystickDriverKit
 
@@ -7,11 +6,13 @@ setbuf(stdout, nil)
 
 let permissionManager = PermissionManager()
 let profileStore = ProfileStore()
-let manager = DeviceManager(dispatcher: CGEventOutputDispatcher(profileStore: profileStore))
+let dispatcher = CGEventOutputDispatcher(profileStore: profileStore)
+let manager = DeviceManager(dispatcher: dispatcher)
 let xpcService = XPCService(
   deviceManager: manager,
   permissionManager: permissionManager,
-  profileStore: profileStore
+  profileStore: profileStore,
+  dispatcher: dispatcher
 )
 
 manager.setupGracefulShutdown(label: "Daemon")
@@ -23,10 +24,8 @@ Task { await permissionManager.startPolling() }
 Task {
   let accessState = await permissionManager.checkAccessibilityState()
   if accessState != .granted {
-    print("[Daemon] Accessibility not granted" + " - CGEvent output disabled")
-    print("[Daemon] Grant in System Settings" + " > Privacy > Accessibility")
-    // Trigger accessibility TCC prompt for this daemon binary.
-    AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+    print("[Daemon] Accessibility not granted - CGEvent output disabled")
+    print("[Daemon] Grant in System Settings > Privacy > Accessibility")
   }
 }
 
