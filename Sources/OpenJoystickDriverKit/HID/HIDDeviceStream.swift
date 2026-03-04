@@ -54,12 +54,14 @@ public final class HIDDeviceStream: @unchecked Sendable {
     let pid = deviceProperty(device, kIOHIDProductIDKey)
     let serial = IOHIDDeviceGetProperty(device, kIOHIDSerialNumberKey as CFString) as? String
     let loc = deviceProperty(device, kIOHIDLocationIDKey)
+    let productName = IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) as? String
     continuation?.yield(
       .connected(
         vendorID: UInt16(truncatingIfNeeded: vid),
         productID: UInt16(truncatingIfNeeded: pid),
         serialNumber: serial,
-        locationID: UInt32(truncatingIfNeeded: loc)
+        locationID: UInt32(truncatingIfNeeded: loc),
+        productName: productName
       )
     )
   }

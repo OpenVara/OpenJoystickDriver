@@ -7,6 +7,11 @@ public final class ParserRegistry: Sendable {
 
   public init() {}
 
+  /// Returns parser name for given device identifier.
+  public func parserName(for identifier: DeviceIdentifier) -> String {
+    catalog.parserName(for: identifier)
+  }
+
   /// Returns parser for given device identifier.
   public func parser(for identifier: DeviceIdentifier) -> any InputParser {
     switch catalog.parserName(for: identifier) {

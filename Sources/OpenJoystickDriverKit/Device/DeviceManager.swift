@@ -9,11 +9,17 @@ private let usbVendorSpecificClass: UInt8 = 0xFF
 /// Uses dual detection: SwiftUSB for class 0xFF (GIP) +
 /// IOKit HIDManager for class 0x03 (HID).
 public actor DeviceManager {
+  private struct DeviceInfo {
+    let name: String
+    let connection: String
+  }
+
   private let parserRegistry: ParserRegistry
   private let dispatcher: any OutputDispatcher
   private let permissionManager: PermissionManager
   private let hidManager: HIDManager
   private var pipelines: [DeviceIdentifier: DevicePipeline] = [:]
+  private var deviceInfos: [DeviceIdentifier: DeviceInfo] = [:]
   private var detectionTasks: [Task<Void, Never>] = []
 
   public init(dispatcher: any OutputDispatcher) {
@@ -39,8 +45,6 @@ public actor DeviceManager {
     case .granted: print("[DeviceManager] Input Monitoring granted")
     }
 
-    await permissionManager.startPolling()
-
     let usbTask = Task { await self.runUSBDetection() }
     let hidTask = Task { await self.runHIDDetection() }
     detectionTasks = [usbTask, hidTask]
@@ -48,10 +52,18 @@ public actor DeviceManager {
     print("[DeviceManager] Started" + " - dual detection active")
   }
 
-  /// Returns description strings for all connected
-  /// controllers. Used by XPCService to report live
-  /// device list.
-  public func connectedDeviceDescriptions() -> [String] { Array(pipelines.keys.map(\.description)) }
+  /// Returns description strings for all connected controllers.
+  /// Format: "NAME (VID:D PID:D PARSER [CONNECTION])"
+  /// Used by XPCService to report live device list.
+  public func connectedDeviceDescriptions() -> [String] {
+    pipelines.keys.map { id in
+      let info = deviceInfos[id]
+      let name = info?.name ?? "Controller"
+      let connection = info?.connection ?? "USB"
+      let parser = parserRegistry.parserName(for: id)
+      return "\(name) (VID:\(id.vendorID) PID:\(id.productID) \(parser) [\(connection)])"
+    }
+  }
 
   /// Stop all detection and pipelines.
   public func stop() async {
@@ -111,7 +123,9 @@ public actor DeviceManager {
       return
     }
 
-    print("[DeviceManager] USB device added: \(identifier)")
+    let productName = (try? device.getProduct()) ?? "Controller"
+    deviceInfos[identifier] = DeviceInfo(name: productName, connection: "USB")
+    print("[DeviceManager] USB device added: \(productName) (\(identifier))")
     let parser = parserRegistry.parser(for: identifier)
     let pipeline = DevicePipeline(
       identifier: identifier,
@@ -129,12 +143,13 @@ public actor DeviceManager {
     print("[DeviceManager] HID detection started" + " (class 0x03)")
     for await event in hidManager.deviceEvents() {
       switch event {
-      case .connected(let vid, let pid, let serial, let loc):
+      case .connected(let vid, let pid, let serial, let loc, let productName):
         handleHIDDeviceConnected(
           vendorID: vid,
           productID: pid,
           serialNumber: serial,
-          locationID: loc
+          locationID: loc,
+          productName: productName
         )
       case .disconnected(let vid, let pid, let loc):
         await handleHIDDeviceDisconnected(vendorID: vid, productID: pid, locationID: loc)
@@ -147,7 +162,8 @@ public actor DeviceManager {
     vendorID: UInt16,
     productID: UInt16,
     serialNumber: String?,
-    locationID: UInt32
+    locationID: UInt32,
+    productName: String?
   ) {
     let identifier = DeviceIdentifier(
       vendorID: vendorID,
@@ -158,7 +174,9 @@ public actor DeviceManager {
 
     guard pipelines[identifier] == nil else { return }
 
-    print("[DeviceManager] HID device connected:" + " \(identifier)")
+    let name = productName ?? "Controller"
+    deviceInfos[identifier] = DeviceInfo(name: name, connection: "HID")
+    print("[DeviceManager] HID device connected:" + " \(name) (\(identifier))")
     let parser = parserRegistry.parser(for: identifier)
     let pipeline = DevicePipeline(
       identifier: identifier,
@@ -175,6 +193,7 @@ public actor DeviceManager {
   {
     if let key = pipelines.keys.first(where: { $0.locationID == locationID }) {
       let pipeline = pipelines.removeValue(forKey: key)
+      deviceInfos.removeValue(forKey: key)
       await pipeline?.stop()
       print(
         "[DeviceManager] HID device disconnected:" + " VID=\(vendorID) PID=\(productID)"
