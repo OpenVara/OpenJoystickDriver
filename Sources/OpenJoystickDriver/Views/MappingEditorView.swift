@@ -53,11 +53,17 @@ struct MappingEditorView: View {
           buttons: [.leftBumper, .rightBumper],
           labels: ["Left Shoulder", "Right Shoulder"]
         )
+        pairedMappingCard(
+          title: "Stick Clicks",
+          systemImage: "l.joystick.press.down",
+          buttons: [.leftStick, .rightStick],
+          labels: ["L3 (Left Click)", "R3 (Right Click)"]
+        )
         triggersCard
         gridMappingCard(
           title: "System",
           systemImage: "ellipsis.circle",
-          buttons: [.start, .back, .guide]
+          buttons: [.start, .back, .guide, .share]
         )
         pairedMappingCard(
           title: "D-Pad",
@@ -141,25 +147,30 @@ struct MappingEditorView: View {
     case .back: return .sfSymbol("square.on.square")
     case .guide: return .sfSymbol("house.circle")
     case .share: return .sfSymbol("square.and.arrow.up")
+    case .leftStick: return .textLabel("L3")
+    case .rightStick: return .textLabel("R3")
     default: return nil
     }
   }
 
   private func buttonTooltip(for button: OpenJoystickDriverKit.Button) -> String {
     switch button {
-    case .a: return "A — confirm / accept"
-    case .b: return "B — cancel / back"
-    case .x: return "X — secondary action"
-    case .y: return "Y — secondary action"
-    case .guide: return "Guide / Home — opens the system overlay"
-    case .start: return "Menu / Start — opens the in-game pause menu"
-    case .back: return "View / Back — toggles secondary view or minimap"
-    case .leftBumper: return "LB — Left Bumper (upper shoulder button)"
-    case .rightBumper: return "RB — Right Bumper (upper shoulder button)"
+    case .a: return "A - confirm / accept"
+    case .b: return "B - cancel / back"
+    case .x: return "X - secondary action"
+    case .y: return "Y - secondary action"
+    case .guide: return "Guide / Home - opens the system overlay"
+    case .start: return "Menu / Start - opens the in-game pause menu"
+    case .back: return "View / Back - toggles secondary view or minimap"
+    case .share: return "Share / Create - screenshot and capture button"
+    case .leftBumper: return "LB - Left Bumper (upper shoulder button)"
+    case .rightBumper: return "RB - Right Bumper (upper shoulder button)"
     case .dpadUp: return "D-Pad Up"
     case .dpadDown: return "D-Pad Down"
     case .dpadLeft: return "D-Pad Left"
     case .dpadRight: return "D-Pad Right"
+    case .leftStick: return "L3 - Left Stick Click"
+    case .rightStick: return "R3 - Right Stick Click"
     default: return button.displayName
     }
   }
@@ -254,14 +265,14 @@ struct MappingEditorView: View {
           keyCode: currentProfile.buttonMappings["leftTrigger"] ?? 0,
           badge: .textLabel("LT")
         ) { code in updateTriggerMapping(key: "leftTrigger", keyCode: code) }.padding(.vertical, 2)
-          .help("LT — Left Trigger. Assign a key to fire on full press.")
+          .help("LT - Left Trigger. Assign a key to fire on full press.")
         Divider().padding(.horizontal, 6)
         KeyCaptureRow(
           label: "Right Trigger",
           keyCode: currentProfile.buttonMappings["rightTrigger"] ?? 0,
           badge: .textLabel("RT")
         ) { code in updateTriggerMapping(key: "rightTrigger", keyCode: code) }.padding(.vertical, 2)
-          .help("RT — Right Trigger. Assign a key to fire on full press.")
+          .help("RT - Right Trigger. Assign a key to fire on full press.")
       }
     } label: {
       Label("Triggers", systemImage: "arrow.down.circle").fontWeight(.semibold)
@@ -271,18 +282,133 @@ struct MappingEditorView: View {
   private var axesCard: some View {
     GroupBox {
       VStack(spacing: 0) {
+        stickModeRow(
+          label: "Left Stick Mode",
+          mode: Binding(get: { currentProfile.leftStickMode }, set: { updateLeftStickMode($0) })
+        )
+        Divider()
+        if currentProfile.leftStickMode == .mouse {
+          Divider()
+          mouseSensitivitySlider.help("How fast the left stick moves the mouse cursor.")
+        } else if currentProfile.leftStickMode == .mouseRegion {
+          Divider()
+          mouseRegionRadiusSlider.help(
+            "Region radius: how far (in pixels) the cursor moves at full stick deflection."
+              + " Use 150-300 for most racing games."
+          )
+        } else if currentProfile.leftStickMode == .keyboard {
+          stickKeyBindings(
+            prefix: "leftStick",
+            upLabel: "L-Stick Up",
+            downLabel: "L-Stick Down",
+            leftLabel: "L-Stick Left",
+            rightLabel: "L-Stick Right"
+          )
+        }
+        Divider()
+        stickModeRow(
+          label: "Right Stick Mode",
+          mode: Binding(get: { currentProfile.rightStickMode }, set: { updateRightStickMode($0) })
+        )
+        if currentProfile.rightStickMode == .mouse {
+          Divider()
+          mouseSensitivitySlider.help("How fast the right stick moves the mouse cursor.")
+        } else if currentProfile.rightStickMode == .mouseRegion {
+          Divider()
+          mouseRegionRadiusSlider.help(
+            "Region radius: how far (in pixels) the cursor moves at full stick deflection."
+          )
+        } else if currentProfile.rightStickMode == .keyboard {
+          Divider()
+          stickKeyBindings(
+            prefix: "rightStick",
+            upLabel: "R-Stick Up",
+            downLabel: "R-Stick Down",
+            leftLabel: "R-Stick Left",
+            rightLabel: "R-Stick Right"
+          )
+        } else if currentProfile.rightStickMode == .scroll {
+          Divider()
+          scrollSensitivitySlider.help("How fast the right stick scrolls.")
+        }
+        Divider()
         deadzoneSlider.help(
           "Deadzone: minimum stick deflection before input registers."
             + " Raise if small resting movements cause unintended actions."
         )
-        Divider()
-        mouseSensitivitySlider.help("How fast the left stick moves the mouse cursor.")
-        Divider()
-        scrollSensitivitySlider.help("How fast the right stick scrolls.")
       }
     } label: {
       Label("Axes", systemImage: "dial.medium").fontWeight(.semibold)
     }
+  }
+
+  private func stickModeRow(label: String, mode: Binding<StickMode>) -> some View {
+    HStack {
+      Text(label).frame(maxWidth: .infinity, alignment: .leading)
+      Picker("", selection: mode) {
+        Text("Mouse").tag(StickMode.mouse)
+        Text("Region").tag(StickMode.mouseRegion)
+        Text("Scroll").tag(StickMode.scroll)
+        Text("Keys").tag(StickMode.keyboard)
+      }.pickerStyle(.segmented).frame(maxWidth: 260)
+    }.padding(.vertical, 4)
+  }
+
+  @ViewBuilder private func stickKeyBindings(
+    prefix: String,
+    upLabel: String,
+    downLabel: String,
+    leftLabel: String,
+    rightLabel: String
+  ) -> some View {
+    KeyCaptureRow(
+      label: upLabel,
+      keyCode: currentProfile.buttonMappings[prefix + "Up"] ?? 0,
+      badge: .sfSymbol("arrow.up")
+    ) { code in updateStickKeyMapping(key: prefix + "Up", keyCode: code) }.padding(.vertical, 2)
+    Divider()
+    KeyCaptureRow(
+      label: downLabel,
+      keyCode: currentProfile.buttonMappings[prefix + "Down"] ?? 0,
+      badge: .sfSymbol("arrow.down")
+    ) { code in updateStickKeyMapping(key: prefix + "Down", keyCode: code) }.padding(.vertical, 2)
+    Divider()
+    KeyCaptureRow(
+      label: leftLabel,
+      keyCode: currentProfile.buttonMappings[prefix + "Left"] ?? 0,
+      badge: .sfSymbol("arrow.left")
+    ) { code in updateStickKeyMapping(key: prefix + "Left", keyCode: code) }.padding(.vertical, 2)
+    Divider()
+    KeyCaptureRow(
+      label: rightLabel,
+      keyCode: currentProfile.buttonMappings[prefix + "Right"] ?? 0,
+      badge: .sfSymbol("arrow.right")
+    ) { code in updateStickKeyMapping(key: prefix + "Right", keyCode: code) }.padding(.vertical, 2)
+  }
+
+  private func updateStickKeyMapping(key: String, keyCode: UInt16) {
+    var updated = currentProfile
+    if keyCode == 0 {
+      updated.buttonMappings.removeValue(forKey: key)
+    } else {
+      updated.buttonMappings[key] = keyCode
+    }
+    profile = updated
+    saveCurrentProfile(updated)
+  }
+
+  private func updateLeftStickMode(_ mode: StickMode) {
+    var updated = currentProfile
+    updated.leftStickMode = mode
+    profile = updated
+    saveCurrentProfile(updated)
+  }
+
+  private func updateRightStickMode(_ mode: StickMode) {
+    var updated = currentProfile
+    updated.rightStickMode = mode
+    profile = updated
+    saveCurrentProfile(updated)
   }
 
   @ViewBuilder private var errorBanner: some View {
@@ -340,6 +466,26 @@ struct MappingEditorView: View {
     }.padding(.vertical, 4)
   }
 
+  private var mouseRegionRadiusSlider: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Region Radius: " + String(format: "%.0f px", currentProfile.stickMouseRegionRadius))
+      Slider(
+        value: Binding(
+          get: { Double(currentProfile.stickMouseRegionRadius) },
+          set: { updateMouseRegionRadius(Float($0)) }
+        ),
+        in: 50...500
+      )
+    }.padding(.vertical, 4)
+  }
+
+  private func updateMouseRegionRadius(_ value: Float) {
+    var updated = currentProfile
+    updated.stickMouseRegionRadius = value
+    profile = updated
+    saveCurrentProfile(updated)
+  }
+
   private func loadAllProfiles() {
     Task { @MainActor in
       do {
@@ -354,9 +500,9 @@ struct MappingEditorView: View {
         }
         profileError = nil
       } catch {
-        // Daemon unreachable — show current profile only, no alarming error
+        // Daemon unreachable - show current profile only, no alarming error
         if allProfiles.isEmpty { allProfiles = [currentProfile] }
-        if model.daemonConnected { profileError = "Profile sync failed — changes may not persist." }
+        if model.daemonConnected { profileError = "Profile sync failed - changes may not persist." }
       }
     }
   }
