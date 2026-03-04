@@ -6,7 +6,11 @@ struct ListCommand {
   func run() {
     print("Scanning for game controllers...")
     print("")
+    if checkDaemonAndListDevices() { return }
+    handleDirectScan()
+  }
 
+  private func checkDaemonAndListDevices() -> Bool {
     let client = XPCClient()
     client.connect()
     let semaphore = DispatchSemaphore(value: 0)
@@ -18,18 +22,20 @@ struct ListCommand {
     let daemonRunning =
       semaphore.wait(timeout: .now() + xpcCallTimeoutSeconds) == .success && xpcDevices != nil
 
-    if daemonRunning, let devices = xpcDevices {
-      print("Controllers (from running daemon):")
-      if devices.isEmpty {
-        print("  (none connected)")
-      } else {
-        for dev in devices { print("  \(dev)") }
-      }
-      print("")
-      return
-    }
+    defer { client.disconnect() }
 
-    client.disconnect()
+    guard daemonRunning, let devices = xpcDevices else { return false }
+    print("Controllers (from running daemon):")
+    if devices.isEmpty {
+      print("  (none connected)")
+    } else {
+      for dev in devices { print("  \(dev)") }
+    }
+    print("")
+    return true
+  }
+
+  private func handleDirectScan() {
     print("(direct scan - daemon not running)")
     listUSBDevices()
     print("")
@@ -62,9 +68,7 @@ struct ListCommand {
       }
     } catch {
       print("  Error accessing USB: \(error)")
-      print(
-        "  Tip: Run with sudo or sign with" + " entitlement" + " (see scripts/sign-dev.sh)"
-      )
+      print("  Tip: Run with sudo or sign with" + " entitlement" + " (see scripts/sign-dev.sh)")
     }
   }
 }
