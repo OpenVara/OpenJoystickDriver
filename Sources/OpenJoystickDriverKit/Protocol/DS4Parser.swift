@@ -47,59 +47,29 @@ public final class DS4Parser: InputParser, @unchecked Sendable {
     let bytes = Array(data)
     var events: [ControllerEvent] = []
 
-    // Sticks (0-255, 128=center, Y inverted)
-    let lsxRaw = bytes[ReportOffset.leftStickX]
-    let lsyRaw = bytes[ReportOffset.leftStickY]
-    let rsxRaw = bytes[ReportOffset.rightStickX]
-    let rsyRaw = bytes[ReportOffset.rightStickY]
+    let stickEvents = parseSticks(bytes: bytes)
+    events.append(contentsOf: stickEvents.events)
+    let (lsxRaw, lsyRaw, rsxRaw, rsyRaw) = stickEvents.raws
 
-    if lsxRaw != prevLSX || lsyRaw != prevLSY {
-      let lx = normalizeHID(lsxRaw)
-      let ly = -normalizeHID(lsyRaw)
-      events.append(.leftStickChanged(x: lx, y: ly))
-    }
-    if rsxRaw != prevRSX || rsyRaw != prevRSY {
-      let rx = normalizeHID(rsxRaw)
-      let ry = -normalizeHID(rsyRaw)
-      events.append(.rightStickChanged(x: rx, y: ry))
-    }
+    let triggerEvents = parseTriggers(bytes: bytes)
+    events.append(contentsOf: triggerEvents.events)
+    let (l2, r2) = triggerEvents.values
 
-    // Triggers
-    let l2 = bytes[ReportOffset.l2Trigger]
-    let r2 = bytes[ReportOffset.r2Trigger]
-    if l2 != prevL2 { events.append(.leftTriggerChanged(Float(l2) / ds4TriggerMax)) }
-    if r2 != prevR2 { events.append(.rightTriggerChanged(Float(r2) / ds4TriggerMax)) }
+    let dpadEvents = parseDpad(bytes: bytes)
+    events.append(contentsOf: dpadEvents.events)
+    let hat = dpadEvents.value
 
-    // D-pad (hat switch in bits 0-3 of buttons0)
-    let hat = bytes[ReportOffset.buttons0] & 0x0F
-    if hat != prevHat { events.append(.dpadChanged(mapHat(hat))) }
+    let faceEvents = parseFaceButtons(bytes: bytes)
+    events.append(contentsOf: faceEvents.events)
+    let face = faceEvents.value
 
-    // Face buttons (bits 4-7 of buttons0)
-    let face = bytes[ReportOffset.buttons0]
-    events += diffButtons(
-      prev: prevFace,
-      curr: face,
-      mapping: [(0x10, .square), (0x20, .cross), (0x40, .circle), (0x80, .triangle)]
-    )
+    let shoulderEvents = parseShoulderButtons(bytes: bytes)
+    events.append(contentsOf: shoulderEvents.events)
+    let shoulders = shoulderEvents.value
 
-    // Shoulder buttons (buttons1)
-    let shoulders = bytes[ReportOffset.buttons1]
-    events += diffButtons(
-      prev: prevShoulders,
-      curr: shoulders,
-      mapping: [
-        (0x01, .l1), (0x02, .r1), (0x10, .share), (0x20, .options), (0x40, .leftStick),
-        (0x80, .rightStick),
-      ]
-    )
-
-    // System buttons (buttons2)
-    let system = bytes[ReportOffset.buttons2]
-    events += diffButtons(
-      prev: prevSystem,
-      curr: system,
-      mapping: [(0x01, .ps), (0x02, .touchpad)]
-    )
+    let systemEvents = parseSystemButtons(bytes: bytes)
+    events.append(contentsOf: systemEvents.events)
+    let system = systemEvents.value
 
     prevFace = face
     prevShoulders = shoulders
@@ -113,6 +83,77 @@ public final class DS4Parser: InputParser, @unchecked Sendable {
     prevRSY = rsyRaw
 
     return events
+  }
+
+  private func parseSticks(bytes: [UInt8]) -> (
+    events: [ControllerEvent], raws: (UInt8, UInt8, UInt8, UInt8)
+  ) {
+    let lsxRaw = bytes[ReportOffset.leftStickX]
+    let lsyRaw = bytes[ReportOffset.leftStickY]
+    let rsxRaw = bytes[ReportOffset.rightStickX]
+    let rsyRaw = bytes[ReportOffset.rightStickY]
+    var events: [ControllerEvent] = []
+    if lsxRaw != prevLSX || lsyRaw != prevLSY {
+      let lx = normalizeHID(lsxRaw)
+      let ly = -normalizeHID(lsyRaw)
+      events.append(.leftStickChanged(x: lx, y: ly))
+    }
+    if rsxRaw != prevRSX || rsyRaw != prevRSY {
+      let rx = normalizeHID(rsxRaw)
+      let ry = -normalizeHID(rsyRaw)
+      events.append(.rightStickChanged(x: rx, y: ry))
+    }
+    return (events, (lsxRaw, lsyRaw, rsxRaw, rsyRaw))
+  }
+
+  private func parseTriggers(bytes: [UInt8]) -> (events: [ControllerEvent], values: (UInt8, UInt8))
+  {
+    let l2 = bytes[ReportOffset.l2Trigger]
+    let r2 = bytes[ReportOffset.r2Trigger]
+    var events: [ControllerEvent] = []
+    if l2 != prevL2 { events.append(.leftTriggerChanged(Float(l2) / ds4TriggerMax)) }
+    if r2 != prevR2 { events.append(.rightTriggerChanged(Float(r2) / ds4TriggerMax)) }
+    return (events, (l2, r2))
+  }
+
+  private func parseDpad(bytes: [UInt8]) -> (events: [ControllerEvent], value: UInt8) {
+    let hat = bytes[ReportOffset.buttons0] & 0x0F
+    var events: [ControllerEvent] = []
+    if hat != prevHat { events.append(.dpadChanged(mapHat(hat))) }
+    return (events, hat)
+  }
+
+  private func parseFaceButtons(bytes: [UInt8]) -> (events: [ControllerEvent], value: UInt8) {
+    let face = bytes[ReportOffset.buttons0]
+    let events = diffButtons(
+      prev: prevFace,
+      curr: face,
+      mapping: [(0x10, .square), (0x20, .cross), (0x40, .circle), (0x80, .triangle)]
+    )
+    return (events, face)
+  }
+
+  private func parseShoulderButtons(bytes: [UInt8]) -> (events: [ControllerEvent], value: UInt8) {
+    let shoulders = bytes[ReportOffset.buttons1]
+    let events = diffButtons(
+      prev: prevShoulders,
+      curr: shoulders,
+      mapping: [
+        (0x01, .l1), (0x02, .r1), (0x10, .share), (0x20, .options), (0x40, .leftStick),
+        (0x80, .rightStick),
+      ]
+    )
+    return (events, shoulders)
+  }
+
+  private func parseSystemButtons(bytes: [UInt8]) -> (events: [ControllerEvent], value: UInt8) {
+    let system = bytes[ReportOffset.buttons2]
+    let events = diffButtons(
+      prev: prevSystem,
+      curr: system,
+      mapping: [(0x01, .ps), (0x02, .touchpad)]
+    )
+    return (events, system)
   }
 
   private func diffButtons(prev: UInt8, curr: UInt8, mapping: [(UInt8, Button)])
