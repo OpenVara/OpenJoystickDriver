@@ -103,159 +103,162 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
 /// Central observable model for GUI.
 /// Polls daemon via XPC every 2 seconds.
 @MainActor final class AppModel: ObservableObject {
-    @Published var daemonConnected = false
-    @Published var daemonInstalled = false
-    @Published var daemonError: String?
-    @Published var devices: [DeviceViewModel] = []
-    @Published var inputMonitoring = "unknown"
-    @Published var accessibility = "unknown"
-    @Published var profiles: [Profile] = []
-    var developerMode: Bool
+  @Published var daemonConnected = false
+  @Published var daemonInstalled = false
+  @Published var daemonRestarting = false
+  @Published var daemonError: String?
+  @Published var devices: [DeviceViewModel] = []
+  @Published var inputMonitoring = "unknown"
+  @Published var accessibility = "unknown"
+  @Published var profiles: [Profile] = []
+  var developerMode: Bool
 
-    private let client = XPCClient()
-    private var pollTask: Task<Void, Never>?
+  private let client = XPCClient()
+  private var pollTask: Task<Void, Never>?
 
-    init(developerMode: Bool = false) { self.developerMode = developerMode }
+  init(developerMode: Bool = false) { self.developerMode = developerMode }
 
-    func start() async {
-      client.connect()
-      refreshDaemonStatus()
-      await poll()
-      startPolling()
+  func start() async {
+    client.connect()
+    refreshDaemonStatus()
+    await poll()
+    startPolling()
+  }
+
+  func refreshDaemonStatus() { daemonInstalled = DaemonManager.isInstalled }
+
+  /// Path to daemon binary as recorded in installed LaunchAgent plist.
+  /// Falls back to expected path relative to this app's executable.
+  var daemonExecutablePath: String? {
+    if let installed = DaemonManager.installedDaemonPath { return installed }
+    return Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent(
+      "OpenJoystickDriverDaemon"
+    ).path(percentEncoded: false)
+  }
+
+  func installDaemon() async {
+    daemonError = nil
+    guard let execURL = Bundle.main.executableURL else {
+      daemonError = "Cannot locate app executable."
+      return
+    }
+    let daemonURL = execURL.deletingLastPathComponent().appendingPathComponent(
+      "OpenJoystickDriverDaemon"
+    )
+    do {
+      let task = Task.detached { try DaemonManager.install(daemonExecutable: daemonURL) }
+      try await task.value
+    } catch {
+      daemonError = error.localizedDescription
+      return
+    }
+    refreshDaemonStatus()
+  }
+
+  func startDaemon() async {
+    daemonError = nil
+    let task = Task.detached { DaemonManager.start() }
+    await task.value
+    try? await Task.sleep(for: .seconds(1))
+    await poll()
+  }
+
+  func restartDaemon() async {
+    daemonError = nil
+    daemonRestarting = true
+    let task = Task.detached { DaemonManager.restart() }
+    await task.value
+    client.disconnect()
+    try? await Task.sleep(for: .seconds(2))
+    await poll()
+    daemonRestarting = false
+  }
+
+  func uninstallDaemon() async {
+    daemonError = nil
+    do {
+      let task = Task.detached { try DaemonManager.uninstall() }
+      try await task.value
+    } catch {
+      daemonError = error.localizedDescription
+      return
+    }
+    refreshDaemonStatus()
+  }
+
+  func saveProfile(_ profile: Profile) async throws {
+    try await client.saveProfile(profile)
+    await refreshProfiles()
+  }
+
+  func resetProfile(vendorID: UInt16, productID: UInt16) async throws {
+    try await client.resetProfile(vendorID: vendorID, productID: productID)
+    await refreshProfiles()
+  }
+
+  func refreshProfiles() async {
+    do { profiles = try await client.listProfiles() } catch {
+      print("[AppModel] refreshProfiles error: \(error)")
+    }
+  }
+
+  func allProfiles(vendorID: UInt16, productID: UInt16) async throws -> [Profile] {
+    try await client.allProfiles(vendorID: vendorID, productID: productID)
+  }
+
+  func addProfile(name: String, basedOn profile: Profile) async throws -> Profile {
+    var copy = profile
+    copy.id = UUID()
+    copy.name = name
+    return try await client.addProfile(copy)
+  }
+
+  func deleteProfile(id: UUID, vendorID: UInt16, productID: UInt16) async throws {
+    try await client.deleteProfile(id: id, vendorID: vendorID, productID: productID)
+  }
+
+  func setActiveProfile(id: UUID, vendorID: UInt16, productID: UInt16) async throws {
+    try await client.setActiveProfile(id: id, vendorID: vendorID, productID: productID)
+  }
+
+  func deviceInputState(vendorID: UInt16, productID: UInt16) async -> DeviceInputState? {
+    try? await client.deviceInputState(vendorID: vendorID, productID: productID)
+  }
+
+  func packetLog(vendorID: UInt16, productID: UInt16) async -> [PacketLogEntry] {
+    (try? await client.packetLog(vendorID: vendorID, productID: productID)) ?? []
+  }
+
+  func setSuppressOutput(_ suppress: Bool) async { try? await client.setSuppressOutput(suppress) }
+
+  private func poll() async {
+    refreshDaemonStatus()
+    if !client.isConnected { client.connect() }
+    do {
+      let status = try await client.getStatus()
+      daemonConnected = true
+      inputMonitoring = status.inputMonitoring
+      accessibility = status.accessibility
+      devices = status.connectedDevices.compactMap(DeviceViewModel.parse(description:))
+    } catch {
+      daemonConnected = false
+      devices = []
+      // Daemon unreachable - fall back to checking this process's own permissions
+      // so UI shows something useful rather than stale "unknown".
+      let pm = PermissionManager()
+      inputMonitoring = "\(await pm.checkAccess())"
+      accessibility = "\(await pm.checkAccessibilityState())"
     }
 
-    func refreshDaemonStatus() { daemonInstalled = DaemonManager.isInstalled }
+    await refreshProfiles()
+  }
 
-    /// Path to daemon binary as recorded in installed LaunchAgent plist.
-    /// Falls back to expected path relative to this app's executable.
-    var daemonExecutablePath: String? {
-      if let installed = DaemonManager.installedDaemonPath { return installed }
-      return Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent(
-        "OpenJoystickDriverDaemon"
-      ).path(percentEncoded: false)
-    }
-
-    func installDaemon() async {
-      daemonError = nil
-      guard let execURL = Bundle.main.executableURL else {
-        daemonError = "Cannot locate app executable."
-        return
+  private func startPolling() {
+    pollTask = Task { [weak self] in
+      while !Task.isCancelled {
+        try? await Task.sleep(for: appModelPollInterval)
+        await self?.poll()
       }
-      let daemonURL = execURL.deletingLastPathComponent().appendingPathComponent(
-        "OpenJoystickDriverDaemon"
-      )
-      do {
-        let task = Task.detached { try DaemonManager.install(daemonExecutable: daemonURL) }
-        try await task.value
-      } catch {
-        daemonError = error.localizedDescription
-        return
-      }
-      refreshDaemonStatus()
     }
-
-    func startDaemon() async {
-      daemonError = nil
-      let task = Task.detached { DaemonManager.start() }
-      await task.value
-      // Give launchd one moment to start process before polling.
-      try? await Task.sleep(for: .seconds(1))
-      await poll()
-    }
-
-    func restartDaemon() async {
-      daemonError = nil
-      let task = Task.detached { DaemonManager.restart() }
-      await task.value
-      try? await Task.sleep(for: .seconds(2))
-      await poll()
-    }
-
-    func uninstallDaemon() async {
-      daemonError = nil
-      do {
-        let task = Task.detached { try DaemonManager.uninstall() }
-        try await task.value
-      } catch {
-        daemonError = error.localizedDescription
-        return
-      }
-      refreshDaemonStatus()
-    }
-
-    func saveProfile(_ profile: Profile) async throws {
-      try await client.saveProfile(profile)
-      await refreshProfiles()
-    }
-
-    func resetProfile(vendorID: UInt16, productID: UInt16) async throws {
-      try await client.resetProfile(vendorID: vendorID, productID: productID)
-      await refreshProfiles()
-    }
-
-    func refreshProfiles() async {
-      do { profiles = try await client.listProfiles() } catch {
-        print("[AppModel] refreshProfiles error: \(error)")
-      }
-    }
-
-    func allProfiles(vendorID: UInt16, productID: UInt16) async throws -> [Profile] {
-      try await client.allProfiles(vendorID: vendorID, productID: productID)
-    }
-
-    func addProfile(name: String, basedOn profile: Profile) async throws -> Profile {
-      var copy = profile
-      copy.id = UUID()
-      copy.name = name
-      return try await client.addProfile(copy)
-    }
-
-    func deleteProfile(id: UUID, vendorID: UInt16, productID: UInt16) async throws {
-      try await client.deleteProfile(id: id, vendorID: vendorID, productID: productID)
-    }
-
-    func setActiveProfile(id: UUID, vendorID: UInt16, productID: UInt16) async throws {
-      try await client.setActiveProfile(id: id, vendorID: vendorID, productID: productID)
-    }
-
-    func deviceInputState(vendorID: UInt16, productID: UInt16) async -> DeviceInputState? {
-      try? await client.deviceInputState(vendorID: vendorID, productID: productID)
-    }
-
-    func packetLog(vendorID: UInt16, productID: UInt16) async -> [PacketLogEntry] {
-      (try? await client.packetLog(vendorID: vendorID, productID: productID)) ?? []
-    }
-
-    func setSuppressOutput(_ suppress: Bool) async { try? await client.setSuppressOutput(suppress) }
-
-    private func poll() async {
-      refreshDaemonStatus()
-      if !client.isConnected { client.connect() }
-      do {
-        let status = try await client.getStatus()
-        daemonConnected = true
-        inputMonitoring = status.inputMonitoring
-        accessibility = status.accessibility
-        devices = status.connectedDevices.compactMap(DeviceViewModel.parse(description:))
-      } catch {
-        daemonConnected = false
-        devices = []
-        // Daemon unreachable - fall back to checking this process's own permissions
-        // so UI shows something useful rather than stale "unknown".
-        let pm = PermissionManager()
-        inputMonitoring = "\(await pm.checkAccess())"
-        accessibility = "\(await pm.checkAccessibilityState())"
-      }
-
-      await refreshProfiles()
-    }
-
-    private func startPolling() {
-      pollTask = Task { [weak self] in
-        while !Task.isCancelled {
-          try? await Task.sleep(for: appModelPollInterval)
-          await self?.poll()
-        }
-      }
-    }
+  }
 }
