@@ -60,8 +60,7 @@ actor DevicePipeline {
     print("[DevicePipeline] Stopped: \(identifier)")
   }
 
-  /// Feed HID input report data (called by DeviceManager
-  /// for class 0x03 devices).
+  /// Feed HID input report data (called by DeviceManager for class 0x03 devices).
   func feedHIDData(_ data: Data) async {
     guard isActive else { return }
     do {
