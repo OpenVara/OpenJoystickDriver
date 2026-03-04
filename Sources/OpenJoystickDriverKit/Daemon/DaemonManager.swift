@@ -35,6 +35,14 @@ public enum DaemonManager: Sendable {
     print("[DaemonManager] Installed")
   }
 
+  /// Starts daemon via launchctl kickstart.
+  /// Use when LaunchAgent is installed but not running.
+  public static func start() {
+    let uid = String(getuid())
+    launchctl(["kickstart", "-k", "gui/\(uid)/\(label)"])
+    print("[DaemonManager] Started")
+  }
+
   /// Unloads daemon and removes LaunchAgent plist.
   public static func uninstall() throws {
     let uid = String(getuid())

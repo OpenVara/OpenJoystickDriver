@@ -1,4 +1,6 @@
 import AppKit
+import ApplicationServices
+import IOKit.hid
 import OpenJoystickDriverKit
 import SwiftUI
 
@@ -17,7 +19,17 @@ private enum WindowMetrics {
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.accessory)
     setupStatusItem()
+    requestPermissions()
     Task { @MainActor in await model.start() }
+  }
+
+  /// Trigger system permission dialogs on first launch.
+  /// These are no-ops if already granted.
+  private func requestPermissions() {
+    IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+    // CFString global - bridge to String to satisfy Swift 6 Sendable check.
+    let promptKey = "AXTrustedCheckOptionPrompt"
+    AXIsProcessTrustedWithOptions([promptKey: true] as CFDictionary)
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

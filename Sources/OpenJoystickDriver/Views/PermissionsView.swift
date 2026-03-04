@@ -33,9 +33,7 @@ struct PermissionsView: View {
   private var daemonWarning: some View {
     HStack(spacing: 8) {
       Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
-      Text("Daemon not running \u{2014} start with:" + " sudo OpenJoystickDriverDaemon").font(
-        .callout
-      )
+      Text("Daemon not running \u{2014} start it from Diagnostics tab.").font(.callout)
     }.padding().background(.yellow.opacity(0.15)).clipShape(RoundedRectangle(cornerRadius: 8))
       .padding(.horizontal)
   }

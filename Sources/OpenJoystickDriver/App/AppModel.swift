@@ -90,6 +90,15 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     refreshDaemonStatus()
   }
 
+  func startDaemon() async {
+    daemonError = nil
+    let task = Task.detached { DaemonManager.start() }
+    await task.value
+    // Give launchd one moment to start process before polling.
+    try? await Task.sleep(for: .seconds(1))
+    await poll()
+  }
+
   func uninstallDaemon() async {
     daemonError = nil
     do {
@@ -114,7 +123,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
 
   func refreshProfiles() async {
     do { profiles = try await client.listProfiles() } catch {
-      debugPrint("[AppModel] refreshProfiles error: \(error)")
+      print("[AppModel] refreshProfiles error: \(error)")
     }
   }
 
@@ -129,6 +138,11 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     } catch {
       daemonConnected = false
       devices = []
+      // Daemon unreachable - fall back to checking this process's own permissions
+      // so UI shows something useful rather than stale "unknown".
+      let pm = PermissionManager()
+      inputMonitoring = "\(await pm.checkAccess())"
+      accessibility = "\(await pm.checkAccessibilityState())"
     }
 
     await refreshProfiles()

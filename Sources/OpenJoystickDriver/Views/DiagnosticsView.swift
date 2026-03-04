@@ -44,6 +44,15 @@ struct DiagnosticsView: View {
             }
           }.disabled(managingDaemon)
         } else {
+          if !model.daemonConnected {
+            SwiftUI.Button("Start Daemon") {
+              managingDaemon = true
+              Task {
+                await model.startDaemon()
+                managingDaemon = false
+              }
+            }.disabled(managingDaemon)
+          }
           SwiftUI.Button("Uninstall LaunchAgent", role: .destructive) {
             managingDaemon = true
             Task {
@@ -82,8 +91,9 @@ struct DiagnosticsView: View {
         )
         tipRow(
           "Daemon not running",
-          detail: "Use 'Install LaunchAgent' above" + " to auto-start on login, or run:"
-            + " sudo OpenJoystickDriverDaemon"
+          detail: "Use 'Start Daemon' above to launch it via LaunchAgent."
+            + " Running with sudo won't work - it puts daemon in root's"
+            + " bootstrap namespace, preventing XPC communication with this app."
         )
         tipRow(
           "No events in games",
