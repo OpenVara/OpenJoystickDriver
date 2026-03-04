@@ -17,7 +17,9 @@ struct ProfileCommand {
     default:
       print("Unknown profile subcommand: \(sub)")
       print(
-        "Usage: OpenJoystickDriver --headless" + " profile [list|show VID:PID|set VID:PID BUTTON KEYCODE|reset VID:PID]"
+        "Usage: OpenJoystickDriver --headless"
+          + " profile [list|show VID:PID"
+          + "|set VID:PID BUTTON KEYCODE|reset VID:PID]"
       )
     }
   }
@@ -72,7 +74,10 @@ struct ProfileCommand {
         "Usage: profile set VID:PID BUTTON KEYCODE"
           + "  (e.g. profile set 13623:4112 a 36)"
       )
-      print("  BUTTON: a, b, x, y, start, back, guide, lb, rb, dpadup, dpaddown, dpadleft, dpadright")
+      print(
+        "  BUTTON: a, b, x, y, start, back, guide,"
+          + " lb, rb, dpadup, dpaddown, dpadleft, dpadright"
+      )
       print("  KEYCODE: numeric (e.g. 36) or key name (e.g. return, escape, space)")
       return
     }
@@ -125,9 +130,7 @@ struct ProfileCommand {
   private func resolveKeyCode(_ input: String) -> UInt16? {
     if let numeric = UInt16(input) { return numeric }
     let lower = input.lowercased()
-    for (code, name) in KeyNames.lookup {
-      if name.lowercased().hasPrefix(lower) { return code }
-    }
+    for (code, name) in KeyNames.lookup where name.lowercased().hasPrefix(lower) { return code }
     return nil
   }
 }
