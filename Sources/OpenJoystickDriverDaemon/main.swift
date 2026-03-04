@@ -1,6 +1,9 @@
 import Foundation
 import OpenJoystickDriverKit
 
+// Disable stdout buffering so log lines appear immediately in StandardOutPath file.
+setbuf(stdout, nil)
+
 let permissionManager = PermissionManager()
 let profileStore = ProfileStore()
 let manager = DeviceManager(dispatcher: CGEventOutputDispatcher(profileStore: profileStore))
@@ -20,7 +23,7 @@ Task {
   let accessState = await permissionManager.checkAccessibilityState()
   if accessState != .granted {
     print("[Daemon] Accessibility not granted" + " - CGEvent output disabled")
-    print("[Daemon] Grant in System Settings" + " > Privacy > Accessibility," + " then restart")
+    print("[Daemon] Grant in System Settings" + " > Privacy > Accessibility")
   }
 }
 
