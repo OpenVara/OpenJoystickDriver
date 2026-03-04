@@ -14,8 +14,8 @@ struct ProfileCommand {
     case "show": showProfile(store: store, args: Array(args.dropFirst()))
     case "reset": resetProfile(store: store, args: Array(args.dropFirst()))
     default:
-      debugPrint("Unknown profile subcommand: \(sub)")
-      debugPrint(
+      print("Unknown profile subcommand: \(sub)")
+      print(
         "Usage: OpenJoystickDriver --headless" + " profile [list|show VID:PID|reset VID:PID]"
       )
     }
@@ -25,14 +25,14 @@ struct ProfileCommand {
     runSync {
       let profiles = await store.listProfiles()
       if profiles.isEmpty {
-        debugPrint("No saved profiles.")
-        debugPrint("Profiles are created automatically" + " when controller is used.")
+        print("No saved profiles.")
+        print("Profiles are created automatically" + " when controller is used.")
       } else {
-        debugPrint("Saved profiles:")
+        print("Saved profiles:")
         for profile in profiles {
           let vid = String(format: "0x%04X", profile.vendorID)
           let pid = String(format: "0x%04X", profile.productID)
-          debugPrint("  \(vid):\(pid)  '\(profile.name)'" + "  deadzone=\(profile.stickDeadzone)")
+          print("  \(vid):\(pid)  '\(profile.name)'" + "  deadzone=\(profile.stickDeadzone)")
         }
       }
     }
@@ -40,34 +40,34 @@ struct ProfileCommand {
 
   private func showProfile(store: ProfileStore, args: [String]) {
     guard let vidPid = args.first, let (vid, pid) = parseVidPid(vidPid) else {
-      debugPrint("Usage: profile show VID:PID" + "  (e.g. profile show 13623:4112)")
+      print("Usage: profile show VID:PID" + "  (e.g. profile show 13623:4112)")
       return
     }
     let identifier = DeviceIdentifier(vendorID: vid, productID: pid)
     runSync {
       let profile = await store.profile(for: identifier)
-      debugPrint("Profile for \(vidPid):")
-      debugPrint("  Name       : \(profile.name)")
-      debugPrint("  Deadzone   : \(profile.stickDeadzone)")
-      debugPrint("  Mouse sens : " + "\(profile.stickMouseSensitivity)")
-      debugPrint("  Scroll sens: " + "\(profile.stickScrollSensitivity)")
-      debugPrint("  Button mappings:")
+      print("Profile for \(vidPid):")
+      print("  Name       : \(profile.name)")
+      print("  Deadzone   : \(profile.stickDeadzone)")
+      print("  Mouse sens : " + "\(profile.stickMouseSensitivity)")
+      print("  Scroll sens: " + "\(profile.stickScrollSensitivity)")
+      print("  Button mappings:")
       let sorted = profile.buttonMappings.sorted { $0.key < $1.key }
-      for (btn, kc) in sorted { debugPrint("    \(btn) -> keyCode \(kc)") }
+      for (btn, kc) in sorted { print("    \(btn) -> keyCode \(kc)") }
     }
   }
 
   private func resetProfile(store: ProfileStore, args: [String]) {
     guard let vidPid = args.first, let (vid, pid) = parseVidPid(vidPid) else {
-      debugPrint("Usage: profile reset VID:PID" + "  (e.g. profile reset 13623:4112)")
+      print("Usage: profile reset VID:PID" + "  (e.g. profile reset 13623:4112)")
       return
     }
     let identifier = DeviceIdentifier(vendorID: vid, productID: pid)
     runSync {
       do {
         try await store.reset(for: identifier)
-        debugPrint("Profile reset to defaults for \(vidPid)")
-      } catch { debugPrint("Failed to reset profile: \(error)") }
+        print("Profile reset to defaults for \(vidPid)")
+      } catch { print("Failed to reset profile: \(error)") }
     }
   }
 

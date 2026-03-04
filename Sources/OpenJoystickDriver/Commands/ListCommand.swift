@@ -4,8 +4,8 @@ import SwiftUSB
 
 struct ListCommand {
   func run() {
-    debugPrint("Scanning for game controllers...")
-    debugPrint("")
+    print("Scanning for game controllers...")
+    print("")
 
     let client = XPCClient()
     client.connect()
@@ -19,25 +19,25 @@ struct ListCommand {
       semaphore.wait(timeout: .now() + xpcCallTimeoutSeconds) == .success && xpcDevices != nil
 
     if daemonRunning, let devices = xpcDevices {
-      debugPrint("Controllers (from running daemon):")
+      print("Controllers (from running daemon):")
       if devices.isEmpty {
-        debugPrint("  (none connected)")
+        print("  (none connected)")
       } else {
-        for dev in devices { debugPrint("  \(dev)") }
+        for dev in devices { print("  \(dev)") }
       }
-      debugPrint("")
+      print("")
       return
     }
 
     client.disconnect()
-    debugPrint("(direct scan - daemon not running)")
+    print("(direct scan - daemon not running)")
     listUSBDevices()
-    debugPrint("")
-    debugPrint("Note: HID controllers shown" + " when daemon is running.")
+    print("")
+    print("Note: HID controllers shown" + " when daemon is running.")
   }
 
   private func listUSBDevices() {
-    debugPrint("USB Controllers (class 0xFF / GIP):")
+    print("USB Controllers (class 0xFF / GIP):")
     do {
       let context = try USBContext()
       runSync {
@@ -52,17 +52,17 @@ struct ListCommand {
           let name = String(describing: type(of: parser))
           let vid = String(format: "%04X", device.idVendor)
           let pid = String(format: "%04X", device.idProduct)
-          debugPrint(
+          print(
             "  VID=0x\(vid)" + " PID=0x\(pid)" + " bus=\(device.bus)" + " addr=\(device.address)"
               + " parser=\(name)"
           )
           found = true
         }
-        if !found { debugPrint("  (none found)") }
+        if !found { print("  (none found)") }
       }
     } catch {
-      debugPrint("  Error accessing USB: \(error)")
-      debugPrint(
+      print("  Error accessing USB: \(error)")
+      print(
         "  Tip: Run with sudo or sign with" + " entitlement" + " (see scripts/sign-dev.sh)"
       )
     }

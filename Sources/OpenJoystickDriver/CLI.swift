@@ -15,16 +15,16 @@ struct CLI {
     case "uninstall": UninstallCommand().run()
     case "run": RunCommand().run()
     case "--help", "-h", "help": printHelp()
-    case "--version", "-v", "version": debugPrint("OpenJoystickDriver v0.1.0")
+    case "--version", "-v", "version": print("OpenJoystickDriver v0.1.0")
     default:
-      debugPrint("Unknown command: \(command)")
+      print("Unknown command: \(command)")
       printHelp()
       exit(1)
     }
   }
 
   private func printHelp() {
-    debugPrint(
+    print(
       """
       OpenJoystickDriver v0.1.0 \
       - macOS gamepad driver

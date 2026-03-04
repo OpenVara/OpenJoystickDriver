@@ -9,14 +9,14 @@ struct InstallCommand {
       "OpenJoystickDriverDaemon"
     )
     guard FileManager.default.fileExists(atPath: daemonURL.path) else {
-      debugPrint("Error: daemon binary not found at \(daemonURL.path)")
+      print("Error: daemon binary not found at \(daemonURL.path)")
       exit(1)
     }
     do {
       try DaemonManager.install(daemonExecutable: daemonURL)
-      debugPrint("Daemon installed. Auto-starts on login.")
+      print("Daemon installed. Auto-starts on login.")
     } catch {
-      debugPrint("Install failed: \(error.localizedDescription)")
+      print("Install failed: \(error.localizedDescription)")
       exit(1)
     }
   }

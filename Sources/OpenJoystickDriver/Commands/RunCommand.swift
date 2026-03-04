@@ -3,8 +3,8 @@ import OpenJoystickDriverKit
 
 struct RunCommand {
   func run() {
-    debugPrint("[OpenJoystickDriver] Starting driver...")
-    debugPrint("[OpenJoystickDriver] Press Ctrl+C to stop.")
+    print("[OpenJoystickDriver] Starting driver...")
+    print("[OpenJoystickDriver] Press Ctrl+C to stop.")
 
     let profileStore = ProfileStore()
     let manager = DeviceManager(dispatcher: CGEventOutputDispatcher(profileStore: profileStore))

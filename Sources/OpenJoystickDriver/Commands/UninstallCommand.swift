@@ -6,9 +6,9 @@ struct UninstallCommand {
   func run() {
     do {
       try DaemonManager.uninstall()
-      debugPrint("Daemon uninstalled.")
+      print("Daemon uninstalled.")
     } catch {
-      debugPrint("Uninstall failed: \(error.localizedDescription)")
+      print("Uninstall failed: \(error.localizedDescription)")
       exit(1)
     }
   }
