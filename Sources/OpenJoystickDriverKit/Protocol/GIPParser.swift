@@ -8,13 +8,25 @@ private let gipHandshakeRetryDelays: [UInt64] = [1_000_000_000, 2_000_000_000, 4
 private let gipInitDelayNanoseconds: UInt64 = 50_000_000
 private let gipStickMax: Float = 32767
 private let gipTriggerMax: Float = 1023
+/// GIP CMD=0x03 keep-alive sent to prevent controller idling (~4 s interval).
+private let gipKeepAliveCmd: UInt8 = 0x03
 
+/// Errors that ``GIPParser`` can throw during the handshake or while parsing packets.
 public enum GIPError: Error, Sendable {
+  /// The controller did not complete the handshake within the allowed number of attempts.
   case handshakeTimeout
+  /// The handshake failed for a specific reason (e.g. no USB handle was provided).
   case handshakeFailed(String)
+  /// A received packet is too short or its declared length does not match the actual data.
   case malformedPacket(String)
 }
 
+/// Parser for Xbox One (GIP) controllers connected over USB.
+///
+/// Sends the three-packet GIP init sequence on connection, then parses
+/// incoming interrupt-transfer packets into ``ControllerEvent`` values.
+/// Sends a keep-alive ping every ~4 seconds to prevent the controller
+/// from entering idle.
 public final class GIPParser: InputParser, @unchecked Sendable {
 
   private enum Command {
@@ -36,6 +48,7 @@ public final class GIPParser: InputParser, @unchecked Sendable {
 
   private var prevButtons0: UInt8 = 0
   private var prevButtons1: UInt8 = 0
+  private var prevExtButtons: UInt8 = 0
   private var prevLT: UInt16 = 0
   private var prevRT: UInt16 = 0
 
@@ -58,6 +71,14 @@ public final class GIPParser: InputParser, @unchecked Sendable {
         try await Task.sleep(nanoseconds: gipHandshakeRetryDelays[attempt])
       }
     }
+  }
+
+  /// Send GIP keep-alive (CMD=0x03) to prevent the controller entering idle.
+  public func keepAlive(handle: USBDeviceHandle?) throws {
+    guard let handle else { return }
+    let seq = sequencer.next(for: gipKeepAliveCmd)
+    let packet: [UInt8] = [gipKeepAliveCmd, Option.internal, seq, 3, 0x00, 0x00, 0x00]
+    _ = try handle.interruptTransfer(endpoint: outEndpoint, data: packet, timeout: 2000)
   }
 
   public func parse(data: Data) throws -> [ControllerEvent] {
@@ -134,8 +155,11 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     events += parseSticksEvents(lsx: lsx, lsy: lsy, rsx: rsx, rsy: rsy)
     events += parseTriggers(lt: lt, rt: rt)
 
+    if bytes.count >= 15 { events += parseExtendedButtons(extByte: bytes[14]) }
+
     prevButtons0 = buttons0
     prevButtons1 = buttons1
+    prevExtButtons = bytes.count >= 15 ? bytes[14] : prevExtButtons
     prevLT = lt
     prevRT = rt
 
@@ -198,6 +222,12 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     guard let first = payload.first else { return [] }
     if (first & gipGuideButtonMask) != 0 { return [.buttonPressed(.guide)] }
     return [.buttonReleased(.guide)]
+  }
+
+  /// Parse extended button byte present in G7 SE 32-byte INPUT payload at offset 14.
+  /// Confirmed: bit 0x01 = Share.
+  private func parseExtendedButtons(extByte: UInt8) -> [ControllerEvent] {
+    diffButtons(prev: prevExtButtons, curr: extByte, mapping: [(1, .share)])
   }
 
   private func diffButtons(prev: UInt8, curr: UInt8, mapping: [(UInt8, Button)])
