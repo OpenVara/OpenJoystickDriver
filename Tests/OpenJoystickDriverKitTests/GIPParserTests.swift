@@ -175,4 +175,15 @@ import Testing
     #expect(!events2.contains(.buttonPressed(.a)))
     #expect(!events2.contains(.buttonReleased(.a)))
   }
+
+  @Test func parseShareButton() throws {
+    let parser = GIPParser()
+    // Share is at payload[14] (data[18]) bit 0, confirmed from G7 SE hardware capture
+    var payload = Data(repeating: 0, count: 32)
+    payload[14] = 0x01  // Share bit
+    var packet = Data([0x20, 32, 0, 32])
+    packet += payload
+    let events = try parser.parse(data: packet)
+    #expect(events.contains(.buttonPressed(.share)))
+  }
 }
