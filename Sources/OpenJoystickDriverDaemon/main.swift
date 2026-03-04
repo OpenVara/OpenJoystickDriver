@@ -1,3 +1,4 @@
+import ApplicationServices
 import Foundation
 import OpenJoystickDriverKit
 
@@ -24,6 +25,8 @@ Task {
   if accessState != .granted {
     print("[Daemon] Accessibility not granted" + " - CGEvent output disabled")
     print("[Daemon] Grant in System Settings" + " > Privacy > Accessibility")
+    // Trigger accessibility TCC prompt for this daemon binary.
+    AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
   }
 }
 
