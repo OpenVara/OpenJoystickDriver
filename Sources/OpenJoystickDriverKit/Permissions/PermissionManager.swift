@@ -1,5 +1,3 @@
-// Sources/OpenJoystickDriverKit/Permissions/PermissionManager.swift
-
 import ApplicationServices
 import Foundation
 import IOKit
