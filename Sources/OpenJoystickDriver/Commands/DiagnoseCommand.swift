@@ -61,13 +61,9 @@ struct DiagnoseCommand {
   private func printTroubleshooting() {
     print("Troubleshooting:")
     print("  USB access denied?")
-    print(
-      "    -> Run: ./scripts/sign-dev.sh" + " && sudo .build/debug/" + "OpenJoystickDriver run"
-    )
+    print("    -> Run: ./scripts/sign-dev.sh" + " && sudo .build/debug/" + "OpenJoystickDriver run")
     print("  No input from controller?")
-    print(
-      "    -> Grant Input Monitoring:" + " System Settings > Privacy" + " > Input Monitoring"
-    )
+    print("    -> Grant Input Monitoring:" + " System Settings > Privacy" + " > Input Monitoring")
     print("  Keys not firing?")
     print("    -> Grant Accessibility:" + " System Settings > Privacy" + " > Accessibility")
   }
