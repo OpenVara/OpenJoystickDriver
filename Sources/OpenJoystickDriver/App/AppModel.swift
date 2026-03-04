@@ -71,6 +71,15 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
 
   func refreshDaemonStatus() { daemonInstalled = DaemonManager.isInstalled }
 
+  /// Path to daemon binary as recorded in installed LaunchAgent plist.
+  /// Falls back to expected path relative to this app's executable.
+  var daemonExecutablePath: String? {
+    if let installed = DaemonManager.installedDaemonPath { return installed }
+    return Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent(
+      "OpenJoystickDriverDaemon"
+    ).path(percentEncoded: false)
+  }
+
   func installDaemon() async {
     daemonError = nil
     guard let execURL = Bundle.main.executableURL else {
@@ -96,6 +105,14 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     await task.value
     // Give launchd one moment to start process before polling.
     try? await Task.sleep(for: .seconds(1))
+    await poll()
+  }
+
+  func restartDaemon() async {
+    daemonError = nil
+    let task = Task.detached { DaemonManager.restart() }
+    await task.value
+    try? await Task.sleep(for: .seconds(2))
     await poll()
   }
 
