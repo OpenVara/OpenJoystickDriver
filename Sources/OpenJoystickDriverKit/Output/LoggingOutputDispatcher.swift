@@ -8,7 +8,7 @@ public final class LoggingOutputDispatcher: OutputDispatcher, Sendable {
 
   public func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) {
     for event in events {
-      debugPrint("[Output] " + "\(identifier.vendorID):\(identifier.productID)" + " -> \(event)")
+      print("[Output] " + "\(identifier.vendorID):\(identifier.productID)" + " -> \(event)")
     }
   }
 }

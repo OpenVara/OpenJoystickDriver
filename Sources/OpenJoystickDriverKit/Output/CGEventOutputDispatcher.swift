@@ -9,7 +9,7 @@ public final class CGEventOutputDispatcher: OutputDispatcher, @unchecked Sendabl
 
   public func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) async {
     guard AXIsProcessTrusted() else {
-      debugPrint("[CGEventDispatcher] Accessibility not granted" + " - skipping output")
+      print("[CGEventDispatcher] Accessibility not granted" + " - skipping output")
       return
     }
     let profile = await profileStore.profile(for: identifier)

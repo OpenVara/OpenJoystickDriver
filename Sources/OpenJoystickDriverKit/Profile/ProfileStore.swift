@@ -10,7 +10,7 @@ public actor ProfileStore {
     let dir = directory ?? Self.defaultDirectory()
     self.directory = dir
     do { try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) } catch
-    { debugPrint("[ProfileStore] Failed to create" + " directory: \(error)") }
+    { print("[ProfileStore] Failed to create" + " directory: \(error)") }
   }
 
   /// Load profile for device. Returns cached/saved profile or generated default.
@@ -35,7 +35,7 @@ public actor ProfileStore {
     let url = profileURL(for: identifier)
     try data.write(to: url, options: .atomic)
     cache[key] = profile
-    debugPrint("[ProfileStore] Saved profile '\(profile.name)'" + " for \(key)")
+    print("[ProfileStore] Saved profile '\(profile.name)'" + " for \(key)")
   }
 
   /// List all stored profiles from disk.

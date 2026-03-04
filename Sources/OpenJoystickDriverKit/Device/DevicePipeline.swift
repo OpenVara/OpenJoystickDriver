@@ -46,7 +46,7 @@ actor DevicePipeline {
     case .usb(let vid, let pid): await startUSBPipeline(vendorID: vid, productID: pid)
     case .hid:
       // HID pipeline: data fed via feedHIDData(); no separate startup loop needed
-      debugPrint("[DevicePipeline] HID pipeline ready" + " for \(identifier)")
+      print("[DevicePipeline] HID pipeline ready" + " for \(identifier)")
     }
   }
 
@@ -57,7 +57,7 @@ actor DevicePipeline {
       try? handle.releaseInterface(0)
       usbHandle = nil
     }
-    debugPrint("[DevicePipeline] Stopped: \(identifier)")
+    print("[DevicePipeline] Stopped: \(identifier)")
   }
 
   /// Feed HID input report data (called by DeviceManager
@@ -67,7 +67,7 @@ actor DevicePipeline {
     do {
       let events = try parser.parse(data: data)
       if !events.isEmpty { await dispatcher.dispatch(events: events, from: identifier) }
-    } catch { debugPrint("[DevicePipeline] Parse error" + " for \(identifier): \(error)") }
+    } catch { print("[DevicePipeline] Parse error" + " for \(identifier): \(error)") }
   }
 
   // MARK: - Private USB pipeline
@@ -75,7 +75,7 @@ actor DevicePipeline {
   private func startUSBPipeline(vendorID: UInt16, productID: UInt16) async {
     let context: USBContext
     do { context = try USBContext() } catch {
-      debugPrint("[DevicePipeline] Failed to create USBContext" + " for \(identifier): \(error)")
+      print("[DevicePipeline] Failed to create USBContext" + " for \(identifier): \(error)")
       isActive = false
       return
     }
@@ -87,7 +87,7 @@ actor DevicePipeline {
         productID: productID
       )
     else {
-      debugPrint("[DevicePipeline] Could not open USB device" + " \(identifier) after retries")
+      print("[DevicePipeline] Could not open USB device" + " \(identifier) after retries")
       isActive = false
       return
     }
@@ -95,9 +95,9 @@ actor DevicePipeline {
 
     do {
       try await parser.performHandshake(handle: handle)
-      debugPrint("[DevicePipeline] Handshake complete:" + " \(identifier)")
+      print("[DevicePipeline] Handshake complete:" + " \(identifier)")
     } catch {
-      debugPrint("[DevicePipeline] Handshake failed" + " for \(identifier): \(error)")
+      print("[DevicePipeline] Handshake failed" + " for \(identifier): \(error)")
       try? handle.releaseInterface(0)
       usbHandle = nil
       isActive = false
@@ -113,7 +113,7 @@ actor DevicePipeline {
     for attempt in 0..<usbOpenRetryDelays.count {
       do {
         guard let device = await context.findDevice(vendorId: vendorID, productId: productID) else {
-          debugPrint(
+          print(
             "[DevicePipeline] Device not found" + " (attempt \(attempt + 1)):" + " \(identifier)"
           )
           try await Task.sleep(nanoseconds: usbOpenRetryDelays[attempt])
@@ -123,7 +123,7 @@ actor DevicePipeline {
         try handle.claimInterface(0)
         return handle
       } catch {
-        debugPrint(
+        print(
           "[DevicePipeline] Open attempt" + " \(attempt + 1) failed"
             + " for \(identifier): \(error)"
         )
@@ -137,7 +137,7 @@ actor DevicePipeline {
 
   private func runUSBInputLoop(handle: USBDeviceHandle) async {
     let inEndpoint = gipInputEndpointAddress
-    debugPrint("[DevicePipeline] Starting USB input loop:" + " \(identifier)")
+    print("[DevicePipeline] Starting USB input loop:" + " \(identifier)")
 
     while isActive {
       do {
@@ -151,16 +151,16 @@ actor DevicePipeline {
       } catch let error as USBError where error.isTimeout { continue } catch let error as USBError
         where error.isNoDevice
       {
-        debugPrint("[DevicePipeline] Device disconnected:" + " \(identifier)")
+        print("[DevicePipeline] Device disconnected:" + " \(identifier)")
         break
       } catch {
-        debugPrint("[DevicePipeline] Read error" + " for \(identifier):" + " \(error) - continuing")
+        print("[DevicePipeline] Read error" + " for \(identifier):" + " \(error) - continuing")
         try? await Task.sleep(nanoseconds: pipelineErrorRecoveryDelay)
       }
     }
 
     try? handle.releaseInterface(0)
     usbHandle = nil
-    debugPrint("[DevicePipeline] Input loop ended:" + " \(identifier)")
+    print("[DevicePipeline] Input loop ended:" + " \(identifier)")
   }
 }

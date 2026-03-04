@@ -32,7 +32,7 @@ public enum DaemonManager: Sendable {
     try plist.write(to: plistURL, atomically: true, encoding: .utf8)
     let uid = String(getuid())
     launchctl(["bootstrap", "gui/\(uid)", plistURL.path(percentEncoded: false)])
-    debugPrint("[DaemonManager] Installed")
+    print("[DaemonManager] Installed")
   }
 
   /// Unloads daemon and removes LaunchAgent plist.
@@ -42,7 +42,7 @@ public enum DaemonManager: Sendable {
     if FileManager.default.fileExists(atPath: plistURL.path(percentEncoded: false)) {
       try FileManager.default.removeItem(at: plistURL)
     }
-    debugPrint("[DaemonManager] Uninstalled")
+    print("[DaemonManager] Uninstalled")
   }
 
   // MARK: - Private

@@ -14,7 +14,7 @@ struct DeviceCatalog: Sendable {
       for entry in decoded.devices { map["\(entry.vendor_id):\(entry.product_id)"] = entry.parser }
       entries = map
     } else {
-      debugPrint("[DeviceCatalog] Could not load devices.json - using built-in fallbacks")
+      print("[DeviceCatalog] Could not load devices.json - using built-in fallbacks")
       entries = ["13623:4112": "GIP", "1356:1476": "DS4", "1356:2508": "DS4"]
     }
   }

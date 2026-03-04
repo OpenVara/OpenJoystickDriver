@@ -50,10 +50,10 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     for attempt in 0..<gipHandshakeMaxAttempts {
       do {
         try await sendInitSequence(handle: handle)
-        debugPrint("[GIPParser] Init sequence sent" + " (attempt \(attempt + 1))")
+        print("[GIPParser] Init sequence sent" + " (attempt \(attempt + 1))")
         return
       } catch {
-        debugPrint("[GIPParser] Init attempt \(attempt + 1) " + "failed: \(error)")
+        print("[GIPParser] Init attempt \(attempt + 1) " + "failed: \(error)")
         guard attempt < gipHandshakeMaxAttempts - 1 else { throw GIPError.handshakeTimeout }
         try await Task.sleep(nanoseconds: gipHandshakeRetryDelays[attempt])
       }
@@ -116,7 +116,7 @@ public final class GIPParser: InputParser, @unchecked Sendable {
 
   private func parseMainInput(payload: Data) -> [ControllerEvent] {
     guard payload.count >= 14 else {
-      debugPrint("[GIPParser] Main input payload too short: " + "\(payload.count)")
+      print("[GIPParser] Main input payload too short: " + "\(payload.count)")
       return []
     }
     let bytes = Array(payload)

@@ -82,13 +82,13 @@ public actor PermissionManager {
   private func updateState(_ state: AccessState) {
     let previous = inputMonitoringState
     inputMonitoringState = state
-    debugPrint("[PermissionManager] Input Monitoring " + "state changed: \(previous) -> \(state)")
+    print("[PermissionManager] Input Monitoring " + "state changed: \(previous) -> \(state)")
   }
 
   private func updateAccessibilityState(_ state: AccessState) {
     let previous = accessibilityState
     accessibilityState = state
-    debugPrint("[PermissionManager] Accessibility " + "state changed: \(previous) -> \(state)")
+    print("[PermissionManager] Accessibility " + "state changed: \(previous) -> \(state)")
   }
 
   private func mapAccess(_ result: IOHIDAccessType) -> AccessState {

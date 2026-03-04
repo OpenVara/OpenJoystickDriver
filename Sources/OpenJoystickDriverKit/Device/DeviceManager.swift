@@ -28,15 +28,15 @@ public actor DeviceManager {
     let state = await permissionManager.checkAccess()
     switch state {
     case .unknown:
-      debugPrint("[DeviceManager] Requesting Input Monitoring" + " permission...")
+      print("[DeviceManager] Requesting Input Monitoring" + " permission...")
       await permissionManager.requestAccess()
     case .denied:
-      debugPrint("[DeviceManager] Input Monitoring denied" + " - running in detect-only mode")
-      debugPrint(
+      print("[DeviceManager] Input Monitoring denied" + " - running in detect-only mode")
+      print(
         "[DeviceManager] Open System Settings" + " > Privacy > Input Monitoring"
           + " to grant access"
       )
-    case .granted: debugPrint("[DeviceManager] Input Monitoring granted")
+    case .granted: print("[DeviceManager] Input Monitoring granted")
     }
 
     await permissionManager.startPolling()
@@ -45,7 +45,7 @@ public actor DeviceManager {
     let hidTask = Task { await self.runHIDDetection() }
     detectionTasks = [usbTask, hidTask]
 
-    debugPrint("[DeviceManager] Started" + " - dual detection active")
+    print("[DeviceManager] Started" + " - dual detection active")
   }
 
   /// Returns description strings for all connected
@@ -60,15 +60,15 @@ public actor DeviceManager {
     for pipeline in pipelines.values { await pipeline.stop() }
     pipelines = [:]
     await permissionManager.stopPolling()
-    debugPrint("[DeviceManager] Stopped")
+    print("[DeviceManager] Stopped")
   }
 
   // MARK: - USB detection (class 0xFF)
 
   private func runUSBDetection() async {
-    debugPrint("[DeviceManager] USB detection started" + " (class 0xFF)")
+    print("[DeviceManager] USB detection started" + " (class 0xFF)")
     guard let context = try? USBContext() else {
-      debugPrint("[DeviceManager] Failed to create USBContext")
+      print("[DeviceManager] Failed to create USBContext")
       return
     }
 
@@ -89,7 +89,7 @@ public actor DeviceManager {
       let removedKeys = knownLocations.subtracting(currentKeys)
       for key in removedKeys {
         knownLocations.remove(key)
-        debugPrint("[DeviceManager] USB device removed: \(key)")
+        print("[DeviceManager] USB device removed: \(key)")
       }
 
       try? await Task.sleep(nanoseconds: usbDetectionPollNanoseconds)
@@ -107,11 +107,11 @@ public actor DeviceManager {
     )
 
     guard pipelines[identifier] == nil else {
-      debugPrint("[DeviceManager] Pipeline already exists" + " for \(identifier)")
+      print("[DeviceManager] Pipeline already exists" + " for \(identifier)")
       return
     }
 
-    debugPrint("[DeviceManager] USB device added: \(identifier)")
+    print("[DeviceManager] USB device added: \(identifier)")
     let parser = parserRegistry.parser(for: identifier)
     let pipeline = DevicePipeline(
       identifier: identifier,
@@ -126,7 +126,7 @@ public actor DeviceManager {
   // MARK: - HID detection (class 0x03)
 
   private func runHIDDetection() async {
-    debugPrint("[DeviceManager] HID detection started" + " (class 0x03)")
+    print("[DeviceManager] HID detection started" + " (class 0x03)")
     for await event in hidManager.deviceEvents() {
       switch event {
       case .connected(let vid, let pid, let serial, let loc):
@@ -158,7 +158,7 @@ public actor DeviceManager {
 
     guard pipelines[identifier] == nil else { return }
 
-    debugPrint("[DeviceManager] HID device connected:" + " \(identifier)")
+    print("[DeviceManager] HID device connected:" + " \(identifier)")
     let parser = parserRegistry.parser(for: identifier)
     let pipeline = DevicePipeline(
       identifier: identifier,
@@ -176,7 +176,7 @@ public actor DeviceManager {
     if let key = pipelines.keys.first(where: { $0.locationID == locationID }) {
       let pipeline = pipelines.removeValue(forKey: key)
       await pipeline?.stop()
-      debugPrint(
+      print(
         "[DeviceManager] HID device disconnected:" + " VID=\(vendorID) PID=\(productID)"
           + " loc=\(locationID)"
       )

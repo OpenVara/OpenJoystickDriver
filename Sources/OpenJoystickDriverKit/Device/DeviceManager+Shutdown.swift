@@ -7,7 +7,7 @@ extension DeviceManager {
     let dm = self
     let sigterm = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
     sigterm.setEventHandler {
-      debugPrint("[\(label)] SIGTERM - stopping...")
+      print("[\(label)] SIGTERM - stopping...")
       Task {
         await dm.stop()
         exit(0)
@@ -18,7 +18,7 @@ extension DeviceManager {
 
     let sigint = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
     sigint.setEventHandler {
-      debugPrint("[\(label)] SIGINT - stopping...")
+      print("[\(label)] SIGINT - stopping...")
       Task {
         await dm.stop()
         exit(0)

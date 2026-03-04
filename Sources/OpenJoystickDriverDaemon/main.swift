@@ -12,17 +12,15 @@ let xpcService = XPCService(
 
 manager.setupGracefulShutdown(label: "Daemon")
 
-debugPrint("[Daemon] OpenJoystickDriverDaemon starting...")
+print("[Daemon] OpenJoystickDriverDaemon starting...")
 
 Task { await permissionManager.startPolling() }
 
 Task {
   let accessState = await permissionManager.checkAccessibilityState()
   if accessState != .granted {
-    debugPrint("[Daemon] Accessibility not granted" + " - CGEvent output disabled")
-    debugPrint(
-      "[Daemon] Grant in System Settings" + " > Privacy > Accessibility," + " then restart"
-    )
+    print("[Daemon] Accessibility not granted" + " - CGEvent output disabled")
+    print("[Daemon] Grant in System Settings" + " > Privacy > Accessibility," + " then restart")
   }
 }
 

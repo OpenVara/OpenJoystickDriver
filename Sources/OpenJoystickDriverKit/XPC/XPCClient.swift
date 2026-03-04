@@ -19,9 +19,9 @@ public final class XPCClient: @unchecked Sendable {
     conn.remoteObjectInterface = NSXPCInterface(with: OpenJoystickDriverXPCProtocol.self)
     conn.invalidationHandler = { [weak self] in
       self?.connection = nil
-      debugPrint("[XPCClient] Connection invalidated")
+      print("[XPCClient] Connection invalidated")
     }
-    conn.interruptionHandler = { debugPrint("[XPCClient] Connection interrupted") }
+    conn.interruptionHandler = { print("[XPCClient] Connection interrupted") }
     conn.resume()
     connection = conn
   }

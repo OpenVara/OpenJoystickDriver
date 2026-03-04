@@ -8,9 +8,7 @@ public final class GenericHIDParser: InputParser, Sendable {
 
   public init(identifier: DeviceIdentifier) {
     self.identifier = identifier
-    debugPrint(
-      "[GenericHIDParser] Unrecognized controller " + "\(identifier), using generic mapping"
-    )
+    print("[GenericHIDParser] Unrecognized controller " + "\(identifier), using generic mapping")
   }
 
   // swiftlint:disable async_without_await
