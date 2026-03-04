@@ -12,6 +12,7 @@ public actor DeviceManager {
   private struct DeviceInfo {
     let name: String
     let connection: String
+    let serialNumber: String?
   }
 
   private let parserRegistry: ParserRegistry
@@ -22,6 +23,7 @@ public actor DeviceManager {
   private var deviceInfos: [DeviceIdentifier: DeviceInfo] = [:]
   private var detectionTasks: [Task<Void, Never>] = []
 
+  /// Creates a manager that sends all output to `dispatcher`.
   public init(dispatcher: any OutputDispatcher) {
     self.dispatcher = dispatcher
     self.parserRegistry = ParserRegistry()
@@ -56,8 +58,22 @@ public actor DeviceManager {
     print("[DeviceManager] Started" + " - dual detection active")
   }
 
+  /// Returns the latest input snapshot for a device matched by vendor and product ID.
+  /// Returns nil if no pipeline is active for the device.
+  public func inputState(for identifier: DeviceIdentifier) async -> DeviceInputState? {
+    guard let key = pipelines.keys.first(where: { $0.modelMatches(identifier) }) else { return nil }
+    return await pipelines[key]?.inputState()
+  }
+
+  /// Returns recent raw USB packets for a device matched by vendor and product ID.
+  /// Returns an empty array if no pipeline is active for the device.
+  public func packetLog(for identifier: DeviceIdentifier) async -> [PacketLogEntry] {
+    guard let key = pipelines.keys.first(where: { $0.modelMatches(identifier) }) else { return [] }
+    return await pipelines[key]?.getPacketLog() ?? []
+  }
+
   /// Returns description strings for all connected controllers.
-  /// Format: "NAME (VID:D PID:D PARSER [CONNECTION])"
+  /// Format: "NAME (VID:D PID:D PARSER [CONNECTION] SN:SERIAL)"
   /// Used by XPCService to report live device list.
   public func connectedDeviceDescriptions() -> [String] {
     pipelines.keys.map { id in
@@ -65,7 +81,8 @@ public actor DeviceManager {
       let name = info?.name ?? "Controller"
       let connection = info?.connection ?? "USB"
       let parser = parserRegistry.parserName(for: id)
-      return "\(name) (VID:\(id.vendorID) PID:\(id.productID) \(parser) [\(connection)])"
+      let sn = info?.serialNumber ?? "none"
+      return "\(name) (VID:\(id.vendorID) PID:\(id.productID) \(parser) [\(connection)] SN:\(sn))"
     }
   }
 
@@ -89,30 +106,75 @@ public actor DeviceManager {
     }
 
     var knownLocations: Set<String> = []
+    var locationToIdentifier: [String: DeviceIdentifier] = [:]
 
     while !Task.isCancelled {
-      var currentKeys: Set<String> = []
-      let stream = context.findDevices(deviceClass: usbVendorSpecificClass, findAll: true)
-      for await device in stream {
-        let key = "\(device.bus):\(device.address)"
-        currentKeys.insert(key)
-        if !knownLocations.contains(key) {
-          knownLocations.insert(key)
-          handleUSBDeviceAdded(device)
-        }
-      }
+      let (currentKeys, addedDevices) = await usbDetectCurrentDevices(
+        context: context,
+        knownLocations: knownLocations
+      )
 
-      let removedKeys = knownLocations.subtracting(currentKeys)
-      for key in removedKeys {
-        knownLocations.remove(key)
-        print("[DeviceManager] USB device removed: \(key)")
-      }
+      updateUSBKnownLocations(
+        &knownLocations,
+        currentKeys: currentKeys,
+        addedDevices: addedDevices,
+        locationToIdentifier: &locationToIdentifier
+      )
+
+      await removeUSBLostDevices(
+        knownLocations: &knownLocations,
+        currentKeys: currentKeys,
+        locationToIdentifier: &locationToIdentifier
+      )
 
       try? await Task.sleep(nanoseconds: usbDetectionPollNanoseconds)
     }
   }
 
-  private func handleUSBDeviceAdded(_ device: USBDevice) {
+  private func usbDetectCurrentDevices(context: USBContext, knownLocations: Set<String>) async -> (
+    Set<String>, [(device: USBDevice, key: String)]
+  ) {
+    var currentKeys: Set<String> = []
+    var addedDevices: [(device: USBDevice, key: String)] = []
+    let stream = context.findDevices(deviceClass: usbVendorSpecificClass, findAll: true)
+    for await device in stream {
+      let key = "\(device.bus):\(device.address)"
+      currentKeys.insert(key)
+      if !knownLocations.contains(key) { addedDevices.append((device, key)) }
+    }
+    return (currentKeys, addedDevices)
+  }
+
+  private func updateUSBKnownLocations(
+    _ knownLocations: inout Set<String>,
+    currentKeys: Set<String>,
+    addedDevices: [(device: USBDevice, key: String)],
+    locationToIdentifier: inout [String: DeviceIdentifier]
+  ) {
+    for (device, key) in addedDevices {
+      knownLocations.insert(key)
+      if let id = handleUSBDeviceAdded(device) { locationToIdentifier[key] = id }
+    }
+  }
+
+  private func removeUSBLostDevices(
+    knownLocations: inout Set<String>,
+    currentKeys: Set<String>,
+    locationToIdentifier: inout [String: DeviceIdentifier]
+  ) async {
+    let removedKeys = knownLocations.subtracting(currentKeys)
+    for key in removedKeys {
+      knownLocations.remove(key)
+      if let id = locationToIdentifier.removeValue(forKey: key) {
+        let pipeline = pipelines.removeValue(forKey: id)
+        deviceInfos.removeValue(forKey: id)
+        await pipeline?.stop()
+        print("[DeviceManager] USB device removed: \(id)")
+      }
+    }
+  }
+
+  @discardableResult private func handleUSBDeviceAdded(_ device: USBDevice) -> DeviceIdentifier? {
     let locationID = UInt32((UInt32(device.bus) << 8) | UInt32(device.address))
     let serial = try? device.getSerialNumber()
     let identifier = DeviceIdentifier(
@@ -124,11 +186,11 @@ public actor DeviceManager {
 
     guard pipelines[identifier] == nil else {
       print("[DeviceManager] Pipeline already exists" + " for \(identifier)")
-      return
+      return nil
     }
 
     let productName = (try? device.getProduct()) ?? "Controller"
-    deviceInfos[identifier] = DeviceInfo(name: productName, connection: "USB")
+    deviceInfos[identifier] = DeviceInfo(name: productName, connection: "USB", serialNumber: serial)
     print("[DeviceManager] USB device added: \(productName) (\(identifier))")
     let parser = parserRegistry.parser(for: identifier)
     let pipeline = DevicePipeline(
@@ -139,6 +201,7 @@ public actor DeviceManager {
     )
     pipelines[identifier] = pipeline
     Task { await pipeline.start() }
+    return identifier
   }
 
   // MARK: - HID detection (class 0x03)
@@ -179,7 +242,7 @@ public actor DeviceManager {
     guard pipelines[identifier] == nil else { return }
 
     let name = productName ?? "Controller"
-    deviceInfos[identifier] = DeviceInfo(name: name, connection: "HID")
+    deviceInfos[identifier] = DeviceInfo(name: name, connection: "HID", serialNumber: serialNumber)
     print("[DeviceManager] HID device connected:" + " \(name) (\(identifier))")
     let parser = parserRegistry.parser(for: identifier)
     let pipeline = DevicePipeline(
