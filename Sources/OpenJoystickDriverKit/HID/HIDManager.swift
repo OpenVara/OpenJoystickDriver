@@ -1,5 +1,3 @@
-// Sources/OpenJoystickDriverKit/HID/HIDManager.swift
-
 import Foundation
 import IOKit.hid
 
