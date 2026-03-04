@@ -4,14 +4,19 @@ import CoreGraphics
 public final class CGEventOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   private var dpadTracker = DpadKeyTracker()
   private let profileStore: ProfileStore
+  private var hasLoggedAccessibilityWarning = false
 
   public init(profileStore: ProfileStore = ProfileStore()) { self.profileStore = profileStore }
 
   public func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) async {
     guard AXIsProcessTrusted() else {
-      print("[CGEventDispatcher] Accessibility not granted" + " - skipping output")
+      if !hasLoggedAccessibilityWarning {
+        hasLoggedAccessibilityWarning = true
+        print("[CGEventDispatcher] Accessibility not granted" + " - skipping output")
+      }
       return
     }
+    hasLoggedAccessibilityWarning = false
     let profile = await profileStore.profile(for: identifier)
     for event in events { handle(event, profile: profile) }
   }
