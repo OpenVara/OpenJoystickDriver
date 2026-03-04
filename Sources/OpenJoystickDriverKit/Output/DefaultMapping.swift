@@ -27,4 +27,13 @@ public enum DefaultMapping {
   public static let stickMouseSensitivity: Float = 8.0
   /// Multiplier applied to right-stick input when scrolling.
   public static let stickScrollSensitivity: Float = 3.0
+  /// Half-width of the cursor region in pixels for ``StickMode/mouseRegion`` mode.
+  public static let stickMouseRegionRadius: Float = 200.0
+  /// Default key bindings used when a stick is in ``StickMode/keyboard`` mode and
+  /// the profile has no explicit mapping for a direction.  Arrow keys are used so
+  /// that keyboard mode works out-of-the-box without manual configuration.
+  public static let stickKeyboardDefaults: [String: UInt16] = [
+    "leftStickUp": 126, "leftStickDown": 125, "leftStickLeft": 123, "leftStickRight": 124,
+    "rightStickUp": 126, "rightStickDown": 125, "rightStickLeft": 123, "rightStickRight": 124,
+  ]
 }
