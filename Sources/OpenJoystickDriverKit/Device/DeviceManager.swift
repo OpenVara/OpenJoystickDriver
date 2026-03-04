@@ -33,15 +33,19 @@ public actor DeviceManager {
   public func start() async {
     let state = await permissionManager.checkAccess()
     switch state {
-    case .unknown:
-      print("[DeviceManager] Requesting Input Monitoring" + " permission...")
+    case .unknown, .denied:
+      // Request (or re-request) so TCC entry stays current in System Settings.
+      // When denied, IOHIDRequestAccess is no-op dialog-wise but keeps entry alive.
       await permissionManager.requestAccess()
-    case .denied:
-      print("[DeviceManager] Input Monitoring denied" + " - running in detect-only mode")
-      print(
-        "[DeviceManager] Open System Settings" + " > Privacy > Input Monitoring"
-          + " to grant access"
-      )
+      if state == .denied {
+        print("[DeviceManager] Input Monitoring denied" + " - running in detect-only mode")
+        print(
+          "[DeviceManager] Open System Settings" + " > Privacy > Input Monitoring"
+            + " to grant access"
+        )
+      } else {
+        print("[DeviceManager] Requesting Input Monitoring" + " permission...")
+      }
     case .granted: print("[DeviceManager] Input Monitoring granted")
     }
 
