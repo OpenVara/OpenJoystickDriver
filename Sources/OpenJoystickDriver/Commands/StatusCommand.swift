@@ -3,11 +3,7 @@ import OpenJoystickDriverKit
 
 struct StatusCommand {
   func run() {
-    print("OpenJoystickDriver Status")
-    let divider = String(repeating: "\u{2500}", count: 25)
-    print(divider)
-    print("")
-
+    printHeader()
     let client = XPCClient()
     client.connect()
     let semaphore = DispatchSemaphore(value: 0)
@@ -21,25 +17,38 @@ struct StatusCommand {
       semaphore.wait(timeout: .now() + xpcCallTimeoutSeconds) == .success && xpcPayload != nil
 
     if connected, let payload = xpcPayload {
-      print("(connected to running daemon via XPC)")
-      print("")
-      print("Permissions:")
-      print("  Input Monitoring : " + payload.inputMonitoring)
-      print("  Accessibility    : " + payload.accessibility)
-      print("")
-      if payload.connectedDevices.isEmpty {
-        print("Devices: (none connected)")
-      } else {
-        print("Devices" + " (\(payload.connectedDevices.count)):")
-        for dev in payload.connectedDevices { print("  \(dev)") }
-      }
+      printPayloadStatus(payload)
     } else {
       client.disconnect()
       runDirectMode()
     }
     print("")
-    print("Use '--headless list'" + " to enumerate controllers.")
+    printUsageHint()
   }
+
+  private func printHeader() {
+    print("OpenJoystickDriver Status")
+    let divider = String(repeating: "\u{2500}", count: 25)
+    print(divider)
+    print("")
+  }
+
+  private func printPayloadStatus(_ payload: XPCStatusPayload) {
+    print("(connected to running daemon via XPC)")
+    print("")
+    print("Permissions:")
+    print("  Input Monitoring : " + payload.inputMonitoring)
+    print("  Accessibility    : " + payload.accessibility)
+    print("")
+    if payload.connectedDevices.isEmpty {
+      print("Devices: (none connected)")
+    } else {
+      print("Devices" + " (\(payload.connectedDevices.count)):")
+      for dev in payload.connectedDevices { print("  \(dev)") }
+    }
+  }
+
+  private func printUsageHint() { print("Use '--headless list'" + " to enumerate controllers.") }
 
   private func runDirectMode() {
     print("(direct mode - daemon not running)")
