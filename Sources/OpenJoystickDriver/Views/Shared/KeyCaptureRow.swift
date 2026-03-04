@@ -1,4 +1,5 @@
 import AppKit
+import OpenJoystickDriverKit
 import SwiftUI
 
 private let captureRowLabelWidth: CGFloat = 130
