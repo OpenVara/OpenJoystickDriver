@@ -11,6 +11,8 @@ struct CLI {
     case "status": StatusCommand().run()
     case "diagnose": DiagnoseCommand().run()
     case "profile": ProfileCommand(args: Array(args.dropFirst())).run()
+    case "start": StartDaemonCommand().run()
+    case "restart": RestartDaemonCommand().run()
     case "install": InstallCommand().run()
     case "uninstall": UninstallCommand().run()
     case "run": RunCommand().run()
@@ -39,10 +41,12 @@ struct CLI {
         status     Show permission and device status
         diagnose   Hardware diagnostics
         profile    Manage controller profiles \
-      (list|show|reset)
+      (list|show|set|reset)
         install    Install daemon as LaunchAgent \
       (auto-starts on login)
         uninstall  Remove daemon LaunchAgent
+        start      Start daemon LaunchAgent
+        restart    Restart daemon LaunchAgent
 
       Options:
         -h, --help     Show this help
