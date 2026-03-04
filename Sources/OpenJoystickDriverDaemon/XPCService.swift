@@ -20,16 +20,19 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
   private let deviceManager: DeviceManager
   private let permissionManager: PermissionManager
   private let profileStore: ProfileStore
+  private let dispatcher: CGEventOutputDispatcher
   private var listener: NSXPCListener?
 
   public init(
     deviceManager: DeviceManager,
     permissionManager: PermissionManager,
-    profileStore: ProfileStore
+    profileStore: ProfileStore,
+    dispatcher: CGEventOutputDispatcher
   ) {
     self.deviceManager = deviceManager
     self.permissionManager = permissionManager
     self.profileStore = profileStore
+    self.dispatcher = dispatcher
   }
 
   /// Register Mach service and start accepting connections.
@@ -135,5 +138,114 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         callback.call(false)
       }
     }
+  }
+
+  public func allProfiles(vendorID: Int, productID: Int, reply: @escaping (Data) -> Void) {
+    let callback = SendableReply(call: reply)
+    let ps = profileStore
+    Task {
+      let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
+      let profiles = await ps.allProfiles(for: identifier)
+      let data = (try? JSONEncoder().encode(profiles)) ?? Data()
+      callback.call(data)
+    }
+  }
+
+  public func addProfile(
+    profileData: Data,
+    vendorID: Int,
+    productID: Int,
+    reply: @escaping (Data?) -> Void
+  ) {
+    let callback = SendableReply(call: reply)
+    let ps = profileStore
+    Task {
+      guard var profile = try? JSONDecoder().decode(Profile.self, from: profileData) else {
+        callback.call(nil)
+        return
+      }
+      profile.vendorID = UInt16(vendorID)
+      profile.productID = UInt16(productID)
+      do {
+        try await ps.addProfile(profile)
+        callback.call(try? JSONEncoder().encode(profile))
+      } catch {
+        print("[XPCService] addProfile error: \(error)")
+        callback.call(nil)
+      }
+    }
+  }
+
+  public func deleteProfile(
+    profileId: String,
+    vendorID: Int,
+    productID: Int,
+    reply: @escaping (Bool) -> Void
+  ) {
+    let callback = SendableReply(call: reply)
+    let ps = profileStore
+    Task {
+      guard let uuid = UUID(uuidString: profileId) else {
+        callback.call(false)
+        return
+      }
+      let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
+      do {
+        try await ps.deleteProfile(id: uuid, for: identifier)
+        callback.call(true)
+      } catch {
+        print("[XPCService] deleteProfile error: \(error)")
+        callback.call(false)
+      }
+    }
+  }
+
+  public func setActiveProfile(
+    profileId: String,
+    vendorID: Int,
+    productID: Int,
+    reply: @escaping (Bool) -> Void
+  ) {
+    let callback = SendableReply(call: reply)
+    let ps = profileStore
+    Task {
+      guard let uuid = UUID(uuidString: profileId) else {
+        callback.call(false)
+        return
+      }
+      let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
+      do {
+        try await ps.setActiveProfile(id: uuid, for: identifier)
+        callback.call(true)
+      } catch {
+        print("[XPCService] setActiveProfile error: \(error)")
+        callback.call(false)
+      }
+    }
+  }
+
+  public func getDeviceInputState(vendorID: Int, productID: Int, reply: @escaping (Data?) -> Void) {
+    let callback = SendableReply(call: reply)
+    let dm = deviceManager
+    Task {
+      let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
+      let state = await dm.inputState(for: identifier)
+      callback.call(try? JSONEncoder().encode(state))
+    }
+  }
+
+  public func getPacketLog(vendorID: Int, productID: Int, reply: @escaping (Data) -> Void) {
+    let callback = SendableReply(call: reply)
+    let dm = deviceManager
+    Task {
+      let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
+      let log = await dm.packetLog(for: identifier)
+      callback.call((try? JSONEncoder().encode(log)) ?? Data())
+    }
+  }
+
+  public func setSuppressOutput(_ suppress: Bool, reply: @escaping (Bool) -> Void) {
+    dispatcher.suppressOutput = suppress
+    reply(true)
   }
 }
