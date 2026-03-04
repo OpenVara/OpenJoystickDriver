@@ -15,23 +15,25 @@ struct PermissionsView: View {
           rebuildNotice
         }
         daemonPathCard
-        PermissionCard(
-          title: "Input Monitoring",
-          systemImage: "keyboard",
-          status: model.inputMonitoring,
-          description: "Required to monitor keyboard" + " state and detect conflicts.",
-          settingsURL: inputMonitoringURL,
-          showHint: model.inputMonitoring.lowercased() != "granted"
-        ).padding(.horizontal)
-        PermissionCard(
-          title: "Accessibility",
-          systemImage: "accessibility",
-          status: model.accessibility,
-          description: "Required to post CGEvents" + " (keyboard/mouse output) to system.",
-          settingsURL: accessibilityURL,
-          showHint: model.accessibility.lowercased() != "granted"
-        ).padding(.horizontal)
-      }.padding(.vertical)
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+          PermissionCard(
+            title: "Input Monitoring",
+            systemImage: "keyboard",
+            status: model.inputMonitoring,
+            description: "Required to monitor keyboard" + " state and detect conflicts.",
+            settingsURL: inputMonitoringURL,
+            showHint: model.inputMonitoring.lowercased() != "granted"
+          )
+          PermissionCard(
+            title: "Accessibility",
+            systemImage: "accessibility",
+            status: model.accessibility,
+            description: "Required to post CGEvents" + " (keyboard/mouse output) to system.",
+            settingsURL: accessibilityURL,
+            showHint: model.accessibility.lowercased() != "granted"
+          )
+        }.padding(.horizontal)
+      }.padding()
     }.navigationTitle("Permissions")
   }
 
@@ -81,7 +83,6 @@ struct PermissionsView: View {
   private var daemonPathCard: some View {
     GroupBox {
       VStack(alignment: .leading, spacing: 8) {
-        Label("Daemon Binary", systemImage: "terminal").fontWeight(.semibold)
         if let path = model.daemonExecutablePath {
           Text(path).font(.system(.caption, design: .monospaced)).textSelection(.enabled).padding(6)
             .frame(maxWidth: .infinity, alignment: .leading).background(
@@ -91,10 +92,11 @@ struct PermissionsView: View {
           Text("Not found").font(.caption).foregroundStyle(.secondary)
         }
         Text(
-          "Grant permissions to this binary" + " in System Settings."
-            + " Permissions reset after each rebuild."
+          "Grant permissions to this binary in System Settings. Permissions reset after each rebuild."
         ).font(.caption).foregroundStyle(.secondary)
       }
+    } label: {
+      Label("Daemon Binary", systemImage: "terminal").fontWeight(.semibold)
     }.padding(.horizontal)
   }
 }
@@ -107,15 +109,6 @@ private struct PermissionCard: View {
   let settingsURL: String
   var showHint: Bool = false
 
-  private var statusLabel: String {
-    switch status.lowercased() {
-    case "granted": "Granted"
-    case "denied": "Denied"
-    case "notdetermined": "Not Determined"
-    default: status
-    }
-  }
-
   private var isGranted: Bool { status.lowercased() == "granted" }
 
   var body: some View {
@@ -125,7 +118,7 @@ private struct PermissionCard: View {
           Image(systemName: systemImage).font(.title3).frame(width: 24)
           Text(title).fontWeight(.semibold)
           Spacer()
-          statusPill
+          PermissionStatusIcon(isGranted: isGranted)
         }
         Text(description).font(.caption).foregroundStyle(.secondary)
         if showHint { hintBox }
@@ -134,15 +127,6 @@ private struct PermissionCard: View {
         }.buttonStyle(.bordered)
       }
     }
-  }
-
-  private var statusPill: some View {
-    Text(statusLabel).font(.caption).fontWeight(.medium).padding(.horizontal, 8).padding(
-      .vertical,
-      3
-    ).background(isGranted ? Color.green.opacity(0.15) : Color.red.opacity(0.15)).foregroundStyle(
-      isGranted ? .green : .red
-    ).clipShape(Capsule())
   }
 
   private var hintBox: some View {
