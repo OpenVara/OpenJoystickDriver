@@ -6,12 +6,12 @@
 #   Ad-hoc (default, no Apple account needed):
 #     Embeds entitlements in binary but macOS does NOT enforce them.
 #     On Darwin 25+ (macOS 26+), sudo alone is insufficient for USB class 0xFF
-#     access — IOKit now requires com.apple.security.device.usb to be honored,
+#     access - IOKit now requires com.apple.security.device.usb to be honored,
 #     which only happens with real signing identity.
 #
 #   Apple Development (recommended):
 #     Signs with your Apple Development certificate (free Apple Account via Xcode).
-#     Entitlements are enforced — USB access works without sudo.
+#     Entitlements are enforced - USB access works without sudo.
 #     Set CODESIGN_IDENTITY before running:
 #       export CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
 #       ./scripts/sign-dev.sh
