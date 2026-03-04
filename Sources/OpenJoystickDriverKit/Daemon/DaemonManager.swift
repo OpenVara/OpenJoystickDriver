@@ -43,6 +43,24 @@ public enum DaemonManager: Sendable {
     print("[DaemonManager] Started")
   }
 
+  /// Kills and restarts daemon via launchctl kickstart -k.
+  /// Use to apply permission grants without full reinstall.
+  public static func restart() {
+    let uid = String(getuid())
+    launchctl(["kickstart", "-k", "gui/\(uid)/\(label)"])
+    print("[DaemonManager] Restarted")
+  }
+
+  /// Returns daemon executable path from installed LaunchAgent plist.
+  /// Returns nil if plist is absent or unparseable.
+  public static var installedDaemonPath: String? {
+    guard let data = try? Data(contentsOf: plistURL),
+      let plist = try? PropertyListSerialization.propertyList(from: data, format: nil)
+        as? [String: Any], let args = plist["ProgramArguments"] as? [String]
+    else { return nil }
+    return args.first
+  }
+
   /// Unloads daemon and removes LaunchAgent plist.
   public static func uninstall() throws {
     let uid = String(getuid())
