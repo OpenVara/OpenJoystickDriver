@@ -18,10 +18,10 @@ OpenJoystickDriver is to gamepads what [OpenTabletDriver](https://opentabletdriv
 
 | Feature | Status |
 |---------|--------|
-| Xbox One / Series controllers (GIP protocol) | Working — hardware verified on Gamesir G7 SE |
+| Xbox One / Series controllers (GIP protocol) | Working - hardware verified on Gamesir G7 SE |
 | DualShock 4 (USB) | Implemented, untested (no PS4 hardware) |
 | Generic USB HID gamepads | Basic fallback (standard HID usage page) |
-| Button remapping | Working — JSON profiles per VID/PID |
+| Button remapping | Working - JSON profiles per VID/PID |
 | Stick → mouse, D-pad → arrow keys | Working |
 | Menu bar app (SwiftUI) | Working |
 | CLI (`--headless`) | Working |
@@ -35,7 +35,7 @@ OpenJoystickDriver is to gamepads what [OpenTabletDriver](https://opentabletdriv
 ## Requirements
 
 - macOS 13 (Ventura) or later
-- [libusb](https://libusb.info/) — required for Xbox/GIP controllers
+- [libusb](https://libusb.info/) - required for Xbox/GIP controllers
 - Xcode Command Line Tools or a full Xcode installation (for `swift build`)
 
 ```bash
@@ -66,8 +66,8 @@ To uninstall:
 
 Two system permissions are required:
 
-- **Input Monitoring** (`System Settings > Privacy > Input Monitoring`) — to read controller input
-- **Accessibility** (`System Settings > Privacy > Accessibility`) — to inject keyboard/mouse events
+- **Input Monitoring** (`System Settings > Privacy > Input Monitoring`) - to read controller input
+- **Accessibility** (`System Settings > Privacy > Accessibility`) - to inject keyboard/mouse events
 
 Grant both to the **daemon binary** (`OpenJoystickDriverDaemon`), not the GUI app.
 
@@ -88,11 +88,11 @@ Grant both to the **daemon binary** (`OpenJoystickDriverDaemon`), not the GUI ap
 
 Launch `OpenJoystickDriver` from `/usr/local/bin` or Spotlight. It runs as a menu bar app.
 
-- **Sidebar** — lists connected controllers and navigation links for Permissions and Diagnostics
-- **Mapping tab** — remap any button to a keyboard key; configure stick deadzone, mouse sensitivity, scroll sensitivity
-- **Info tab** — VID, PID, protocol, connection details
-- **Permissions** — per-permission status cards with deep links to System Settings; shows a restart prompt when permissions reset after a rebuild
-- **Diagnostics** — daemon lifecycle controls (install / start / restart / uninstall), log path, troubleshooting tips, copy-to-clipboard diagnostics
+- **Sidebar** - lists connected controllers and navigation links for Permissions and Diagnostics
+- **Mapping tab** - remap any button to a keyboard key; configure stick deadzone, mouse sensitivity, scroll sensitivity
+- **Info tab** - VID, PID, protocol, connection details
+- **Permissions** - per-permission status cards with deep links to System Settings; shows a restart prompt when permissions reset after a rebuild
+- **Diagnostics** - daemon lifecycle controls (install / start / restart / uninstall), log path, troubleshooting tips, copy-to-clipboard diagnostics
 
 ### CLI
 
@@ -140,7 +140,7 @@ USB Class 0xFF (Vendor-Specific)  →  LibUSB / SwiftUSB    →  GIPParser
 USB Class 0x03 (HID)              →  IOKit / IOHIDManager  →  DS4Parser or GenericHIDParser
 ```
 
-Both paths feed into a `DevicePipeline` actor — one per connected controller. Pipelines are isolated: an error in one controller's pipeline doesn't affect the others.
+Both paths feed into a `DevicePipeline` actor - one per connected controller. Pipelines are isolated: an error in one controller's pipeline doesn't affect the others.
 
 The daemon exposes an XPC service (`com.openjoystickdriver.xpc`). The GUI and CLI connect to it for device listing, status queries, and profile changes. The daemon never depends on the GUI being open.
 
@@ -152,8 +152,8 @@ Profiles are stored at `~/Library/Application Support/OpenJoystickDriver/profile
 
 Device support lives in two places:
 
-- `Sources/OpenJoystickDriverKit/Resources/devices.json` — VID/PID catalog and parser assignment
-- `Resources/Schemas/Devices/` — per-device field layouts (for documentation and validation)
+- `Sources/OpenJoystickDriverKit/Resources/devices.json` - VID/PID catalog and parser assignment
+- `Resources/Schemas/Devices/` - per-device field layouts (for documentation and validation)
 
 To add a new controller:
 
@@ -191,4 +191,4 @@ Swift 6.2 strict concurrency is enforced. All warnings are errors. SwiftLint zer
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).

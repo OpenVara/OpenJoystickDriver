@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-analyze_gamepad.py — Gamesir G7 SE / Xbox GIP raw USB packet analyzer.
+analyze_gamepad.py - Gamesir G7 SE / Xbox GIP raw USB packet analyzer.
 
 Investigates whether L4/R4/M/Mic buttons produce USB traffic.
 
@@ -142,7 +142,7 @@ def decode_input(payload: bytes) -> str:
         if unknown14:
             extra_notes.append(f"ext[14]=0x{ext14:02X} (unknown bits!)")
 
-    # Bytes 15..31 — log any non-zero values (potential unreported buttons)
+    # Bytes 15..31 - log any non-zero values (potential unreported buttons)
     if len(payload) > 15:
         nonzero = [(i + 15, v) for i, v in enumerate(payload[15:]) if v != 0]
         if nonzero:
@@ -314,11 +314,11 @@ def capture(
                     print(f"[{elapsed:8.3f}s] INPUT       {hex_str(payload)}")
                 print(f"             ↳  {decode_input(payload)}")
                 prev_input = payload
-            elif cmd == 0x07:  # VIRTUAL_KEY — always decode in detail
+            elif cmd == 0x07:  # VIRTUAL_KEY - always decode in detail
                 print(f"[{elapsed:8.3f}s] {cmd_name:<12} {hex_str(data)}")
                 print(f"             ↳  {decode_virtual_key(payload)}")
             else:
-                # Every non-INPUT packet always printed — this is what we're hunting for
+                # Every non-INPUT packet always printed - this is what we're hunting for
                 print(f"[{elapsed:8.3f}s] {cmd_name:<12} {hex_str(data)}")
 
     except KeyboardInterrupt:
@@ -337,16 +337,16 @@ def capture(
 # ── Investigate mode ──────────────────────────────────────────────────────────
 
 INVESTIGATE_PHASES: List[Tuple[str, float]] = [
-    ("BASELINE — all inputs at rest (sticks centred, no buttons)", 6.0),
+    ("BASELINE - all inputs at rest (sticks centred, no buttons)", 6.0),
     ("Press and HOLD  L4  (back left paddle)", 10.0),
-    ("Release L4 — rest", 3.0),
+    ("Release L4 - rest", 3.0),
     ("Press and HOLD  R4  (back right paddle)", 10.0),
-    ("Release R4 — rest", 3.0),
+    ("Release R4 - rest", 3.0),
     ("Press and HOLD  M   (mode button, centre back)", 10.0),
-    ("Release M — rest", 3.0),
+    ("Release M - rest", 3.0),
     ("Press and HOLD  Mic (microphone button, near headphone jack)", 10.0),
-    ("Release Mic — rest", 3.0),
-    ("REFERENCE — press  A,  LB,  Share,  Guide  (confirm known buttons appear)", 10.0),
+    ("Release Mic - rest", 3.0),
+    ("REFERENCE - press  A,  LB,  Share,  Guide  (confirm known buttons appear)", 10.0),
 ]
 
 
@@ -357,7 +357,7 @@ def investigate(dev: usb.core.Device, in_ep: int, out_ep: int, seq: GIPSequencer
 
     all_cmds: Dict[int, int] = {}
     for label, dur in INVESTIGATE_PHASES:
-        prompt = f"\n→  {label}  ({dur:.0f}s — press Enter then act)"
+        prompt = f"\n→  {label}  ({dur:.0f}s - press Enter then act)"
         input(prompt)
         counts = capture(dev, in_ep, out_ep, seq, duration=dur,
                          diff_only=False, label=label)
@@ -439,7 +439,7 @@ def main():
 
     try:
         if mode == "default":
-            print("\n[CAPTURE] 30s capture — press buttons to investigate.")
+            print("\n[CAPTURE] 30s capture - press buttons to investigate.")
             if diff_only:
                 print("  Idle INPUT packets suppressed. Changed bytes in [brackets].\n")
             capture(dev, in_ep, out_ep, seq, duration=30.0, diff_only=diff_only)
