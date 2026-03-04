@@ -1,21 +1,19 @@
 #!/usr/bin/env bash
-# Builds universal binary, installs to INSTALL_DIR,
+# Builds native binary, installs to INSTALL_DIR,
 # and registers daemon as LaunchAgent for current user.
+# For signed universal binary (distribution), use scripts/build-release.sh instead.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
-echo "Building universal binary..."
+echo "Building..."
 cd "$PROJECT_DIR"
-swift build -c release \
-  --product OpenJoystickDriverDaemon \
-  --product OpenJoystickDriver \
-  --arch arm64 \
-  --arch x86_64
+swift build -c release --product OpenJoystickDriverDaemon
+swift build -c release --product OpenJoystickDriver
 
-RELEASE=".build/apple/Products/Release"
+RELEASE=".build/release"
 
 echo "Installing to $INSTALL_DIR..."
 sudo install -m 755 "$RELEASE/OpenJoystickDriverDaemon" \
