@@ -40,6 +40,7 @@ struct DiagnosticsView: View {
   // MARK: - Status Helpers
 
   private var daemonStatusText: String {
+    if model.daemonRestarting { return "Restarting..." }
     if let action = daemonAction { return action }
     if model.daemonConnected { return "Running" }
     if model.daemonInstalled { return "Installed (not running)" }
@@ -47,6 +48,7 @@ struct DiagnosticsView: View {
   }
 
   private var daemonStatusColor: Color {
+    if model.daemonRestarting { return .orange }
     if daemonAction != nil { return .orange }
     if model.daemonConnected { return .green }
     if model.daemonInstalled { return .orange }
@@ -231,7 +233,7 @@ struct DiagnosticsView: View {
       )
       tipRow(
         "Accessibility not granted",
-        detail: "System Settings › Privacy › Accessibility — add the daemon binary."
+        detail: "System Settings › Privacy › Accessibility - add the daemon binary."
       )
       tipRow(
         "Daemon not running",
