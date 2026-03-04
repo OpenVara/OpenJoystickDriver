@@ -17,21 +17,22 @@ cd "$(dirname "$0")/.."
 ENTITLEMENTS="Sources/OpenJoystickDriverDaemon/OpenJoystickDriverDaemon.entitlements"
 
 echo "Building debug binaries..."
-swift build \
-  --product OpenJoystickDriverDaemon \
-  --product OpenJoystickDriver
+swift build --product OpenJoystickDriverDaemon
+swift build --product OpenJoystickDriver
 
 DAEMON=".build/debug/OpenJoystickDriverDaemon"
 GUI=".build/debug/OpenJoystickDriver"
 
+# Ad-hoc signing without --options runtime: hardened runtime enforces library
+# validation and rejects Homebrew dylibs (different Team ID). Dev builds don't
+# need hardened runtime — that's notarization requirement only.
 echo "Ad-hoc signing daemon (with entitlements)..."
-codesign --sign - --force --options runtime \
+codesign --sign - --force \
   --entitlements "$ENTITLEMENTS" \
   "$DAEMON"
 
 echo "Ad-hoc signing GUI..."
-codesign --sign - --force --options runtime \
-  "$GUI"
+codesign --sign - --force "$GUI"
 
 echo ""
 echo "Signed (ad-hoc):"
