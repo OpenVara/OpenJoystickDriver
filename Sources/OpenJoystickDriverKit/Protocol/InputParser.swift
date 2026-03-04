@@ -1,4 +1,3 @@
-// Sources/OpenJoystickDriverKit/Protocol/InputParser.swift
 import Foundation
 import SwiftUSB
 
