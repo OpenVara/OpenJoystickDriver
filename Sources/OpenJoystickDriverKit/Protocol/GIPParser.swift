@@ -51,6 +51,10 @@ public final class GIPParser: InputParser, @unchecked Sendable {
   private var prevExtButtons: UInt8 = 0
   private var prevLT: UInt16 = 0
   private var prevRT: UInt16 = 0
+  private var prevLSX: Int16 = 0
+  private var prevLSY: Int16 = 0
+  private var prevRSX: Int16 = 0
+  private var prevRSY: Int16 = 0
 
   public init() {}
 
@@ -204,11 +208,22 @@ public final class GIPParser: InputParser, @unchecked Sendable {
   private func parseSticksEvents(lsx: Int16, lsy: Int16, rsx: Int16, rsy: Int16)
     -> [ControllerEvent]
   {
-    let lx = normalizeStick(lsx)
-    let ly = -normalizeStick(lsy)
-    let rx = normalizeStick(rsx)
-    let ry = -normalizeStick(rsy)
-    return [.leftStickChanged(x: lx, y: ly), .rightStickChanged(x: rx, y: ry)]
+    var events: [ControllerEvent] = []
+    if lsx != prevLSX || lsy != prevLSY {
+      let lx = normalizeStick(lsx)
+      let ly = -normalizeStick(lsy)
+      events.append(.leftStickChanged(x: lx, y: ly))
+      prevLSX = lsx
+      prevLSY = lsy
+    }
+    if rsx != prevRSX || rsy != prevRSY {
+      let rx = normalizeStick(rsx)
+      let ry = -normalizeStick(rsy)
+      events.append(.rightStickChanged(x: rx, y: ry))
+      prevRSX = rsx
+      prevRSY = rsy
+    }
+    return events
   }
 
   private func parseTriggers(lt: UInt16, rt: UInt16) -> [ControllerEvent] {
