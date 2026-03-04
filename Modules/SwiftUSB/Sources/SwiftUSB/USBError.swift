@@ -95,9 +95,9 @@ public struct USBError: Error, Sendable {
 
   private static func logError(code: Int32, message: String, context: String?) {
     if let context {
-      debugPrint("[SwiftUSB] \(message) (code: \(code), context: \(context))")
+      print("[SwiftUSB] \(message) (code: \(code), context: \(context))")
     } else {
-      debugPrint("[SwiftUSB] \(message) (code: \(code))")
+      print("[SwiftUSB] \(message) (code: \(code))")
     }
   }
 

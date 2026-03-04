@@ -38,7 +38,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     xpcListener.delegate = self
     xpcListener.resume()
     listener = xpcListener
-    debugPrint("[XPCService] Listening on \(xpcServiceName)")
+    print("[XPCService] Listening on \(xpcServiceName)")
   }
 
   // MARK: - NSXPCListenerDelegate
@@ -50,7 +50,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     connection.exportedInterface = NSXPCInterface(with: OpenJoystickDriverXPCProtocol.self)
     connection.exportedObject = self
     connection.resume()
-    debugPrint("[XPCService] Accepted new connection")
+    print("[XPCService] Accepted new connection")
     return true
   }
 
@@ -116,7 +116,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         try await ps.save(profile)
         callback.call(true)
       } catch {
-        debugPrint("[XPCService] saveProfile error: \(error)")
+        print("[XPCService] saveProfile error: \(error)")
         callback.call(false)
       }
     }
@@ -131,7 +131,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         try await ps.reset(for: identifier)
         callback.call(true)
       } catch {
-        debugPrint("[XPCService] resetProfile error: \(error)")
+        print("[XPCService] resetProfile error: \(error)")
         callback.call(false)
       }
     }

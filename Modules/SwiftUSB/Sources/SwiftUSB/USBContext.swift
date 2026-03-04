@@ -3,7 +3,7 @@ import Dispatch
 import Foundation
 
 /// Sendable wrapper for C opaque pointer.
-/// Safe because libusb context pointer outlives all closures that use it —
+/// Safe because libusb context pointer outlives all closures that use it -
 /// enforced by deinit semaphore in USBContext.
 private struct SendablePointer: @unchecked Sendable { let value: OpaquePointer }
 
@@ -65,9 +65,7 @@ public final class USBContext: @unchecked Sendable {
         let result = libusb_handle_events_timeout(ctx.value, &timeout)
         if result == Self.TIMEOUT { continue }
         guard result >= 0 else {
-          debugPrint(
-            "[SwiftUSB] Event handling error: \(String(cString: libusb_error_name(result)))"
-          )
+          print("[SwiftUSB] Event handling error: \(String(cString: libusb_error_name(result)))")
           continue
         }
       }

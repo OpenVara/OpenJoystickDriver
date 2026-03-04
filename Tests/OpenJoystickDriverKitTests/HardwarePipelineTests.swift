@@ -24,7 +24,7 @@ private let sharedContext: USBContext? = try? USBContext()
     for await device in stream where device.idVendor == gamesirVID && device.idProduct == gamesirPID
     {
       found = true
-      debugPrint(
+      print(
         "[HardwareTest] Found G7 SE:" + " bus=\(device.bus)" + " addr=\(device.address)"
           + " class=\(device.bDeviceClass)"
       )
@@ -45,21 +45,21 @@ private let sharedContext: USBContext? = try? USBContext()
 
     let handle: USBDeviceHandle
     do { handle = try device.open() } catch let error as USBError where error.isAccessDenied {
-      debugPrint(
+      print(
         "[HardwareTest] USB access denied" + " - skipping handshake test"
           + " (needs root or entitlements)"
       )
       return
     }
     do { try handle.claimInterface(0) } catch let error as USBError where error.isAccessDenied {
-      debugPrint("[HardwareTest] Cannot claim interface" + " - skipping (access denied)")
+      print("[HardwareTest] Cannot claim interface" + " - skipping (access denied)")
       return
     }
 
     let parser = GIPParser()
 
     try await parser.performHandshake(handle: handle)
-    debugPrint("[HardwareTest] Handshake sent" + " - G7 SE LED should be on")
+    print("[HardwareTest] Handshake sent" + " - G7 SE LED should be on")
 
     var gotReport = false
     var parseError: (any Error)?
@@ -67,9 +67,9 @@ private let sharedContext: USBContext? = try? USBContext()
     for _ in 0..<5 {
       do {
         let data = try handle.readInterrupt(endpoint: 0x82, length: 64, timeout: 1000)
-        debugPrint("[HardwareTest] Report bytes:" + " \(Array(data).prefix(8))")
+        print("[HardwareTest] Report bytes:" + " \(Array(data).prefix(8))")
         let events = try parser.parse(data: Data(data))
-        debugPrint("[HardwareTest] Parsed \(events.count) events")
+        print("[HardwareTest] Parsed \(events.count) events")
         gotReport = true
         break
       } catch let error as USBError where error.isTimeout { continue } catch {

@@ -220,7 +220,7 @@ public func disposeResources(for handle: USBDeviceHandle) {
   for interface in handle.claimedInterfaces {
     let result = libusb_release_interface(handle.handle, Int32(interface))
     if result < 0 {
-      debugPrint("[SwiftUSB] Failed to release interface \(interface): error code \(result)")
+      print("[SwiftUSB] Failed to release interface \(interface): error code \(result)")
     }
   }
   handle.claimedInterfaces.removeAll()
