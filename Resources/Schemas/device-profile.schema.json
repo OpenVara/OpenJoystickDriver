@@ -2,7 +2,7 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "device-profile.schema.json",
 	"title": "Device Hardware Profile",
-	"description": "Hardware-verified specification for a specific USB game controller. Documents USB endpoints, protocol init sequence, and input report layout. These files are reference documentation — they are NOT loaded at runtime. All numeric values are decimal (no hex).",
+	"description": "Hardware-verified specification for a specific USB game controller. Documents USB endpoints, protocol init sequence, and input report layout. These files are reference documentation - they are NOT loaded at runtime. All numeric values are decimal (no hex).",
 	"type": "object",
 	"required": [
 		"vendor_id",

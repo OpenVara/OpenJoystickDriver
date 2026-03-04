@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Publisher release script — builds signed universal binary and notarizes it.
+# Publisher release script - builds signed universal binary and notarizes it.
 #
-# REQUIREMENTS (publisher only — contributors use scripts/sign-dev.sh instead):
+# REQUIREMENTS (publisher only - contributors use scripts/sign-dev.sh instead):
 #   1. Valid Apple Developer account with Developer ID Application certificate.
 #   2. Copy .env.example to .env and fill in all four values.
 #   3. Developer ID Application certificate must be installed in your Keychain.
@@ -30,7 +30,7 @@ source "$ENV_FILE"
 : "${APPLE_ID_PASSWORD:?APPLE_ID_PASSWORD not set in .env}"
 
 # ---------------------------------------------------------------------------
-# Universal (fat) libusb — Homebrew only ships arm64 on Apple Silicon.
+# Universal (fat) libusb - Homebrew only ships arm64 on Apple Silicon.
 # We cross-compile x86_64 from source and lipo both slices into one .a that
 # SPM/xcodebuild can link when targeting both architectures.
 # Result is cached under .build/libusb-universal so it only builds once.

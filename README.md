@@ -16,14 +16,12 @@ OpenJoystickDriver is to gamepads what [OpenTabletDriver](https://opentabletdriv
 
 ## What works
 
-**v0.1.0**
-
 | Feature | Status |
 |---------|--------|
-| Xbox One / Series controllers (GIP protocol) | Working — hardware verified on Gamesir G7 SE |
+| Xbox One / Series controllers (GIP protocol) | Working - hardware verified on Gamesir G7 SE |
 | DualShock 4 (USB) | Implemented, untested (no PS4 hardware) |
 | Generic USB HID gamepads | Basic fallback (reports standard HID usage page) |
-| Button remapping | Working — JSON profiles per VID/PID |
+| Button remapping | Working - JSON profiles per VID/PID |
 | Stick → mouse, D-pad → arrow keys | Working |
 | Menu bar app (SwiftUI) | Working |
 | CLI (`--headless`) | Working |
@@ -37,11 +35,11 @@ OpenJoystickDriver is to gamepads what [OpenTabletDriver](https://opentabletdriv
 ## Requirements
 
 - macOS 13 (Ventura) or later
-- [libusb](https://libusb.info/) — required for Xbox/GIP controllers
+- [libusb](https://libusb.info/) - required for Xbox/GIP controllers
 - Xcode Command Line Tools or a full Xcode installation (for `swift build`)
 - Two system permissions granted at first launch:
-  - **Input Monitoring** — to read controller input
-  - **Accessibility** — to inject keyboard/mouse events
+  - **Input Monitoring** - to read controller input
+  - **Accessibility** - to inject keyboard/mouse events
 
 ```bash
 brew install libusb
@@ -111,7 +109,7 @@ USB Class 0xFF (Vendor-Specific)   →  LibUSB / SwiftUSB  →  GIPParser
 USB Class 0x03 (HID)               →  IOKit / IOHIDManager  →  DS4Parser or GenericHIDParser
 ```
 
-Both paths feed into a `DevicePipeline` actor — one per connected controller. Pipelines are isolated: a crash or parse error in one controller's pipeline doesn't affect the others.
+Both paths feed into a `DevicePipeline` actor - one per connected controller. Pipelines are isolated: a crash or parse error in one controller's pipeline doesn't affect the others.
 
 The daemon exposes an XPC service (`com.openjoystickdriver.xpc`). The GUI and CLI connect to it for device listing, status queries, and profile changes. The daemon never depends on the GUI being open.
 
@@ -123,8 +121,8 @@ Profiles are stored at `~/Library/Application Support/OpenJoystickDriver/profile
 
 Device support lives in two places:
 
-- `Sources/OpenJoystickDriverKit/Resources/devices.json` — VID/PID catalog and parser assignment
-- `Resources/Schemas/Devices/` — per-device field layouts (for documentation and validation)
+- `Sources/OpenJoystickDriverKit/Resources/devices.json` - VID/PID catalog and parser assignment
+- `Resources/Schemas/Devices/` - per-device field layouts (for documentation and validation)
 
 To add a new controller:
 
@@ -159,4 +157,4 @@ Swift 6.2 strict concurrency is enforced. All warnings are errors. SwiftLint run
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).

@@ -31,7 +31,7 @@ Check the [issue tracker](https://github.com/OpenVara/OpenJoystickDriver/issues)
 
 ## Adding a controller
 
-**Step 1 — Identify the device class.**
+**Step 1 - Identify the device class.**
 
 Plug in the controller and run:
 
@@ -41,7 +41,7 @@ system_profiler SPUSBDataType
 
 Look for `bDeviceClass`. If it's `0xff` (255), the controller uses a vendor-specific protocol (likely GIP for Xbox-compatible hardware). If it's `0x03` (3), it's a standard HID device.
 
-**Step 2 — Add the device to the catalog.**
+**Step 2 - Add the device to the catalog.**
 
 Edit `Sources/OpenJoystickDriverKit/Resources/devices.json`. VID and PID must be **decimal integers**, not hex strings.
 
@@ -56,15 +56,15 @@ Edit `Sources/OpenJoystickDriverKit/Resources/devices.json`. VID and PID must be
 
 Valid parser values: `"gip"`, `"ds4"`, `"generic_hid"`.
 
-**Step 3 — Add a device schema (optional but useful).**
+**Step 3 - Add a device schema (optional but useful).**
 
 Create `Resources/Schemas/Devices/YourDevice.json` documenting the button layout and any protocol quirks. See `GamesirG7SE.json` for an example.
 
-**Step 4 — If the controller uses a new protocol, implement a parser.**
+**Step 4 - If the controller uses a new protocol, implement a parser.**
 
 New parsers go in `Sources/OpenJoystickDriverKit/Protocol/` and must conform to the `InputParser` protocol. Look at `GIPParser.swift` and `DS4Parser.swift` as references.
 
-**Step 5 — Add tests.**
+**Step 5 - Add tests.**
 
 Add test cases to `Tests/OpenJoystickDriverKitTests/`. Tests that require hardware should be in `Modules/SwiftUSB/Tests/HardwareTests/` and use the `.serialized` trait.
 
@@ -73,7 +73,7 @@ Add test cases to `Tests/OpenJoystickDriverKitTests/`. Tests that require hardwa
 ## Code rules
 
 - **Swift 6.2 strict concurrency.** All warnings are treated as errors. No `nonisolated(unsafe)` unless absolutely necessary and justified in a comment.
-- **SwiftLint zero-suppression policy.** Don't add `// swiftlint:disable` lines. Fix the lint issue instead. The only exception is `@objc` callbacks that can't satisfy certain rules — document the reason in a comment on the same line.
+- **SwiftLint zero-suppression policy.** Don't add `// swiftlint:disable` lines. Fix the lint issue instead. The only exception is `@objc` callbacks that can't satisfy certain rules - document the reason in a comment on the same line.
 - **No hex numbers in JSON files.** Use decimal integers for VID/PID, command codes, and all other numeric values.
 - **`debugPrint` only.** Don't use `print` or `swift-log`.
 - **One parser error must not affect other controllers.** Each `DevicePipeline` is isolated. Errors in a parser should be logged and skipped, not propagated upward.

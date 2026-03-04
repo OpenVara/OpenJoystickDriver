@@ -15,7 +15,7 @@
 		},
 		"commands": {
 			"type": "array",
-			"description": "GIP command codes. The 'code' field is the first byte of every GIP packet (data[0]). Only a subset of the full GIP spec is implemented — add new entries as commands are supported.",
+			"description": "GIP command codes. The 'code' field is the first byte of every GIP packet (data[0]). Only a subset of the full GIP spec is implemented - add new entries as commands are supported.",
 			"items": { "$ref": "#/$defs/command" }
 		},
 		"option_flags": {

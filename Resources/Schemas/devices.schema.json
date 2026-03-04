@@ -2,7 +2,7 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "devices.schema.json",
 	"title": "OpenJoystickDriver Device Catalog",
-	"description": "Maps USB VID/PID pairs to parser implementations. Add new controllers here to get automatic driver support. All numeric values must be decimal — never hex.",
+	"description": "Maps USB VID/PID pairs to parser implementations. Add new controllers here to get automatic driver support. All numeric values must be decimal - never hex.",
 	"type": "object",
 	"required": ["version", "devices"],
 	"additionalProperties": false,
@@ -16,7 +16,7 @@
 		"devices": {
 			"type": "array",
 			"minItems": 1,
-			"description": "Registered controllers. Each entry maps one USB VID+PID to a parser. Order does not matter — lookup is by VID:PID key.",
+			"description": "Registered controllers. Each entry maps one USB VID+PID to a parser. Order does not matter - lookup is by VID:PID key.",
 			"items": { "$ref": "#/$defs/device" }
 		}
 	},
