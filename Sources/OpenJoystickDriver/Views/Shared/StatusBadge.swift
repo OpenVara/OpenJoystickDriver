@@ -16,3 +16,14 @@ struct StatusBadge: View {
     }
   }
 }
+
+/// Fixed-size permission indicator: green checkmark (granted) or red cross (denied).
+struct PermissionStatusIcon: View {
+  let isGranted: Bool
+
+  var body: some View {
+    Image(systemName: isGranted ? "checkmark.circle.fill" : "xmark.circle.fill").foregroundStyle(
+      isGranted ? Color.green : Color.red
+    ).font(.system(size: 18))
+  }
+}
