@@ -45,7 +45,7 @@ public struct USBEndpoint: Sendable {
   /// Transfer type decoded from `bmAttributes`.
   public var transferType: USBTransferType { USBTransferType.from(attributes: bmAttributes) }
 
-  /// Endpoint number — the low 4 bits of `bEndpointAddress`.
+  /// Endpoint number - the low 4 bits of `bEndpointAddress`.
   public var number: Int { Int(bEndpointAddress & 0x0F) }
 
   /// Endpoint address as a formatted hex string (e.g. `"0x82"`).

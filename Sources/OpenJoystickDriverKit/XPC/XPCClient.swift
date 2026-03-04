@@ -30,7 +30,7 @@ public final class XPCClient: @unchecked Sendable {
   public init() {}
 
   /// Opens a connection to the daemon's Mach service.
-  /// Safe to call multiple times — replaces any existing connection.
+  /// Safe to call multiple times - replaces any existing connection.
   public func connect() {
     let conn = NSXPCConnection(machServiceName: xpcServiceName)
     conn.remoteObjectInterface = NSXPCInterface(with: OpenJoystickDriverXPCProtocol.self)

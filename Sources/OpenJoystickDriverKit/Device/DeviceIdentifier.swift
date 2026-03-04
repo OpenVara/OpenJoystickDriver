@@ -1,14 +1,14 @@
 /// Identifies a game controller for profile matching and multi-controller support.
 ///
 /// Three levels of matching, from most specific to least:
-/// 1. **Exact** — vendor ID + product ID + serial number. Matches one physical device.
-/// 2. **Model** — vendor ID + product ID only. All controllers of the same model share a profile.
-/// 3. **Location** — vendor ID + product ID + location ID. A fallback for controllers that
+/// 1. **Exact** - vendor ID + product ID + serial number. Matches one physical device.
+/// 2. **Model** - vendor ID + product ID only. All controllers of the same model share a profile.
+/// 3. **Location** - vendor ID + product ID + location ID. A fallback for controllers that
 ///    do not report a serial number. Location IDs can change when you unplug and replug.
 public struct DeviceIdentifier: Hashable, Sendable {
-  /// Vendor ID (VID) — identifies who made the controller (e.g. 0x3537 = Gamesir).
+  /// Vendor ID (VID) - identifies who made the controller (e.g. 0x3537 = Gamesir).
   public let vendorID: UInt16
-  /// Product ID (PID) — identifies which model of controller (e.g. 0x1010 = G7 SE).
+  /// Product ID (PID) - identifies which model of controller (e.g. 0x1010 = G7 SE).
   public let productID: UInt16
   /// USB serial number reported by the controller. Nil if the controller does not provide one.
   public let serialNumber: String?

@@ -80,7 +80,7 @@ public final class USBContext: @unchecked Sendable {
 
   /// Returns an async stream of USB devices that match the given filters.
   ///
-  /// All filters are optional — omit them to match every connected device.
+  /// All filters are optional - omit them to match every connected device.
   /// Set `findAll` to false to stop the stream after the first match.
   public func findDevices(
     vendorId: UInt16? = nil,

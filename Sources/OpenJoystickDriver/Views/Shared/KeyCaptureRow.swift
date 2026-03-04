@@ -12,7 +12,7 @@ private let captureKeyButtonWidth: CGFloat = 80
 enum ButtonBadge {
   /// Filled coloured circle with a letter (Xbox/DS4 face buttons).
   case xboxFace(_ letter: String, _ color: Color)
-  /// Xbox logo glyph in Xbox green — Guide/Home button.
+  /// Xbox logo glyph in Xbox green - Guide/Home button.
   case xboxLogo
   /// Short text on a tinted pill background (e.g. "LT", "RT").
   case textLabel(_ text: String)

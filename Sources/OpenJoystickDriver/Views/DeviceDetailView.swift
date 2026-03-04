@@ -149,8 +149,8 @@ struct DeviceDetailView: View {
 
   private var parserFullName: String {
     switch device.parser.uppercased() {
-    case "GIP": return "GIP — Xbox Gaming Input Protocol"
-    case "DS4": return "DS4 — DualShock 4"
+    case "GIP": return "GIP - Xbox Gaming Input Protocol"
+    case "DS4": return "DS4 - DualShock 4"
     default: return device.parser
     }
   }
