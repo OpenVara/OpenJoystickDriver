@@ -6,7 +6,19 @@ setbuf(stdout, nil)
 
 let permissionManager = PermissionManager()
 let profileStore = ProfileStore()
-let dispatcher = CGEventOutputDispatcher(profileStore: profileStore)
+
+// Prefer the DriverKit virtual HID extension (no hid.virtual.device entitlement
+// required). Fall back to IOHIDUserDevice if the extension is not installed yet.
+let dextDispatcher = DextOutputDispatcher(profileStore: profileStore)
+let dispatcher: any OutputDispatcher
+if dextDispatcher.connect() {
+  dispatcher = dextDispatcher
+  print("[Daemon] Using DextOutputDispatcher (DriverKit virtual HID)")
+} else {
+  dispatcher = IOHIDVirtualOutputDispatcher(profileStore: profileStore)
+  print("[Daemon] Using IOHIDVirtualOutputDispatcher (fallback — install dext for production)")
+}
+
 let manager = DeviceManager(dispatcher: dispatcher)
 let xpcService = XPCService(
   deviceManager: manager,
@@ -20,14 +32,6 @@ manager.setupGracefulShutdown(label: "Daemon")
 print("[Daemon] OpenJoystickDriverDaemon starting...")
 
 Task { await permissionManager.startPolling() }
-
-Task {
-  let accessState = await permissionManager.checkAccessibilityState()
-  if accessState != .granted {
-    print("[Daemon] Accessibility not granted - CGEvent output disabled")
-    print("[Daemon] Grant in System Settings > Privacy > Accessibility")
-  }
-}
 
 xpcService.start()
 

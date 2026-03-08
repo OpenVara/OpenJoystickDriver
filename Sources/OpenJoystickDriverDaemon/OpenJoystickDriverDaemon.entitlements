@@ -2,9 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Daemon must not be sandboxed to access USB and inject CGEvents -->
+    <!-- Daemon must not be sandboxed to access USB and IOKit HID devices -->
     <key>com.apple.security.app-sandbox</key>
     <false/>
+
+    <!-- com.apple.developer.hid.virtual.device is required for             -->
+    <!-- IOHIDUserDeviceCreateWithProperties (virtual HID gamepad output).  -->
+    <!-- It is a restricted entitlement: adding it without a matching       -->
+    <!-- provisioning profile causes amfid to kill the process on SIP-      -->
+    <!-- enabled Macs.  Omitted here until Apple approves the request at    -->
+    <!-- developer.apple.com/contact/request/system-extension.              -->
+    <!-- When provisioned, add back:                                        -->
+    <!--   <key>com.apple.developer.hid.virtual.device</key><true/>        -->
+    <!-- IOHIDVirtualOutputDispatcher already handles nil device gracefully.-->
 
     <!-- Allows IOKit USB device access (class 0xFF / vendor-specific) -->
     <!-- without running as root. Requires Developer ID signing.       -->
@@ -15,5 +25,12 @@
     <!-- Homebrew, which carries Homebrew's certificate, not ours.     -->
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
+
+    <!-- Allows the daemon to open a user-client connection to the OJD  -->
+    <!-- DriverKit extension (com.openjoystickdriver.VirtualHIDDevice). -->
+    <key>com.apple.developer.driverkit.userclient-access</key>
+    <array>
+        <string>com.openjoystickdriver.VirtualHIDDevice</string>
+    </array>
 </dict>
 </plist>
