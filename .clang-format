@@ -1,0 +1,39 @@
+AccessModifierOffset: -4 # -1
+AlignAfterOpenBracket: AlwaysBreak
+AllowAllArgumentsOnNextLine: false # true
+AllowAllConstructorInitializersOnNextLine: false # true
+AllowAllParametersOfDeclarationOnNextLine: false # true
+AllowShortBlocksOnASingleLine: Empty # Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortCompoundRequirementOnASingleLine: true
+AllowShortEnumsOnASingleLine: false # true
+AllowShortFunctionsOnASingleLine: Empty # All
+AllowShortIfStatementsOnASingleLine: Never # WithoutElse
+AllowShortLoopsOnASingleLine: false # true
+AlwaysBreakAfterReturnType: None
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments: false # true
+BinPackParameters: false # true
+BasedOnStyle: Google
+BreakBeforeBinaryOperators: NonAssignment # None
+BreakBeforeBraces: Custom # Attach
+BreakConstructorInitializers: BeforeComma # BeforeColon
+BreakInheritanceList: AfterColon # BeforeColon
+ColumnLimit: 100 # 80
+CommentPragmas: "" # "^ IWYU pragma:"
+ContinuationIndentWidth: 4
+# ConstructorInitializerIndentWidth: 0 # 4
+Cpp11BracedListStyle: true
+IndentPPDirectives: BeforeHash # None
+IndentRequires: true
+IndentWidth: 4 # 2
+IndentWrappedFunctionNames: true # false
+InsertNewlineAtEOF: true # false
+NamespaceIndentation: All # None
+SpaceAfterTemplateKeyword: false # true
+SpaceBeforeCpp11BracedList: true # false
+SpacesInCStyleCastParentheses: false
+SpacesInContainerLiterals: false # false
+SpacesInParentheses: false
+Standard: Latest # Auto
+TabWidth: 4 # 8

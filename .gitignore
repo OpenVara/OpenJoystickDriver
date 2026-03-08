@@ -366,3 +366,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Serena AI tool workspace
+.serena/

@@ -1,0 +1,85 @@
+Checks: "-*,
+  bugprone-*,
+  cert-*,clang-analyzer-*,concurrency-*,cppcoreguidelines-*,
+  google-*,
+  hicpp-*,
+  misc-*,modernize-*,
+  performance-*,portability-*,
+  readability-*,
+  -readability-magic-numbers,
+  safety-*,
+  -bugprone-easily-swappable-parameters,
+  -cert-arr39-c,
+  -cert-con36-c,-cert-con54-cpp,-cert-ctr56-cpp,
+  -cert-dcl03-c,-cert-dcl16-c,-cert-dcl37-c,
+  -cert-dcl51-cpp,-cert-dcl54-cpp,-cert-dcl59-cpp,
+  -cert-err09-cpp,-cert-err61-cpp,-cert-exp42-c,
+  -cert-fio38-c,-cert-flp37-c,
+  -cert-int09-c,
+  -cert-msc24-c,-cert-msc30-c,-cert-msc32-c,-cert-msc33-c,-cert-msc54-cpp,
+  -cert-oop11-cpp,-cert-oop54-cpp,
+  -cert-pos44-c,-cert-pos47-c,
+  -cert-sig30-c,-cert-str34-c,
+  -cppcoreguidelines-avoid-c-arrays,-cppcoreguidelines-avoid-magic-numbers,-cppcoreguidelines-c-copy-assignment-signature,-cppcoreguidelines-explicit-virtual-functions,-cppcoreguidelines-macro-to-enum,-cppcoreguidelines-narrowing-conversions,-cppcoreguidelines-narrowing-conversions,-cppcoreguidelines-noexcept-destructor,-cppcoreguidelines-noexcept-move-operations,-cppcoreguidelines-noexcept-swap,-cppcoreguidelines-non-private-member-variables-in-classes,-cppcoreguidelines-use-default-member-init,
+  -fuchsia-header-anon-namespaces,
+  -google-readability-braces-around-statements,-google-readability-function-size,-google-readability-namespace-comments,
+  -hicpp-avoid-c-arrays,-hicpp-avoid-goto,-hicpp-braces-around-statements,-hicpp-deprecated-headers,-hicpp-explicit-conversions,-hicpp-function-size,-hicpp-invalid-access-moved,-hicpp-member-init,-hicpp-move-const-arg,-hicpp-named-parameter,-hicpp-new-delete-operators,-hicpp-no-array-decay,-hicpp-no-malloc,-hicpp-noexcept-move,-hicpp-special-member-functions,-hicpp-static-assert,-hicpp-undelegated-constructor,-hicpp-uppercase-literal-suffix,-hicpp-use-auto,-hicpp-use-emplace,-hicpp-use-equals-default,-hicpp-use-equals-delete,-hicpp-use-noexcept,-hicpp-use-nullptr,-hicpp-use-override,-hicpp-vararg,
+  -llvm-else-after-return,-llvm-qualified-auto,
+  -misc-no-recursion"
+CheckOptions:
+  - key: cppcoreguidelines-avoid-do-while.IgnoreMacros
+    value: true
+  - key: bugprone-assert-side-effect.AssertMacros
+    value: assert,DCHECK
+  - key: bugprone-dangling-handle.HandleClasses
+    value: ::std::basic_string_view;::std::span;::absl::string_view;::base::BasicStringPiece;::base::span
+  - key: bugprone-string-constructor.StringNames
+    value: ::std::basic_string;::std::basic_string_view;::base::BasicStringPiece;::absl::string_view
+  - key: misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
+    value: true
+  - key: modernize-use-default-member-init.UseAssignment
+    value: 1
+  - key: modernize-use-transparent-functors.SafeMode
+    value: 1
+  - key: modernize-use-emplace.IgnoreImplicitConstructors
+    value: 0
+  - key: readability-function-cognitive-complexity.Threshold
+    value: 25
+  - key: readability-identifier-length.MinimumVariableNameLength
+    value: 2 # 3
+  - key: readability-identifier-length.MinimumParameterNameLength
+    value: 2 # 3
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+  - key: readability-identifier-naming.EnumCase
+    value: CamelCase
+  - key: readability-identifier-naming.EnumConstantCase
+    value: CamelCase
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case
+  - key: readability-identifier-naming.ClassMemberCase
+    value: lower_case
+  - key: readability-identifier-naming.PrivateMemberPrefix
+    value: m_
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.ConstantCase
+    value: lower_case
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.TypeAliasCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypedefCase
+    value: CamelCase
+HeaderFileExtensions: ["h", "hh", "hpp", "hxx"]
+HeaderFilterRegex: ".*(include|src)/.*"
+ImplementationFileExtensions: ["cpp"]
+SystemHeaders: false
+UseColor: true
+WarningsAsErrors: "*"
