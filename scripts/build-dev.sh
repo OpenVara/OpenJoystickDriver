@@ -23,13 +23,61 @@ swift build --product OpenJoystickDriver
 echo "Signing daemon (with entitlements) using: $IDENTITY"
 ojd_sign "$DAEMON_DEBUG" --entitlements "$ENTITLEMENTS"
 
-echo "Signing GUI..."
-ojd_sign "$GUI_DEBUG"
+# ---------------------------------------------------------------------------
+# Create app bundle for GUI (required for system extension installation)
+# ---------------------------------------------------------------------------
+GUI_ENTITLEMENTS="$PROJECT_DIR/Sources/OpenJoystickDriver/OpenJoystickDriver.entitlements"
+GUI_INFO_PLIST="$PROJECT_DIR/Sources/OpenJoystickDriver/App/Info.plist"
+GUI_APP="$PROJECT_DIR/.build/debug/OpenJoystickDriver.app"
+GUI_CONTENTS="$GUI_APP/Contents"
+GUI_MACOS="$GUI_CONTENTS/MacOS"
+
+echo "Creating app bundle..."
+mkdir -p "$GUI_MACOS"
+cp "$GUI_DEBUG" "$GUI_MACOS/OpenJoystickDriver"
+cp "$DAEMON_DEBUG" "$GUI_MACOS/OpenJoystickDriverDaemon"
+
+# Merge Info.plist with required bundle keys
+cat > "$GUI_CONTENTS/Info.plist" << 'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.openjoystickdriver.app</string>
+    <key>CFBundleName</key>
+    <string>OpenJoystickDriver</string>
+    <key>CFBundleDisplayName</key>
+    <string>OpenJoystickDriver</string>
+    <key>CFBundleExecutable</key>
+    <string>OpenJoystickDriver</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSSystemExtensionUsageDescription</key>
+    <string>OpenJoystickDriver uses this extension to present physical controllers as a standard virtual HID gamepad to games and applications, without requiring Accessibility permission.</string>
+</dict>
+</plist>
+PLIST
+
+echo "Signing GUI app bundle using: $IDENTITY"
+ojd_sign "$GUI_MACOS/OpenJoystickDriver" --entitlements "$GUI_ENTITLEMENTS"
+ojd_sign "$GUI_MACOS/OpenJoystickDriverDaemon" --entitlements "$ENTITLEMENTS"
+codesign --sign "$IDENTITY" --force "$GUI_APP"
 
 echo ""
 echo "Signed with: $IDENTITY"
-echo "  Daemon: $DAEMON_DEBUG"
-echo "  GUI:    $GUI_DEBUG"
+echo "  Daemon: $GUI_MACOS/OpenJoystickDriverDaemon"
+echo "  GUI:    $GUI_APP"
 echo ""
 if [[ "$IDENTITY" == "-" ]]; then
   echo "Note: ad-hoc signed. On Darwin 25+ (macOS 26), sudo may not be enough"
@@ -38,5 +86,7 @@ if [[ "$IDENTITY" == "-" ]]; then
   echo "  Find it: security find-identity -v -p codesigning"
   echo ""
 fi
-echo "Run daemon:  sudo $DAEMON_DEBUG"
-echo "Run GUI:     $GUI_DEBUG"
+echo "Run daemon:  sudo $GUI_MACOS/OpenJoystickDriverDaemon"
+echo "Run GUI:     open $GUI_APP"
+echo ""
+echo "To install DriverKit extension, run ./scripts/build-dext.sh after this."
