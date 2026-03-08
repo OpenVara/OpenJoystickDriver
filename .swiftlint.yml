@@ -173,5 +173,8 @@ excluded:
   - .build
   - .swiftpm
   - "**/Generated"
+  # DriverKit extension uses different APIs (NSString for IOKit) and formatting
+  # conventions (HID descriptor arrays prioritize readability over alignment)
+  - DriverKitExtension
 
 reporter: "xcode"
