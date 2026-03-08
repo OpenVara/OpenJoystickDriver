@@ -8,32 +8,13 @@ struct PermissionsView: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 16) {
         if !model.daemonConnected { daemonWarning }
-        if model.daemonConnected
-          && (model.inputMonitoring.lowercased() != "granted"
-            || model.accessibility.lowercased() != "granted")
-        {
+        if model.daemonConnected && model.inputMonitoring.lowercased() != "granted" {
           rebuildNotice
         }
         daemonPathCard
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-          PermissionCard(
-            title: "Input Monitoring",
-            systemImage: "keyboard",
-            status: model.inputMonitoring,
-            description: "Required to monitor keyboard" + " state and detect conflicts.",
-            settingsURL: inputMonitoringURL,
-            showHint: model.inputMonitoring.lowercased() != "granted"
-          )
-          PermissionCard(
-            title: "Accessibility",
-            systemImage: "accessibility",
-            status: model.accessibility,
-            description: "Required to post CGEvents" + " (keyboard/mouse output) to system.",
-            settingsURL: accessibilityURL,
-            showHint: model.accessibility.lowercased() != "granted"
-          )
-        }.padding(.horizontal)
-      }.padding()
+        inputMonitoringCard
+        virtualDeviceCard
+      }.padding(.bottom, 52).padding()
     }.navigationTitle("Permissions")
   }
 
@@ -41,8 +22,15 @@ struct PermissionsView: View {
     "x-apple.systempreferences:" + "com.apple.preference.security" + "?Privacy_ListenEvent"
   }
 
-  private var accessibilityURL: String {
-    "x-apple.systempreferences:" + "com.apple.preference.security" + "?Privacy_Accessibility"
+  private var inputMonitoringCard: some View {
+    PermissionCard(
+      title: "Input Monitoring",
+      systemImage: "keyboard",
+      status: model.inputMonitoring,
+      description: "Required to read controller input from USB and HID devices.",
+      settingsURL: inputMonitoringURL,
+      showHint: model.inputMonitoring.lowercased() != "granted"
+    ).padding(.horizontal)
   }
 
   private var daemonWarning: some View {
@@ -69,7 +57,7 @@ struct PermissionsView: View {
         VStack(alignment: .leading, spacing: 2) {
           Text("Permissions reset after rebuild").fontWeight(.semibold)
           Text(
-            "Daemon binary changed - re-grant denied" + " permissions above, then restart daemon."
+            "Daemon binary changed - re-grant Input Monitoring above, then restart daemon."
           ).font(.caption).foregroundStyle(.secondary)
         }
         Spacer()
@@ -80,20 +68,74 @@ struct PermissionsView: View {
     }.padding(.horizontal)
   }
 
+  private var virtualDeviceCard: some View {
+    let ext = model.extensionManager
+    return GroupBox {
+      VStack(alignment: .leading, spacing: 10) {
+        HStack {
+          Image(systemName: "gamecontroller").font(.title3).frame(width: 24)
+          Text("Virtual HID Gamepad (DriverKit)").fontWeight(.semibold)
+          Spacer()
+          PermissionStatusIcon(isGranted: ext.installState.isInstalled)
+        }
+        Text(
+          "DriverKit extension that exposes a virtual gamepad to SDL3, GCController, and "
+            + "any HID-aware app — no Accessibility permission required."
+        ).font(.caption).foregroundStyle(.secondary)
+        Text(ext.installState.label)
+          .font(.caption)
+          .foregroundStyle(
+            ext.installState.isInstalled
+              ? .green
+              : (ext.installState.isPending ? .orange : .secondary)
+          )
+        if ext.installState == .requiresApproval {
+          HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).imageScale(
+              .small
+            )
+            Text("Open System Settings → Privacy & Security to approve the extension.").font(
+              .caption
+            ).foregroundStyle(.secondary)
+          }.padding(8).frame(maxWidth: .infinity, alignment: .leading).background(
+            Color.orange.opacity(0.08)
+          ).clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        HStack(spacing: 8) {
+          SwiftUI.Button("Install Extension") {
+            ext.installExtension()
+          }.buttonStyle(.bordered).disabled(
+            ext.installState.isInstalled || ext.installState.isPending
+          )
+          if ext.installState.isInstalled {
+            SwiftUI.Button("Remove") {
+              ext.uninstallExtension()
+            }.buttonStyle(.bordered).foregroundStyle(.red)
+          }
+        }
+      }
+    } label: {
+      Label("Virtual Device Extension", systemImage: "puzzlepiece.extension").fontWeight(.semibold)
+    }.padding(.horizontal)
+  }
+
   private var daemonPathCard: some View {
     GroupBox {
       VStack(alignment: .leading, spacing: 8) {
         if let path = model.daemonExecutablePath {
-          Text(path).font(.system(.caption, design: .monospaced)).textSelection(.enabled).padding(6)
-            .frame(maxWidth: .infinity, alignment: .leading).background(
-              Color(nsColor: .textBackgroundColor).opacity(0.5)
-            ).clipShape(RoundedRectangle(cornerRadius: 4))
+          Text(path)
+            .font(.system(.caption, design: .monospaced))
+            .textSelection(.enabled)
+            .padding(6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
         } else {
           Text("Not found").font(.caption).foregroundStyle(.secondary)
         }
-        Text(
-          "Grant permissions to this binary in System Settings. Permissions reset after each rebuild."
-        ).font(.caption).foregroundStyle(.secondary)
+        Text("Grant permissions to this binary. Permissions reset after each rebuild.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
       }
     } label: {
       Label("Daemon Binary", systemImage: "terminal").fontWeight(.semibold)

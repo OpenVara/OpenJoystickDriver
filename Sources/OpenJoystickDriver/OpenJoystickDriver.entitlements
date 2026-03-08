@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- GUI app must not be sandboxed: it manages a LaunchAgent daemon and
+         submits a system extension (OSSystemExtensionManager requires access
+         to /Library/SystemExtensions which is outside the sandbox). -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+
+    <!-- Allows OSSystemExtensionManager.shared.submitRequest() to install or
+         remove the OpenJoystickVirtualHID.dext system extension.
+         Requires entitlement request at developer.apple.com/contact/request/system-extension. -->
+    <key>com.apple.developer.system-extension.install</key>
+    <true/>
+</dict>
+</plist>

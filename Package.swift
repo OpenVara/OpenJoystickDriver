@@ -41,7 +41,11 @@ let package = Package(
     .executableTarget(
       name: "OpenJoystickDriver",
       dependencies: ["OpenJoystickDriverKit"],
-      path: "Sources/OpenJoystickDriver"
+      path: "Sources/OpenJoystickDriver",
+      exclude: ["OpenJoystickDriver.entitlements", "App/Info.plist"],
+      linkerSettings: [
+        .linkedFramework("SystemExtensions"),
+      ]
     ),
 
     .testTarget(

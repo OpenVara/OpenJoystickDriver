@@ -109,8 +109,8 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   @Published var daemonError: String?
   @Published var devices: [DeviceViewModel] = []
   @Published var inputMonitoring = "unknown"
-  @Published var accessibility = "unknown"
   @Published var profiles: [Profile] = []
+  @Published var extensionManager = SystemExtensionManager()
   var developerMode: Bool
 
   private let client = XPCClient()
@@ -238,7 +238,6 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       let status = try await client.getStatus()
       daemonConnected = true
       inputMonitoring = status.inputMonitoring
-      accessibility = status.accessibility
       devices = status.connectedDevices.compactMap(DeviceViewModel.parse(description:))
     } catch {
       daemonConnected = false
@@ -247,7 +246,6 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       // so UI shows something useful rather than stale "unknown".
       let pm = PermissionManager()
       inputMonitoring = "\(await pm.checkAccess())"
-      accessibility = "\(await pm.checkAccessibilityState())"
     }
 
     await refreshProfiles()
