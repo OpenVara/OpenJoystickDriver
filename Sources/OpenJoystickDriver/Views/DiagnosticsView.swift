@@ -75,10 +75,6 @@ struct DiagnosticsView: View {
         labeledRow("Input Monitoring") {
           PermissionStatusIcon(isGranted: model.inputMonitoring.lowercased() == "granted")
         }
-        Divider()
-        labeledRow("Accessibility") {
-          PermissionStatusIcon(isGranted: model.accessibility.lowercased() == "granted")
-        }
       }
     } label: {
       Label("Status", systemImage: "checkmark.shield").fontWeight(.semibold)
@@ -232,10 +228,6 @@ struct DiagnosticsView: View {
           + " entitlement (scripts/build-release.sh)."
       )
       tipRow(
-        "Accessibility not granted",
-        detail: "System Settings › Privacy › Accessibility - add the daemon binary."
-      )
-      tipRow(
         "Daemon not running",
         detail: "Use Start Daemon in the Daemon Lifecycle card."
           + " Running with sudo puts the daemon in root's bootstrap namespace,"
@@ -244,7 +236,7 @@ struct DiagnosticsView: View {
       tipRow(
         "No events in games",
         detail: "The target app must be focused."
-          + " CGEvents only dispatch to the active application."
+          + " Events only dispatch to the active application."
       )
     }.padding().frame(width: 320)
   }
@@ -271,7 +263,7 @@ struct DiagnosticsView: View {
     var lines: [String] = [
       "OpenJoystickDriver Diagnostics", "==============================", "macOS: \(version)",
       "Daemon: \(daemonStatusText)", "Input Monitoring: \(model.inputMonitoring)",
-      "Accessibility: \(model.accessibility)", "", "Controllers:",
+      "", "Controllers:",
     ]
     if model.devices.isEmpty {
       lines.append("  (none)")

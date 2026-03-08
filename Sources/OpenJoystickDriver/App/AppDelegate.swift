@@ -1,5 +1,4 @@
 import AppKit
-import ApplicationServices
 import IOKit.hid
 import OpenJoystickDriverKit
 import SwiftUI
@@ -29,9 +28,6 @@ private enum WindowMetrics {
   /// These are no-ops if already granted.
   private func requestPermissions() {
     IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
-    // CFString global - bridge to String to satisfy Swift 6 Sendable check.
-    let promptKey = "AXTrustedCheckOptionPrompt"
-    AXIsProcessTrustedWithOptions([promptKey: true] as CFDictionary)
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

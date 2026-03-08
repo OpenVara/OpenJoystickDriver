@@ -1,12 +1,10 @@
-import ApplicationServices
 import Foundation
 import IOKit
 import IOKit.hid
 
 private let permissionPollNanoseconds: UInt64 = 1_000_000_000
 
-/// Manages Input Monitoring and Accessibility permission
-/// state for the daemon.
+/// Manages Input Monitoring permission state for the daemon.
 public actor PermissionManager {
   /// The three possible states for a macOS permission.
   public enum AccessState: Sendable, Equatable {
@@ -29,8 +27,6 @@ public actor PermissionManager {
 
   /// Current state of the Input Monitoring permission. Updated by ``startPolling()`` and ``requestAccess()``.
   public private(set) var inputMonitoringState: AccessState = .unknown
-  /// Current state of the Accessibility permission. Updated by ``startPolling()`` and ``checkAccessibilityState()``.
-  public private(set) var accessibilityState: AccessState = .unknown
   private var pollingTask: Task<Void, Never>?
 
   public init() {}
@@ -42,9 +38,6 @@ public actor PermissionManager {
     return mapAccess(result)
   }
 
-  /// Check current Accessibility permission state.
-  public func checkAccessibility() -> AccessState { AXIsProcessTrusted() ? .granted : .denied }
-
   /// Request Input Monitoring permission
   /// (shows system dialog if needed).
   /// Returns updated state.
@@ -52,13 +45,6 @@ public actor PermissionManager {
     IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
     let state = checkAccess()
     inputMonitoringState = state
-    return state
-  }
-
-  /// Check and update Accessibility permission state.
-  @discardableResult public func checkAccessibilityState() -> AccessState {
-    let state = checkAccessibility()
-    accessibilityState = state
     return state
   }
 
@@ -72,9 +58,6 @@ public actor PermissionManager {
         let currentInput = await self.checkAccess()
         let prevInput = await self.inputMonitoringState
         if currentInput != prevInput { await self.updateState(currentInput) }
-        let currentAccess = await self.checkAccessibility()
-        let prevAccess = await self.accessibilityState
-        if currentAccess != prevAccess { await self.updateAccessibilityState(currentAccess) }
       }
     }
   }
@@ -89,12 +72,6 @@ public actor PermissionManager {
     let previous = inputMonitoringState
     inputMonitoringState = state
     print("[PermissionManager] Input Monitoring " + "state changed: \(previous) -> \(state)")
-  }
-
-  private func updateAccessibilityState(_ state: AccessState) {
-    let previous = accessibilityState
-    accessibilityState = state
-    print("[PermissionManager] Accessibility " + "state changed: \(previous) -> \(state)")
   }
 
   private func mapAccess(_ result: IOHIDAccessType) -> AccessState {

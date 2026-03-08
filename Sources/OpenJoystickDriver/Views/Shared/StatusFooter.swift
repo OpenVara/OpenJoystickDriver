@@ -12,11 +12,6 @@ struct StatusFooter: View {
         systemImage: "keyboard",
         status: model.inputMonitoring
       )
-      permissionIndicator(
-        "Accessibility",
-        systemImage: "accessibility",
-        status: model.accessibility
-      )
       Spacer()
       deviceCount
     }.padding(.horizontal, 12).padding(.vertical, 6).background(.bar).font(.caption)

@@ -86,14 +86,11 @@ public let xpcServiceName = "com.openjoystickdriver.xpc"
 public struct XPCStatusPayload: Codable, Sendable {
   /// Input Monitoring permission state (e.g. "granted", "denied").
   public let inputMonitoring: String
-  /// Accessibility permission state (e.g. "granted", "denied").
-  public let accessibility: String
   /// Human-readable descriptions of all connected controllers.
   public let connectedDevices: [String]
 
-  public init(inputMonitoring: String, accessibility: String, connectedDevices: [String]) {
+  public init(inputMonitoring: String, connectedDevices: [String]) {
     self.inputMonitoring = inputMonitoring
-    self.accessibility = accessibility
     self.connectedDevices = connectedDevices
   }
 }

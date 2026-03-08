@@ -38,7 +38,6 @@ struct StatusCommand {
     print("")
     print("Permissions:")
     print("  Input Monitoring : " + payload.inputMonitoring)
-    print("  Accessibility    : " + payload.accessibility)
     print("")
     if payload.connectedDevices.isEmpty {
       print("Devices: (none connected)")
@@ -56,15 +55,10 @@ struct StatusCommand {
     let permManager = PermissionManager()
     runSync {
       let inputState = await permManager.checkAccess()
-      let accessState = await permManager.checkAccessibilityState()
       print("Permissions:")
       print("  Input Monitoring : " + "\(inputState.label)" + " \(inputState)")
-      print("  Accessibility    : " + "\(accessState.label)" + " \(accessState)")
       if inputState != .granted {
         print("  -> Grant in: System Settings" + " > Privacy > Input Monitoring")
-      }
-      if accessState != .granted {
-        print("  -> Grant in: System Settings" + " > Privacy > Accessibility")
       }
     }
   }

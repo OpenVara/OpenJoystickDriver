@@ -20,14 +20,14 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
   private let deviceManager: DeviceManager
   private let permissionManager: PermissionManager
   private let profileStore: ProfileStore
-  private let dispatcher: CGEventOutputDispatcher
+  private let dispatcher: any OutputDispatcher
   private var listener: NSXPCListener?
 
   public init(
     deviceManager: DeviceManager,
     permissionManager: PermissionManager,
     profileStore: ProfileStore,
-    dispatcher: CGEventOutputDispatcher
+    dispatcher: any OutputDispatcher
   ) {
     self.deviceManager = deviceManager
     self.permissionManager = permissionManager
@@ -74,11 +74,9 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     let pm = permissionManager
     Task {
       let inputState = await pm.inputMonitoringState
-      let accessState = await pm.accessibilityState
       let devices = await dm.connectedDeviceDescriptions()
       let payload = XPCStatusPayload(
         inputMonitoring: "\(inputState)",
-        accessibility: "\(accessState)",
         connectedDevices: devices
       )
       let data = (try? JSONEncoder().encode(payload)) ?? Data()

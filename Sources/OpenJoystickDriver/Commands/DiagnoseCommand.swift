@@ -28,10 +28,8 @@ struct DiagnoseCommand {
     let permManager = PermissionManager()
     runSync {
       let inputState = await permManager.checkAccess()
-      let accessState = await permManager.checkAccessibilityState()
       print("Permissions:")
       print("  Input Monitoring : " + "\(inputState.label) \(inputState)")
-      print("  Accessibility    : " + "\(accessState.label) \(accessState)")
     }
   }
 
@@ -64,7 +62,5 @@ struct DiagnoseCommand {
     print("    -> Run: ./scripts/sign-dev.sh" + " && sudo .build/debug/" + "OpenJoystickDriver run")
     print("  No input from controller?")
     print("    -> Grant Input Monitoring:" + " System Settings > Privacy" + " > Input Monitoring")
-    print("  Keys not firing?")
-    print("    -> Grant Accessibility:" + " System Settings > Privacy" + " > Accessibility")
   }
 }
