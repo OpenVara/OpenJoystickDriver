@@ -1,0 +1,31 @@
+name: OpenJoystickVirtualHID
+options:
+  bundleIdPrefix: com.openjoystickdriver
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    # DriverKit predates Swift concurrency — strict mode produces false errors
+    SWIFT_STRICT_CONCURRENCY: minimal
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_ENTITLEMENTS: OpenJoystickVirtualHID.entitlements
+    CODE_SIGN_IDENTITY: $(CODESIGN_IDENTITY)
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: $(DEVELOPMENT_TEAM)
+    PROVISIONING_PROFILE_SPECIFIER: $(PROVISIONING_PROFILE_SPECIFIER)
+    SDKROOT: driverkit
+    SUPPORTED_PLATFORMS: driverkit
+    DRIVERKIT_DEPLOYMENT_TARGET: "23.0"   # = macOS 13
+    PRODUCT_BUNDLE_IDENTIFIER: com.openjoystickdriver.VirtualHIDDevice
+    PRODUCT_NAME: OpenJoystickVirtualHID
+    INFOPLIST_FILE: Info.plist
+    # C++20 support for DriverKit C++ interop
+    CLANG_CXX_LANGUAGE_STANDARD: c++20
+    CLANG_CXX_LIBRARY: libc++
+    GCC_ENABLE_CPP_EXCEPTIONS: NO   # DriverKit prohibits C++ exceptions
+    GCC_ENABLE_CPP_RTTI: NO        # RTTI unsupported in DriverKit
+    GCC_GENERATE_DEBUGGING_SYMBOLS: YES
+targets:
+  OpenJoystickVirtualHID:
+    type: com.apple.product-type.driver-extension
+    platform: driverkit
+    sources: [Sources]

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.openjoystickdriver.VirtualHIDDevice</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>OpenJoystickVirtualHID</string>
+    <key>CFBundlePackageType</key>
+    <string>DEXT</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <!-- Shown in System Settings → Privacy & Security when user approves the extension -->
+    <key>OSBundleUsageDescription</key>
+    <string>OpenJoystickDriver uses this extension to present physical controllers as a standard virtual HID gamepad to games and applications, without requiring Accessibility permission.</string>
+
+    <key>IOKitPersonalities</key>
+    <dict>
+        <key>OpenJoystickVirtualHID</key>
+        <dict>
+            <key>CFBundleIdentifier</key>
+            <string>com.openjoystickdriver.VirtualHIDDevice</string>
+
+            <!-- IOUserService is mandatory for all DriverKit extension personalities -->
+            <key>IOClass</key>
+            <string>IOUserService</string>
+
+            <!-- Our Swift class that implements IOUserHIDDevice -->
+            <key>IOUserClass</key>
+            <string>OpenJoystickVirtualHIDDevice</string>
+
+            <!-- Virtual device pattern: matches IOUserResources so it starts at boot
+                 with no physical hardware requirement. -->
+            <key>IOProviderClass</key>
+            <string>IOUserResources</string>
+            <key>IOResourceMatch</key>
+            <string>IOKit</string>
+
+            <!-- HIDDriverKit requires these for GCController / GameController.framework
+                 discovery: Generic Desktop (1) / Gamepad (5) -->
+            <key>PrimaryUsagePage</key>
+            <integer>1</integer>
+            <key>PrimaryUsage</key>
+            <integer>5</integer>
+        </dict>
+    </dict>
+</dict>
+</plist>
