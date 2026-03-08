@@ -1,4 +1,3 @@
-import CoreGraphics
 import Foundation
 
 /// How a stick's deflection is translated into output events.
@@ -29,7 +28,8 @@ public struct Profile: Codable, Sendable {
   public var vendorID: UInt16
   /// USB product ID of the device this profile belongs to.
   public var productID: UInt16
-  /// Maps each button name (`Button.rawValue`) to a macOS key code (`CGKeyCode`).
+  /// Maps each button name (``Button/rawValue``) to a virtual HID button index (1-based).
+  /// Empty by default; reserved for future per-device button remapping.
   public var buttonMappings: [String: UInt16]
   /// Minimum stick deflection (0...1) before movement is registered.
   public var stickDeadzone: Float
@@ -44,8 +44,8 @@ public struct Profile: Codable, Sendable {
   public var leftStickMode: StickMode
   /// Output mode for the right stick.
   public var rightStickMode: StickMode
-  /// Bundle ID of the application that receives keyboard and mouse events.
-  /// When nil, events go to whichever window is currently active on screen.
+  /// Bundle ID of the target application.
+  /// Reserved for future use.
   public var targetBundleID: String?
 
   public init(
@@ -93,37 +93,24 @@ public struct Profile: Codable, Sendable {
     stickDeadzone = try container.decode(Float.self, forKey: .stickDeadzone)
     stickMouseSensitivity = try container.decode(Float.self, forKey: .stickMouseSensitivity)
     stickScrollSensitivity = try container.decode(Float.self, forKey: .stickScrollSensitivity)
-    stickMouseRegionRadius = (try? container.decode(Float.self, forKey: .stickMouseRegionRadius)) ?? 200.0
+    stickMouseRegionRadius =
+      (try? container.decode(Float.self, forKey: .stickMouseRegionRadius)) ?? 200.0
     leftStickMode = (try? container.decode(StickMode.self, forKey: .leftStickMode)) ?? .mouse
     rightStickMode = (try? container.decode(StickMode.self, forKey: .rightStickMode)) ?? .scroll
     targetBundleID = try? container.decode(String.self, forKey: .targetBundleID)
   }
 
-  /// Creates a new profile pre-filled with ``DefaultMapping`` values for the given device.
-  ///
-  /// Returns a profile named "Default" with all standard button and axis mappings.
   public static func makeDefault(for identifier: DeviceIdentifier) -> Self {
-    var mappings: [String: UInt16] = [:]
-    for (button, keyCode) in DefaultMapping.buttonKeyCodes { mappings[button.rawValue] = keyCode }
-    for (key, keyCode) in DefaultMapping.stickKeyboardDefaults { mappings[key] = keyCode }
-    return Self(
+    Self(
       id: UUID(),
       name: "Default",
       vendorID: identifier.vendorID,
       productID: identifier.productID,
-      buttonMappings: mappings,
-      stickDeadzone: DefaultMapping.stickDeadzone,
-      stickMouseSensitivity: DefaultMapping.stickMouseSensitivity,
-      stickScrollSensitivity: DefaultMapping.stickScrollSensitivity,
-      stickMouseRegionRadius: DefaultMapping.stickMouseRegionRadius
+      buttonMappings: [:],
+      stickDeadzone: 0.15,
+      stickMouseSensitivity: 8.0,
+      stickScrollSensitivity: 3.0,
+      stickMouseRegionRadius: 200.0
     )
-  }
-
-  /// Returns the key code mapped to `button` in this profile.
-  ///
-  /// Falls back to ``DefaultMapping`` when the profile has no explicit mapping.
-  public func keyCode(for button: Button) -> CGKeyCode? {
-    if let code = buttonMappings[button.rawValue] { return CGKeyCode(code) }
-    return DefaultMapping.buttonKeyCodes[button]
   }
 }

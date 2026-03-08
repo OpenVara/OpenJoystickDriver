@@ -4,9 +4,14 @@ import Foundation
 ///
 /// Implement this protocol to decide what happens when a button is pressed
 /// or a stick is moved. The built-in conformances are
-/// ``CGEventOutputDispatcher`` (posts macOS keyboard/mouse events) and
+/// ``DextOutputDispatcher`` (DriverKit virtual HID, preferred),
+/// ``IOHIDVirtualOutputDispatcher`` (IOHIDUserDevice fallback), and
 /// ``LoggingOutputDispatcher`` (prints events for debugging).
 public protocol OutputDispatcher: AnyObject, Sendable {
+  /// When `true`, all report/event output is suppressed (e.g. during developer
+  /// packet capture). Implementations should invalidate any cached state on change.
+  var suppressOutput: Bool { get set }
+
   /// Receives a batch of events from one controller and writes them to the output.
   ///
   /// Called by ``DevicePipeline`` every time the parser produces new events.

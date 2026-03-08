@@ -5,14 +5,16 @@ import Testing
 
 @Suite("Profile Tests") struct ProfileTests {
 
-  @Test func defaultProfileHasAllButtons() {
+  @Test func defaultProfileHasCorrectDefaults() {
     let id = DeviceIdentifier(vendorID: 13623, productID: 4112)
     let profile = Profile.makeDefault(for: id)
-    #expect(profile.keyCode(for: .a) == 36)
-    #expect(profile.keyCode(for: .b) == 53)
-    #expect(profile.keyCode(for: .dpadUp) == 126)
     #expect(profile.vendorID == 13623)
     #expect(profile.productID == 4112)
+    #expect(profile.name == "Default")
+    #expect(profile.stickDeadzone == 0.15)
+    // Default profile has no pre-populated button mappings —
+    // IOHIDVirtualOutputDispatcher passes through all buttons as raw HID.
+    #expect(profile.buttonMappings.isEmpty)
   }
 
   @Test func profileRoundTripsJSON() throws {
@@ -26,13 +28,6 @@ import Testing
     #expect(decoded.buttonMappings.count == original.buttonMappings.count)
   }
 
-  @Test func profileKeepsFallbackForUnmappedButton() {
-    let id = DeviceIdentifier(vendorID: 1, productID: 1)
-    var profile = Profile.makeDefault(for: id)
-    profile.buttonMappings.removeValue(forKey: "a")
-    #expect(profile.keyCode(for: .a) == 36)
-  }
-
   @Test func profileStoreReturnsDefaultForNewDevice() async {
     let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let store = ProfileStore(directory: tempDir)
@@ -40,7 +35,7 @@ import Testing
     let profile = await store.profile(for: id)
     #expect(profile.vendorID == 999)
     #expect(profile.productID == 888)
-    #expect(profile.keyCode(for: .a) == 36)
+    #expect(profile.stickDeadzone == 0.15)
   }
 
   @Test func profileStorePersistsAndReloads() async throws {

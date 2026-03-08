@@ -31,7 +31,7 @@ public actor ProfileStore {
   /// Returns the active profile for a device.
   ///
   /// Checks the in-memory cache first, then disk. If no saved profile exists,
-  /// a default profile is generated from ``DefaultMapping``.
+  /// a default profile is generated via ``Profile/makeDefault(for:)``.
   public func profile(for identifier: DeviceIdentifier) -> Profile {
     let key = cacheKey(for: identifier)
     if let cached = cache[key] { return cached }
