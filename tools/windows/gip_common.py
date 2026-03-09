@@ -181,6 +181,9 @@ def configure_libusb_backend():
 
     for path in search_paths:
         if os.path.isfile(path):
+            dll_dir = os.path.dirname(os.path.abspath(path))
+            if hasattr(os, "add_dll_directory") and dll_dir:
+                os.add_dll_directory(dll_dir)  # Python 3.8+ Windows DLL search path fix
             backend = usb.backend.libusb1.get_backend(find_library=lambda _p=path: _p)
             if backend is not None:
                 print("[INFO] Using libusb from: {}".format(path))
