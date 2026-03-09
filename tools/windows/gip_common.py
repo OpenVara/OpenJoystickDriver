@@ -179,8 +179,11 @@ def configure_libusb_backend():
         search_paths.append(os.path.join(base, "libusb-1.0", "MinGW64", "dll", "libusb-1.0.dll"))
         search_paths.append(os.path.join(base, "libusb-1.0", "VS2019", "MS64", "dll", "libusb-1.0.dll"))
 
+    found_path = None  # type: Optional[str]
     for path in search_paths:
         if os.path.isfile(path):
+            found_path = path
+            print("[INFO] Found DLL at: {}".format(path))
             dll_dir = os.path.dirname(os.path.abspath(path))
             if hasattr(os, "add_dll_directory") and dll_dir:
                 os.add_dll_directory(dll_dir)  # Python 3.8+ Windows DLL search path fix
@@ -189,9 +192,30 @@ def configure_libusb_backend():
                 print("[INFO] Using libusb from: {}".format(path))
                 return backend
 
-    print("[ERROR] libusb-1.0.dll not found.")
-    print("  Place libusb-1.0.dll next to this script or install via:")
-    print("  https://github.com/libusb/libusb/releases")
+            # File found but DLL failed to load — get the actual OS error
+            print("[ERROR] DLL found but failed to load: {}".format(path))
+            try:
+                ctypes.CDLL(path)
+                print("  ctypes loaded it OK — pyusb refused it (version mismatch?)")
+            except OSError as load_err:
+                print("  OS error: {}".format(load_err))
+                err_str = str(load_err)
+                if "193" in err_str or "%1" in err_str:
+                    bits = "64" if sys.maxsize > 2 ** 32 else "32"
+                    print("  -> Wrong DLL architecture! Python is {}-bit.".format(bits))
+                    print("     Use libusb-1.0.dll from VS2019/MS{}/dll/ in the release zip.".format(bits))
+                elif "126" in err_str or "not found" in err_str.lower():
+                    print("  -> DLL has missing dependencies (MSVC runtime?).")
+                    print("     Try the MinGW64 build: MinGW64/dll/libusb-1.0.dll")
+                    print("     Or install Visual C++ Redistributable 2019.")
+            return None
+
+    if found_path is None:
+        print("[ERROR] libusb-1.0.dll not found. Searched:")
+        for p in search_paths:
+            print("  {}".format(p))
+        print("  Place libusb-1.0.dll in the same folder as this script.")
+        print("  Download: https://github.com/libusb/libusb/releases")
     return None
 
 
