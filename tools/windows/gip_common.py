@@ -196,7 +196,7 @@ def configure_libusb_backend():
             dll_dir = os.path.dirname(os.path.abspath(path))
             if hasattr(os, "add_dll_directory") and dll_dir:
                 os.add_dll_directory(dll_dir)  # Python 3.8+ Windows DLL search path fix
-            backend = _try_backend(find_library=lambda _p=path: _p)
+            backend = _try_backend(find_library=lambda _, _p=path: _p)
             if backend is not None:
                 print("[INFO] Using libusb from: {}".format(path))
                 return backend
@@ -222,12 +222,91 @@ def configure_libusb_backend():
             return None
 
     if found_path is None:
-        print("[ERROR] libusb-1.0.dll not found. Searched:")
-        for p in search_paths:
-            print("  {}".format(p))
-        print("  Place libusb-1.0.dll in the same folder as this script.")
-        print("  Download: https://github.com/libusb/libusb/releases")
+        print("[INFO] libusb-1.0.dll not found in any search path.")
+        downloaded = _download_libusb(os.path.dirname(os.path.abspath(__file__)))
+        if downloaded and os.path.isfile(downloaded):
+            dll_dir = os.path.dirname(downloaded)
+            if hasattr(os, "add_dll_directory") and dll_dir:
+                os.add_dll_directory(dll_dir)
+            backend = _try_backend(find_library=lambda _, _p=downloaded: _p)
+            if backend is not None:
+                print("[INFO] Using libusb from: {}".format(downloaded))
+                return backend
+            print("[ERROR] Downloaded DLL still failed to load — check architecture.")
+        else:
+            print("[ERROR] Could not obtain libusb-1.0.dll automatically.")
+            print("  Download manually: https://github.com/libusb/libusb/releases")
     return None
+
+
+def _download_libusb(dest_dir):
+    # type: (str) -> Optional[str]
+    """
+    Download the correct libusb-1.0.dll for this Python's architecture from the
+    latest GitHub release and place it in dest_dir.  Returns the path on success.
+    Requires only the stdlib (urllib, zipfile) — no extra dependencies.
+    """
+    import urllib.request
+    import zipfile
+    import io
+
+    bits = "64" if sys.maxsize > 2 ** 32 else "32"
+    # Path inside the libusb release zip that matches our architecture
+    dll_zip_path = "VS2019/MS{}/dll/libusb-1.0.dll".format(bits)
+
+    # Resolve the latest release download URL via the GitHub redirect
+    api_url = "https://api.github.com/repos/libusb/libusb/releases/latest"
+    print("[INFO] Fetching latest libusb release info from GitHub...")
+    try:
+        req = urllib.request.Request(api_url, headers={"User-Agent": "gip_common/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            import json as _json
+            release = _json.loads(resp.read().decode())
+
+        asset_url = None  # type: Optional[str]
+        for asset in release.get("assets", []):
+            name = asset.get("name", "")
+            if name.endswith(".7z") or name.endswith(".zip"):
+                if "libusb" in name.lower() and not name.endswith(".7z"):
+                    asset_url = asset["browser_download_url"]
+                    break
+        # Fallback: first .zip asset
+        if asset_url is None:
+            for asset in release.get("assets", []):
+                if asset.get("name", "").endswith(".zip"):
+                    asset_url = asset["browser_download_url"]
+                    break
+
+        if asset_url is None:
+            print("[ERROR] No .zip asset found in latest libusb release.")
+            return None
+
+        print("[INFO] Downloading {} ...".format(asset_url))
+        req2 = urllib.request.Request(asset_url, headers={"User-Agent": "gip_common/1.0"})
+        with urllib.request.urlopen(req2, timeout=60) as resp2:
+            data = resp2.read()
+
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            # Normalise paths in zip (may use backslashes or forward slashes)
+            target = dll_zip_path.replace("\\", "/")
+            names = [n.replace("\\", "/") for n in zf.namelist()]
+            if target not in names:
+                print("[ERROR] Expected '{}' not found in zip.".format(dll_zip_path))
+                print("  Available paths (dll): {}".format(
+                    [n for n in names if n.endswith(".dll")]
+                ))
+                return None
+            dll_bytes = zf.read(zf.namelist()[names.index(target)])
+
+        dest_path = os.path.join(dest_dir, "libusb-1.0.dll")
+        with open(dest_path, "wb") as f:
+            f.write(dll_bytes)
+        print("[INFO] libusb-1.0.dll ({}-bit) saved to: {}".format(bits, dest_path))
+        return dest_path
+
+    except Exception as e:
+        print("[ERROR] Auto-download failed: {}".format(e))
+        return None
 
 
 def find_device_windows():
