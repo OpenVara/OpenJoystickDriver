@@ -379,15 +379,43 @@ def find_device_windows():
     if dev is not None:
         return dev
 
-    # Fallback: any vendor-class device that looks like a controller
+    # Fallback: any device with a controller-like name
     for d in usb.core.find(find_all=True, backend=backend):
-        if getattr(d, "bDeviceClass", None) == 0xFF:
+        try:
+            name = usb.util.get_string(d, d.iProduct) or ""
+        except Exception:
+            name = ""
+        if any(s in name.lower() for s in ["xbox", "gamesir", "gamepad", "controller"]):
+            print("[INFO] Found by name: {:04X}:{:04X} '{}'".format(
+                d.idVendor, d.idProduct, name))
+            return d
+
+    # Diagnostic: list everything libusb can see
+    print("\n[DEBUG] Devices visible to libusb:")
+    all_devs = list(usb.core.find(find_all=True, backend=backend))
+    if not all_devs:
+        print("  (none — libusb sees no USB devices at all)")
+        print("  This usually means WinUSB is not installed on the right device.")
+        print("  In Zadig, make sure you select the parent device, not a child interface.")
+    else:
+        for d in all_devs:
             try:
-                name = usb.util.get_string(d, d.iProduct) or ""
+                prod = usb.util.get_string(d, d.iProduct) or ""
             except Exception:
-                name = ""
-            if any(s in name.lower() for s in ["xbox", "gamesir", "gamepad", "controller"]):
-                return d
+                prod = ""
+            try:
+                mfr = usb.util.get_string(d, d.iManufacturer) or ""
+            except Exception:
+                mfr = ""
+            print("  {:04X}:{:04X}  class=0x{:02X}  {}  {}".format(
+                d.idVendor, d.idProduct, d.bDeviceClass, mfr, prod
+            ))
+    print()
+    print("  Tip: If the G7 SE shows as a composite device in Device Manager,")
+    print("  you may need to install WinUSB on the *parent* device, not a child.")
+    print("  In Zadig: Options > List All Devices, look for the entry without")
+    print("  '(Interface X)' in the name.")
+    print()
     return None
 
 
