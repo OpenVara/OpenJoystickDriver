@@ -224,7 +224,22 @@ def configure_libusb_backend():
     if found_path is None:
         print("[INFO] libusb-1.0.dll not found in any search path.")
         downloaded = _download_libusb(os.path.dirname(os.path.abspath(__file__)))
-        if downloaded and os.path.isfile(downloaded):
+        if downloaded == "_pip_installed":
+            # pip installed libusb-package — try its backend directly
+            try:
+                import libusb_package
+                backend = libusb_package.get_libusb1_backend()
+                if backend is not None:
+                    print("[INFO] Using libusb via libusb-package (pip)")
+                    return backend
+            except ImportError:
+                pass
+            # fallback: retry default pyusb search (pip may have put DLL on PATH)
+            backend = _try_backend()
+            if backend is not None:
+                return backend
+        elif downloaded and os.path.isfile(downloaded):
+            # extracted DLL — use explicit path
             dll_dir = os.path.dirname(downloaded)
             if hasattr(os, "add_dll_directory") and dll_dir:
                 os.add_dll_directory(dll_dir)
@@ -235,68 +250,82 @@ def configure_libusb_backend():
             print("[ERROR] Downloaded DLL still failed to load — check architecture.")
         else:
             print("[ERROR] Could not obtain libusb-1.0.dll automatically.")
-            print("  Download manually: https://github.com/libusb/libusb/releases")
+            print("  Try: pip install libusb-package")
+            print("  Or download manually: https://github.com/libusb/libusb/releases")
     return None
 
 
 def _download_libusb(dest_dir):
     # type: (str) -> Optional[str]
     """
-    Download the correct libusb-1.0.dll for this Python's architecture from the
-    latest GitHub release and place it in dest_dir.  Returns the path on success.
-    Requires only the stdlib (urllib, zipfile) — no extra dependencies.
+    Obtain libusb-1.0.dll using a two-tier fallback:
+      1. pip install libusb-package (returns "_pip_installed" sentinel)
+      2. Download .whl from PyPI and extract the DLL (returns DLL path)
+    Returns None on failure after printing diagnostics.
     """
+    import subprocess
+
+    # ── Tier 1: pip install libusb-package ──────────────────────────────────
+    print("[INFO] Attempting: pip install libusb-package ...")
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "libusb-package"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=120,
+        )
+        if result.returncode == 0:
+            print("[INFO] libusb-package installed successfully via pip.")
+            return "_pip_installed"
+        print("[WARN] pip install failed (exit {}). Trying direct download...".format(
+            result.returncode
+        ))
+    except FileNotFoundError:
+        print("[WARN] pip not available. Trying direct download...")
+    except Exception as e:
+        print("[WARN] pip install error: {}. Trying direct download...".format(e))
+
+    # ── Tier 2: download .whl from PyPI and extract DLL ────────────────────
     import urllib.request
     import zipfile
     import io
 
-    bits = "64" if sys.maxsize > 2 ** 32 else "32"
-    # Path inside the libusb release zip that matches our architecture
-    dll_zip_path = "VS2019/MS{}/dll/libusb-1.0.dll".format(bits)
+    is_64 = sys.maxsize > 2 ** 32
+    whl_url = (
+        "https://files.pythonhosted.org/packages/cd/91/"
+        "9eaa00e5e9d2ba0a0adc945990d2383ef3021afa985f59cce975f3c89d20/"
+        "libusb_package-1.0.26.1-cp38-cp38-win_amd64.whl"
+    ) if is_64 else (
+        "https://files.pythonhosted.org/packages/4f/39/"
+        "fdce19efd5a4ca7ed7dcdbec70824d871da238e7f222034dce7372dfcb85/"
+        "libusb_package-1.0.26.1-cp38-cp38-win32.whl"
+    )
+    bits = "64" if is_64 else "32"
+    dll_name_in_whl = "libusb_package/libusb-1.0.dll"
 
-    # Resolve the latest release download URL via the GitHub redirect
-    api_url = "https://api.github.com/repos/libusb/libusb/releases/latest"
-    print("[INFO] Fetching latest libusb release info from GitHub...")
+    print("[INFO] Downloading {}-bit libusb wheel from PyPI...".format(bits))
     try:
-        req = urllib.request.Request(api_url, headers={"User-Agent": "gip_common/1.0"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            import json as _json
-            release = _json.loads(resp.read().decode())
-
-        asset_url = None  # type: Optional[str]
-        for asset in release.get("assets", []):
-            name = asset.get("name", "")
-            if name.endswith(".7z") or name.endswith(".zip"):
-                if "libusb" in name.lower() and not name.endswith(".7z"):
-                    asset_url = asset["browser_download_url"]
-                    break
-        # Fallback: first .zip asset
-        if asset_url is None:
-            for asset in release.get("assets", []):
-                if asset.get("name", "").endswith(".zip"):
-                    asset_url = asset["browser_download_url"]
-                    break
-
-        if asset_url is None:
-            print("[ERROR] No .zip asset found in latest libusb release.")
-            return None
-
-        print("[INFO] Downloading {} ...".format(asset_url))
-        req2 = urllib.request.Request(asset_url, headers={"User-Agent": "gip_common/1.0"})
-        with urllib.request.urlopen(req2, timeout=60) as resp2:
-            data = resp2.read()
+        req = urllib.request.Request(whl_url, headers={"User-Agent": "gip_common/1.0"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = resp.read()
 
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
-            # Normalise paths in zip (may use backslashes or forward slashes)
-            target = dll_zip_path.replace("\\", "/")
             names = [n.replace("\\", "/") for n in zf.namelist()]
-            if target not in names:
-                print("[ERROR] Expected '{}' not found in zip.".format(dll_zip_path))
-                print("  Available paths (dll): {}".format(
-                    [n for n in names if n.endswith(".dll")]
-                ))
-                return None
-            dll_bytes = zf.read(zf.namelist()[names.index(target)])
+            if dll_name_in_whl not in names:
+                # Try to find any libusb DLL in the wheel
+                dll_candidates = [n for n in names if n.endswith("libusb-1.0.dll")]
+                if dll_candidates:
+                    dll_name_found = dll_candidates[0]
+                else:
+                    print("[ERROR] libusb-1.0.dll not found in wheel.")
+                    print("  Contents (dll): {}".format(
+                        [n for n in names if n.endswith(".dll")]
+                    ))
+                    return None
+            else:
+                dll_name_found = dll_name_in_whl
+
+            dll_bytes = zf.read(zf.namelist()[names.index(dll_name_found)])
 
         dest_path = os.path.join(dest_dir, "libusb-1.0.dll")
         with open(dest_path, "wb") as f:
@@ -305,8 +334,35 @@ def _download_libusb(dest_dir):
         return dest_path
 
     except Exception as e:
-        print("[ERROR] Auto-download failed: {}".format(e))
-        return None
+        print("[ERROR] Wheel download failed: {}".format(e))
+
+    # ── Both tiers failed — print diagnostics ──────────────────────────────
+    print("")
+    print("[ERROR] Could not obtain libusb automatically.")
+    print("  Recommended: pip install libusb-package")
+    print("")
+    # Try to show actual GitHub release assets for manual download
+    try:
+        api_url = "https://api.github.com/repos/libusb/libusb/releases/latest"
+        req = urllib.request.Request(api_url, headers={"User-Agent": "gip_common/1.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            import json as _json
+            release = _json.loads(resp.read().decode())
+        tag = release.get("tag_name", "unknown")
+        assets = release.get("assets", [])
+        if assets:
+            print("  Latest GitHub release ({}):".format(tag))
+            for asset in assets:
+                print("    {} -> {}".format(
+                    asset.get("name", "?"),
+                    asset.get("browser_download_url", "?"),
+                ))
+            print("")
+            print("  Note: GitHub releases are .7z (needs 7-Zip to extract).")
+            print("  Inside the archive, use: VS2019/MS{}/dll/libusb-1.0.dll".format(bits))
+    except Exception:
+        print("  Manual download: https://github.com/libusb/libusb/releases")
+    return None
 
 
 def find_device_windows():
