@@ -163,8 +163,17 @@ def configure_libusb_backend():
         print("[ERROR] pyusb not installed.  pip install pyusb")
         return None
 
+    # pyusb caches _lib at module level; reset it before each attempt so
+    # a previous failed call does not prevent retry with an explicit path.
+    lb1 = usb.backend.libusb1
+
+    def _try_backend(find_library=None):
+        # type: (object) -> object
+        lb1._lib = None  # type: ignore[attr-defined]  # force fresh _setup_backend
+        return lb1.get_backend(find_library=find_library)
+
     # Try default (system PATH / site-packages)
-    backend = usb.backend.libusb1.get_backend()
+    backend = _try_backend()
     if backend is not None:
         return backend
 
@@ -187,25 +196,27 @@ def configure_libusb_backend():
             dll_dir = os.path.dirname(os.path.abspath(path))
             if hasattr(os, "add_dll_directory") and dll_dir:
                 os.add_dll_directory(dll_dir)  # Python 3.8+ Windows DLL search path fix
-            backend = usb.backend.libusb1.get_backend(find_library=lambda _p=path: _p)
+            backend = _try_backend(find_library=lambda _p=path: _p)
             if backend is not None:
                 print("[INFO] Using libusb from: {}".format(path))
                 return backend
 
-            # File found but DLL failed to load — get the actual OS error
-            print("[ERROR] DLL found but failed to load: {}".format(path))
+            # DLL found, ctypes can load it, but pyusb still refused — diagnose
+            print("[ERROR] DLL found but pyusb failed to initialise it: {}".format(path))
             try:
                 ctypes.CDLL(path)
-                print("  ctypes loaded it OK — pyusb refused it (version mismatch?)")
+                print("  ctypes load: OK")
+                print("  pyusb refused it — likely a pyusb internal setup error.")
+                print("  Try: pip install --upgrade pyusb")
             except OSError as load_err:
                 print("  OS error: {}".format(load_err))
                 err_str = str(load_err)
                 if "193" in err_str or "%1" in err_str:
                     bits = "64" if sys.maxsize > 2 ** 32 else "32"
                     print("  -> Wrong DLL architecture! Python is {}-bit.".format(bits))
-                    print("     Use libusb-1.0.dll from VS2019/MS{}/dll/ in the release zip.".format(bits))
+                    print("     Use VS2019/MS{}/dll/libusb-1.0.dll from the release zip.".format(bits))
                 elif "126" in err_str or "not found" in err_str.lower():
-                    print("  -> DLL has missing dependencies (MSVC runtime?).")
+                    print("  -> DLL has missing dependencies.")
                     print("     Try the MinGW64 build: MinGW64/dll/libusb-1.0.dll")
                     print("     Or install Visual C++ Redistributable 2019.")
             return None
