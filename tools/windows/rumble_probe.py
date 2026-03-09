@@ -268,8 +268,6 @@ def main():
 
     dev = find_device_windows()
     if dev is None:
-        print("[ERROR] Device {:04X}:{:04X} not found.".format(VID_GAMESIR, PID_G7SE))
-        print("  Is the G7 SE connected? Did you install WinUSB via Zadig?")
         sys.exit(1)
 
     import usb.util

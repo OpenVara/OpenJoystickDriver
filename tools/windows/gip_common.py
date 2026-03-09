@@ -390,8 +390,11 @@ def find_device_windows():
                 d.idVendor, d.idProduct, name))
             return d
 
-    # Diagnostic: list everything libusb can see
-    print("\n[DEBUG] Devices visible to libusb:")
+    # Nothing found — print error with diagnostics
+    print("[ERROR] Device {:04X}:{:04X} not found.".format(VID_GAMESIR, PID_G7SE))
+    print("  Is the G7 SE connected? Did you install WinUSB via Zadig?")
+    print()
+    print("[DEBUG] Devices visible to libusb:")
     all_devs = list(usb.core.find(find_all=True, backend=backend))
     if not all_devs:
         print("  (none — libusb sees no USB devices at all)")
