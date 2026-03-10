@@ -6,10 +6,18 @@
     <true/>
     <key>com.apple.developer.driverkit.family.hid.device</key>
     <true/>
-    <!-- Dev-only: allows the daemon to connect without a same-team ID check.
-         Remove this key for distribution builds and use driverkit.userclient-access
-         on the daemon instead (already present in OpenJoystickDriverDaemon.entitlements). -->
-    <key>com.apple.developer.driverkit.allow-any-userclient-access</key>
+    <key>com.apple.developer.driverkit.transport.hid</key>
     <true/>
+    <key>com.apple.developer.driverkit.family.hid.eventservice</key>
+    <true/>
+    <!-- Dev-only: allows the daemon to connect without a same-team ID check.
+         Not needed with proper provisioning — use driverkit.userclient-access
+         on the daemon instead (already present in OpenJoystickDriverDaemon.entitlements).
+         Uncomment for local development without provisioning profiles. -->
+    <!-- <key>com.apple.developer.driverkit.allow-any-userclient-access</key> -->
+    <!-- <true/> -->
+    <!-- driverkit.transport.usb is granted but not added here yet.
+         The dext currently matches via IOProviderClass: IOUserResources (virtual).
+         Add when implementing physical USB device matching in the dext. -->
 </dict>
 </plist>
