@@ -8,8 +8,6 @@ private let gipHandshakeRetryDelays: [UInt64] = [1_000_000_000, 2_000_000_000, 4
 private let gipInitDelayNanoseconds: UInt64 = 50_000_000
 private let gipStickMax: Float = 32767
 private let gipTriggerMax: Float = 1023
-/// GIP CMD=0x03 keep-alive sent to prevent controller idling (~4 s interval).
-private let gipKeepAliveCmd: UInt8 = 0x03
 
 /// Errors that ``GIPParser`` can throw during the handshake or while parsing packets.
 public enum GIPError: Error, Sendable {
@@ -19,6 +17,8 @@ public enum GIPError: Error, Sendable {
   case handshakeFailed(String)
   /// A received packet is too short or its declared length does not match the actual data.
   case malformedPacket(String)
+  /// Authentication sub-protocol error.
+  case authFailed(String)
 }
 
 /// Parser for Xbox One (GIP) controllers connected over USB.
@@ -29,22 +29,14 @@ public enum GIPError: Error, Sendable {
 /// from entering idle.
 public final class GIPParser: InputParser, @unchecked Sendable {
 
-  private enum Command {
-    static let power: UInt8 = 0x05
-    static let authInit: UInt8 = 0x06
-    static let ledInit: UInt8 = 0x0A
-  }
-
-  private enum Option { static let `internal`: UInt8 = 0x20 }
-
-  private enum CMD {
-    static let input: UInt8 = 0x20
-    static let virtualKey: UInt8 = 0x07
-  }
-
   private let outEndpoint: UInt8 = 0x02
 
   private var sequencer = GIPSequencer()
+  private let authHandler = GIPAuthHandler()
+  private var handle: USBDeviceHandle?
+
+  /// Current device state, driven by auth progress.
+  public var deviceState: GIPDeviceState { authHandler.deviceState }
 
   private var prevButtons0: UInt8 = 0
   private var prevButtons1: UInt8 = 0
@@ -64,6 +56,7 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     guard let handle else {
       throw GIPError.handshakeFailed("No USB handle provided for GIP handshake")
     }
+    self.handle = handle
     for attempt in 0..<gipHandshakeMaxAttempts {
       do {
         try await sendInitSequence(handle: handle)
@@ -80,8 +73,8 @@ public final class GIPParser: InputParser, @unchecked Sendable {
   /// Send GIP keep-alive (CMD=0x03) to prevent the controller entering idle.
   public func keepAlive(handle: USBDeviceHandle?) throws {
     guard let handle else { return }
-    let seq = sequencer.next(for: gipKeepAliveCmd)
-    let packet: [UInt8] = [gipKeepAliveCmd, Option.internal, seq, 3, 0x00, 0x00, 0x00]
+    let seq = sequencer.next(for: GIPCommand.keepAlive)
+    let packet: [UInt8] = [GIPCommand.keepAlive, GIPOption.internal, seq, 3, 0x00, 0x00, 0x00]
     _ = try handle.interruptTransfer(endpoint: outEndpoint, data: packet, timeout: 2000)
   }
 
@@ -89,18 +82,49 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     guard data.count >= 4 else {
       throw GIPError.malformedPacket("Packet too short: \(data.count) bytes")
     }
-    let payloadLength = Int(data[3])
-    guard data.count >= 4 + payloadLength else {
+
+    // Parse payload length — extended encoding when bit 7 is set on byte 3
+    let payloadLength: Int
+    let headerSize: Int
+    if data[3] & 0x80 != 0 {
+      guard data.count >= 5 else {
+        throw GIPError.malformedPacket("Extended length but packet too short")
+      }
+      payloadLength = Int(data[3] & 0x7F) << 8 | Int(data[4])
+      headerSize = 5
+    } else {
+      payloadLength = Int(data[3])
+      headerSize = 4
+    }
+
+    guard data.count >= headerSize + payloadLength else {
       throw GIPError.malformedPacket(
-        "Packet shorter than declared payload: " + "\(data.count) < \(4 + payloadLength)"
+        "Packet shorter than declared payload: "
+          + "\(data.count) < \(headerSize + payloadLength)"
       )
     }
-    let payload = data.dropFirst(4).prefix(payloadLength)
+    let payload = data.dropFirst(headerSize).prefix(payloadLength)
 
     switch data[0] {
-    case CMD.input: return parseMainInput(payload: Data(payload))
-    case CMD.virtualKey: return parseGuideButton(payload: Data(payload))
-    default: return []
+    case GIPCommand.input:
+      return parseMainInput(payload: Data(payload))
+    case GIPCommand.virtualKey:
+      return parseGuideButton(payload: Data(payload))
+    case GIPCommand.authenticate:
+      if let handle {
+        do {
+          try authHandler.handleAuthMessage(
+            payload: Data(payload),
+            handle: handle,
+            sequencer: &sequencer
+          )
+        } catch {
+          print("[GIPParser] Auth error: \(error)")
+        }
+      }
+      return []
+    default:
+      return []
     }
   }
 
@@ -122,20 +146,20 @@ public final class GIPParser: InputParser, @unchecked Sendable {
   }
 
   private func sendPowerOnPacket(handle: USBDeviceHandle) throws {
-    let powerSeq = sequencer.next(for: Command.power)
-    let powerPacket: [UInt8] = [Command.power, Option.internal, powerSeq, 1, 0]
+    let powerSeq = sequencer.next(for: GIPCommand.power)
+    let powerPacket: [UInt8] = [GIPCommand.power, GIPOption.internal, powerSeq, 1, 0]
     _ = try handle.interruptTransfer(endpoint: outEndpoint, data: powerPacket, timeout: 2000)
   }
 
   private func sendLedInitPacket(handle: USBDeviceHandle) throws {
-    let ledSeq = sequencer.next(for: Command.ledInit)
-    let ledPacket: [UInt8] = [Command.ledInit, Option.internal, ledSeq, 3, 0x00, 0x01, 0x14]
+    let ledSeq = sequencer.next(for: GIPCommand.led)
+    let ledPacket: [UInt8] = [GIPCommand.led, GIPOption.internal, ledSeq, 3, 0x00, 0x01, 0x14]
     _ = try handle.interruptTransfer(endpoint: outEndpoint, data: ledPacket, timeout: 2000)
   }
 
   private func sendAuthInitPacket(handle: USBDeviceHandle) throws {
-    let authSeq = sequencer.next(for: Command.authInit)
-    let authPacket: [UInt8] = [Command.authInit, Option.internal, authSeq, 2, 0x01, 0x00]
+    let authSeq = sequencer.next(for: GIPCommand.authenticate)
+    let authPacket: [UInt8] = [GIPCommand.authenticate, GIPOption.internal, authSeq, 2, 0x01, 0x00]
     _ = try handle.interruptTransfer(endpoint: outEndpoint, data: authPacket, timeout: 2000)
   }
 
