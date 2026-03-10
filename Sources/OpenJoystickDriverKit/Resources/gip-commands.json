@@ -3,11 +3,13 @@
 	"version": "1.0.0",
 	"commands": [
 		{ "code": 1, "name": "ACK" },
+		{ "code": 3, "name": "KEEPALIVE" },
 		{ "code": 4, "name": "IDENTIFY" },
 		{ "code": 5, "name": "POWER" },
 		{ "code": 6, "name": "AUTHENTICATE" },
 		{ "code": 7, "name": "VIRTUAL_KEY" },
 		{ "code": 9, "name": "RUMBLE" },
+		{ "code": 10, "name": "LED" },
 		{ "code": 32, "name": "INPUT" }
 	],
 	"option_flags": [
