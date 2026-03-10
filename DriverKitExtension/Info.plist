@@ -30,9 +30,18 @@
             <key>IOClass</key>
             <string>IOUserService</string>
 
-            <!-- Our Swift class that implements IOUserHIDDevice -->
+            <!-- Our C++ class that implements IOUserHIDDevice -->
             <key>IOUserClass</key>
             <string>OpenJoystickVirtualHIDDevice</string>
+
+            <!-- Used by IOService::Create() to instantiate user clients -->
+            <key>UserClientProperties</key>
+            <dict>
+                <key>IOClass</key>
+                <string>IOUserUserClient</string>
+                <key>IOUserClass</key>
+                <string>OpenJoystickUserClient</string>
+            </dict>
 
             <!-- Virtual device pattern: matches IOUserResources so it starts at boot
                  with no physical hardware requirement. -->

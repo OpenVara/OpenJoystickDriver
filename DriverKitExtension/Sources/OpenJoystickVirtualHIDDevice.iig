@@ -1,0 +1,25 @@
+#ifndef OpenJoystickVirtualHIDDevice_h
+#define OpenJoystickVirtualHIDDevice_h
+
+#include <HIDDriverKit/IOUserHIDDevice.iig>
+
+class OpenJoystickVirtualHIDDevice : public IOUserHIDDevice {
+public:
+    virtual bool init() override LOCALONLY;
+    virtual void free() override LOCALONLY;
+
+    virtual kern_return_t Start(IOService *provider) override;
+
+    virtual kern_return_t NewUserClient(uint32_t type,
+                                        IOUserClient **userClient) override;
+
+    virtual bool handleStart(IOService *provider) override LOCALONLY;
+    virtual OSDictionary *newDeviceDescription() override LOCALONLY;
+    virtual OSData *newReportDescriptor() override LOCALONLY;
+
+    /// Injects a HID input report into the system HID stack.
+    virtual kern_return_t send_report(IOMemoryDescriptor *report,
+                                      uint32_t length) LOCALONLY;
+};
+
+#endif /* OpenJoystickVirtualHIDDevice_h */
