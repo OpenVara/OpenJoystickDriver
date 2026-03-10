@@ -149,11 +149,13 @@ codesign \
   --entitlements "$DAEMON_ENTITLEMENTS" \
   "$DAEMON"
 
-echo "Signing GUI (hardened runtime)..."
+echo "Signing GUI (hardened runtime + system-extension entitlement)..."
+GUI_ENTITLEMENTS="$PROJECT_DIR/Sources/OpenJoystickDriver/OpenJoystickDriver.entitlements"
 codesign \
   --sign "$CODESIGN_IDENTITY" \
   --force \
   --options runtime \
+  --entitlements "$GUI_ENTITLEMENTS" \
   "$GUI"
 
 echo "Verifying signatures..."
