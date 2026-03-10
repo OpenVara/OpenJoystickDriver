@@ -6,15 +6,13 @@
     <key>com.apple.security.app-sandbox</key>
     <false/>
 
-    <!-- com.apple.developer.hid.virtual.device is required for             -->
-    <!-- IOHIDUserDeviceCreateWithProperties (virtual HID gamepad output).  -->
-    <!-- It is a restricted entitlement: adding it without a matching       -->
-    <!-- provisioning profile causes amfid to kill the process on SIP-      -->
-    <!-- enabled Macs.  Omitted here until Apple approves the request at    -->
-    <!-- developer.apple.com/contact/request/system-extension.              -->
-    <!-- When provisioned, add back:                                        -->
-    <!--   <key>com.apple.developer.hid.virtual.device</key><true/>        -->
-    <!-- IOHIDVirtualOutputDispatcher already handles nil device gracefully.-->
+    <!-- com.apple.developer.hid.virtual.device (IOHIDUserDevice fallback)  -->
+    <!-- was NOT part of the granted DriverKit entitlements — it is a       -->
+    <!-- separate restricted entitlement outside the DriverKit scope.       -->
+    <!-- DextOutputDispatcher is the production output path; it uses the    -->
+    <!-- DriverKit extension (com.openjoystickdriver.VirtualHIDDevice)      -->
+    <!-- via the userclient-access entitlement below.                       -->
+    <!-- No additional keys needed — daemon only requires userclient-access.-->
 
     <!-- Allows IOKit USB device access (class 0xFF / vendor-specific) -->
     <!-- without running as root. Requires Developer ID signing.       -->
