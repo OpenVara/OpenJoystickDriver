@@ -176,6 +176,63 @@ Expected files:
 - Verify the controller works in a game first
 - Check that WinUSB is the active driver (rumble commands go via raw USB, not XInput)
 
+## Script 5: Kernel Driver Extraction & Decompilation
+
+The G7 SE uses three Xbox/GIP kernel drivers that contain the auth handshake,
+input mapping, and rumble logic we need to replicate in the macOS DriverKit driver:
+
+| Driver | Role |
+|--------|------|
+| `dc1-controller.sys` | Device-specific controller minidriver (input/rumble mapping) |
+| `devauthe.sys` | GIP device authentication handshake |
+| `xboxgip.sys` | Core GIP transport layer |
+
+### Copy drivers
+
+```
+python copy_drivers.py
+```
+
+Copies all three `.sys` files from `%windir%\System32\DRIVERS\` into a local
+`drivers/` subdirectory. Prints file sizes and SHA-256 hashes for version tracking.
+
+### Decompile with Ghidra (any platform)
+
+On Windows (copy + decompile in one step):
+
+```
+set GHIDRA_INSTALL_DIR=C:\ghidra_11.0
+python copy_drivers.py --decompile
+```
+
+On macOS/Linux (decompile pre-copied .sys files):
+
+```
+# First, copy the drivers/ folder from the Windows machine
+export GHIDRA_INSTALL_DIR=/opt/ghidra_11.0      # or /Applications/ghidra_11.0
+python copy_drivers.py --decompile-only
+```
+
+Requires [Ghidra](https://ghidra-sre.org/) installed. This runs Ghidra's
+`analyzeHeadless` with `decompile_driver.ghidra.py` to produce:
+
+- `drivers/<name>_decompiled.c` — Pseudocode for all functions
+- `drivers/<name>_functions.txt` — Function list with addresses and sizes
+
+The Ghidra script (`decompile_driver.ghidra.py`) runs in Ghidra's Jython environment
+and is not meant to be executed directly.
+
+### Alternative: RetDec
+
+For a simpler (but lower-quality) one-shot decompilation without Ghidra:
+
+1. Install [RetDec](https://github.com/avast/retdec) or use the
+   [online demo](https://retdec.com/)
+2. Run: `retdec-decompiler driver.sys`
+
+RetDec produces readable C but struggles with complex control flow and kernel
+data structures compared to Ghidra.
+
 ## File Overview
 
 | File | Requires Zadig? | Description |
@@ -185,3 +242,5 @@ Expected files:
 | `usb_descriptor_dump.py` | Yes | Full USB descriptor dump → JSON |
 | `gip_capture.py` | Yes | Raw GIP packet capture → JSONL |
 | `rumble_probe.py` | Yes | Rumble/LED/command testing → JSON |
+| `copy_drivers.py` | No | Extract kernel drivers + optional decompile |
+| `decompile_driver.ghidra.py` | No | Ghidra headless decompilation script |
