@@ -5,11 +5,15 @@ import OpenJoystickDriverKit
 struct InstallCommand {
   func run() {
     let cliURL = URL(fileURLWithPath: CommandLine.arguments[0])
-    let daemonURL = cliURL.deletingLastPathComponent().appendingPathComponent(
-      "OpenJoystickDriverDaemon"
-    )
+    let macosDir = cliURL.deletingLastPathComponent()
+    // Prefer daemon inside its own bundle (required for provisioning profile on macOS 26+)
+    let bundledDaemon = macosDir
+      .appendingPathComponent("OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon")
+    let legacyDaemon = macosDir.appendingPathComponent("OpenJoystickDriverDaemon")
+    let daemonURL = FileManager.default.fileExists(atPath: bundledDaemon.path)
+      ? bundledDaemon : legacyDaemon
     guard FileManager.default.fileExists(atPath: daemonURL.path) else {
-      print("Error: daemon binary not found at \(daemonURL.path)")
+      print("Error: daemon binary not found at \(bundledDaemon.path) or \(legacyDaemon.path)")
       exit(1)
     }
     do {

@@ -63,6 +63,28 @@ final class SystemExtensionManager: NSObject, ObservableObject, @unchecked Senda
 
   func installExtension() {
     installState = .installing
+
+    // Diagnostics: log what the framework will see
+    let bundlePath = Bundle.main.bundlePath
+    let sysextDir = bundlePath + "/Contents/Library/SystemExtensions"
+    print("[SysExt] Bundle.main.bundlePath: \(bundlePath)")
+    print("[SysExt] Looking for dext ID: \(extensionBundleID)")
+
+    let fm = FileManager.default
+    if let items = try? fm.contentsOfDirectory(atPath: sysextDir) {
+      print("[SysExt] Contents of Library/SystemExtensions/: \(items)")
+      for item in items where item.hasSuffix(".dext") {
+        let dextPath = sysextDir + "/" + item
+        if let dextBundle = Bundle(path: dextPath) {
+          print("[SysExt]   \(item) bundleID=\(dextBundle.bundleIdentifier ?? "nil")")
+        } else {
+          print("[SysExt]   \(item) — could not create Bundle")
+        }
+      }
+    } else {
+      print("[SysExt] Library/SystemExtensions/ does not exist or is unreadable")
+    }
+
     let request = OSSystemExtensionRequest.activationRequest(
       forExtensionWithIdentifier: extensionBundleID,
       queue: .main
@@ -96,7 +118,12 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
     _ request: OSSystemExtensionRequest,
     didFailWithError error: Error
   ) {
-    let message = error.localizedDescription
+    let nsError = error as NSError
+    print("[SysExt] FAILED — domain: \(nsError.domain), code: \(nsError.code)")
+    print("[SysExt]   localizedDescription: \(nsError.localizedDescription)")
+    print("[SysExt]   userInfo: \(nsError.userInfo)")
+
+    let message = "\(error.localizedDescription) [code=\(nsError.code)]"
     Task { @MainActor [weak self] in self?.installState = .failed(message) }
   }
 

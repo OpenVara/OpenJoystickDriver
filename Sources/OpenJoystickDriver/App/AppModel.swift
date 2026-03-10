@@ -131,9 +131,14 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   /// Falls back to expected path relative to this app's executable.
   var daemonExecutablePath: String? {
     if let installed = DaemonManager.installedDaemonPath { return installed }
-    return Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent(
-      "OpenJoystickDriverDaemon"
-    ).path(percentEncoded: false)
+    guard let macosDir = Bundle.main.executableURL?.deletingLastPathComponent() else { return nil }
+    // Prefer daemon inside its own bundle (required for provisioning profile on macOS 26+)
+    let bundled = macosDir
+      .appendingPathComponent("OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon")
+    if FileManager.default.fileExists(atPath: bundled.path(percentEncoded: false)) {
+      return bundled.path(percentEncoded: false)
+    }
+    return macosDir.appendingPathComponent("OpenJoystickDriverDaemon").path(percentEncoded: false)
   }
 
   func installDaemon() async {
@@ -142,9 +147,12 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       daemonError = "Cannot locate app executable."
       return
     }
-    let daemonURL = execURL.deletingLastPathComponent().appendingPathComponent(
-      "OpenJoystickDriverDaemon"
-    )
+    let macosDir = execURL.deletingLastPathComponent()
+    let bundledDaemon = macosDir
+      .appendingPathComponent("OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon")
+    let legacyDaemon = macosDir.appendingPathComponent("OpenJoystickDriverDaemon")
+    let daemonURL = FileManager.default.fileExists(atPath: bundledDaemon.path(percentEncoded: false))
+      ? bundledDaemon : legacyDaemon
     do {
       let task = Task.detached { try DaemonManager.install(daemonExecutable: daemonURL) }
       try await task.value
