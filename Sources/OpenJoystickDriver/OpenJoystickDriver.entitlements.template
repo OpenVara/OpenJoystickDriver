@@ -13,5 +13,12 @@
          Requires entitlement request at developer.apple.com/contact/request/system-extension. -->
     <key>com.apple.developer.system-extension.install</key>
     <true/>
+
+    <!-- Required by AMFI on macOS 26+ to validate the embedded provisioning
+         profile. Must match the profile's application-identifier. -->
+    <key>com.apple.application-identifier</key>
+    <string>${DEVELOPMENT_TEAM}.com.openjoystickdriver</string>
+    <key>com.apple.developer.team-identifier</key>
+    <string>${DEVELOPMENT_TEAM}</string>
 </dict>
 </plist>

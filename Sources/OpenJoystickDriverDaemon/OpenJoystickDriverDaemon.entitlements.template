@@ -30,5 +30,12 @@
     <array>
         <string>com.openjoystickdriver.VirtualHIDDevice</string>
     </array>
+
+    <!-- Required by AMFI on macOS 26+ to validate the embedded provisioning
+         profile. Must match the profile's application-identifier. -->
+    <key>com.apple.application-identifier</key>
+    <string>${DEVELOPMENT_TEAM}.com.openjoystickdriver.daemon</string>
+    <key>com.apple.developer.team-identifier</key>
+    <string>${DEVELOPMENT_TEAM}</string>
 </dict>
 </plist>
