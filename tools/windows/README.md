@@ -96,16 +96,38 @@ a zero-all-motors command before exiting.
 
 ## Restoring the Xbox Driver
 
-After you're done with Scripts 2-4, restore the Xbox driver:
+After you're done with Scripts 2-4, you need to restore the Xbox driver. Simply
+unplugging/replugging won't work — Windows caches the WinUSB driver association
+per-device and will reinstall WinUSB instead of the Xbox driver. Zadig also can't
+help here since it only offers WinUSB/libusb variants, not the original Microsoft
+Xbox driver.
 
-**Option A (easiest):** Unplug the controller and plug it back in. Windows will
-re-install the Xbox driver automatically.
+**Method 1 — Device Manager with "Delete driver" (try this first):**
 
-**Option B:** Device Manager → find the controller under "Universal Serial Bus devices"
-→ right-click → Update Driver → Search automatically.
+1. Open Device Manager → find the controller (under "Universal Serial Bus devices"
+   or "libusb-win32 devices")
+2. Right-click → **Uninstall device**
+3. **Check the box** "Delete the driver software for this device" (Win10) or
+   "Attempt to remove the driver for this device" (Win11) — this is the critical step
+4. Unplug the controller, wait 5 seconds, replug
+5. Windows should now install the Xbox driver from its built-in driver store
 
-**Option C:** Zadig → select the device → set target to the original driver (usually
-`xusb22` or `xb1usb`) → Replace Driver.
+**Method 2 — pnputil (if Method 1 fails):**
+
+1. Open an **Admin Command Prompt**
+2. `pnputil /enum-drivers` — find the WinUSB OEM driver (look for "WinUSB" or the
+   device's VID/PID in the output)
+3. `pnputil /delete-driver oemXX.inf /force` — replace `oemXX.inf` with the actual
+   filename from step 2
+4. Device Manager → right-click the device → Uninstall device
+5. Unplug/replug
+
+**Method 3 — Nuclear option (if nothing else works):**
+
+1. Device Manager → View → **Show hidden devices**
+2. Uninstall **all** entries for the controller (including greyed-out ones),
+   checking "Delete driver" each time
+3. Unplug/replug
 
 ## Collecting Results
 
@@ -118,6 +140,7 @@ copy g7se_*.jsonl \\path\to\shared\folder
 ```
 
 Expected files:
+
 - `g7se_xinput_*.jsonl` — XInput state log
 - `g7se_descriptors_*.json` — USB descriptor dump
 - `g7se_capture_*.jsonl` — Raw GIP packets
@@ -126,25 +149,30 @@ Expected files:
 ## Troubleshooting
 
 ### "Device not found"
+
 - Is the G7 SE plugged in via USB (not Bluetooth)?
 - For Scripts 2-4: did you install WinUSB via Zadig for the correct device?
 - Check VID:PID — should be `3537:1010`
 
 ### "Cannot claim interface" / "Access denied"
+
 - Close any other apps using the controller (Xbox Accessories, Steam, etc.)
 - Run the script as Administrator
 - Verify WinUSB is installed (Zadig should show "WinUSB" as current driver)
 
 ### "libusb-1.0.dll not found"
+
 - Place the DLL in the same directory as the scripts
 - Or add its location to your system `PATH`
 
 ### XInput script shows "Controller not connected"
+
 - Make sure the Xbox driver is active (not WinUSB)
 - Try a different `--user` index (0-3)
 - Replug the controller
 
 ### Rumble probe doesn't produce vibration
+
 - Verify the controller works in a game first
 - Check that WinUSB is the active driver (rumble commands go via raw USB, not XInput)
 
