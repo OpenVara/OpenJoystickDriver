@@ -397,6 +397,7 @@ def find_device_windows():
 
     backend = configure_libusb_backend()
     if backend is None:
+        print("[ERROR] Could not initialise libusb backend. See errors above.")
         return None
 
     dev = usb.core.find(idVendor=VID_GAMESIR, idProduct=PID_G7SE, backend=backend)
