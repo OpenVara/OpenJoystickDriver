@@ -19,6 +19,9 @@ OpenJoystickDriver is to gamepads what [OpenTabletDriver](https://opentabletdriv
 | Feature | Status |
 |---------|--------|
 | Xbox One / Series controllers (GIP protocol) | Working - hardware verified on Gamesir G7 SE |
+| GIP authentication (CMD 0x06 sub-protocol) | Working - state machine with dummy auth payloads |
+| Virtual HID gamepad (DriverKit extension) | Working - production output path on macOS 13+ |
+| Virtual HID gamepad (IOHIDUserDevice fallback) | Working - fallback when dext not installed |
 | DualShock 4 (USB) | Implemented, untested (no PS4 hardware) |
 | Generic USB HID gamepads | Basic fallback (standard HID usage page) |
 | Button remapping | Working - JSON profiles per VID/PID |
@@ -64,20 +67,23 @@ To uninstall:
 
 ## Permissions
 
-Two system permissions are required:
+One system permission is required:
 
 - **Input Monitoring** (`System Settings > Privacy > Input Monitoring`) - to read controller input
-- **Accessibility** (`System Settings > Privacy > Accessibility`) - to inject keyboard/mouse events
 
-Grant both to the **daemon binary** (`OpenJoystickDriverDaemon`), not the GUI app.
+Grant it to the **daemon binary** (`OpenJoystickDriverDaemon`), not the GUI app.
+
+Accessibility permission is **not** needed — the driver injects gamepad input via a virtual HID device (DriverKit extension or IOHIDUserDevice fallback), not CGEvents.
 
 > **Note for development builds:** Ad-hoc signed binaries get a new code identity on every `swift build`. macOS ties TCC grants to **the** binary's code identity, so permissions reset after each rebuild. After rebuilding, re-grant both permissions and use `--headless restart` or the **Restart Daemon** button in the app. The Permissions view detects this state and shows a prompt automatically.
 >
 > To avoid this, sign with a real Apple Development certificate:
+>
 > ```bash
 > export CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)"
 > ./scripts/build-dev.sh
 > ```
+>
 > Find your identity: `security find-identity -v -p codesigning`
 
 ---
@@ -133,14 +139,31 @@ VID and PID in CLI commands are **decimal** integers (e.g. `13623:4112` for Game
 
 ## Architecture
 
+### Input
+
 Two input paths, one per USB device class:
 
 ```
-USB Class 0xFF (Vendor-Specific)  →  LibUSB / SwiftUSB    →  GIPParser
+USB Class 0xFF (Vendor-Specific)  →  LibUSB / SwiftUSB    →  GIPParser (+ GIPAuthHandler)
 USB Class 0x03 (HID)              →  IOKit / IOHIDManager  →  DS4Parser or GenericHIDParser
 ```
 
 Both paths feed into a `DevicePipeline` actor - one per connected controller. Pipelines are isolated: an error in one controller's pipeline doesn't affect the others.
+
+GIP controllers (Xbox One / Series) require a CMD 0x06 authentication handshake before they send input. `GIPAuthHandler` implements the state machine with dummy auth payloads (lenient enforcement allows cryptographically empty responses).
+
+### Output
+
+Two output paths with automatic fallback:
+
+```
+DextOutputDispatcher       →  DriverKit extension (IOUserHIDDevice + user-client IPC)
+IOHIDVirtualOutputDispatcher  →  IOHIDUserDeviceCreateWithProperties (fallback)
+```
+
+The DriverKit extension (`OpenJoystickVirtualHIDDevice`) registers as a system HID device and accepts 13-byte input reports from the daemon via user-client IPC. If the extension is not installed or not approved, the daemon falls back to `IOHIDUserDevice`.
+
+### IPC and profiles
 
 The daemon exposes an XPC service (`com.openjoystickdriver.xpc`). The GUI and CLI connect to it for device listing, status queries, and profile changes. The daemon never depends on the GUI being open.
 
@@ -175,11 +198,17 @@ swift build
 # Run tests (no hardware required)
 swift test --filter OpenJoystickDriverKitTests
 
-# Build + ad-hoc sign both debug binaries
+# Build + ad-hoc sign both debug binaries (creates .app bundle)
 ./scripts/build-dev.sh
 
 # Build + sign + immediately run the daemon (fast dev loop)
 ./scripts/run-dev.sh
+
+# Build the DriverKit extension (requires provisioning profile)
+./scripts/build-dext.sh
+
+# Build universal release binaries, codesign, and notarize
+./scripts/build-release.sh
 
 # Lint
 ./scripts/lint.sh
