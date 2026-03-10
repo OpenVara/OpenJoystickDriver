@@ -27,7 +27,7 @@ DEXT_DIR="$PROJECT_DIR/DriverKitExtension"
 DEXT_PROJECT="$DEXT_DIR/OpenJoystickVirtualHID.xcodeproj"
 DEXT_SCHEME="OpenJoystickVirtualHID"
 DEXT_BUILD_DIR="$PROJECT_DIR/.build/dext"
-DEXT_PRODUCT="$DEXT_BUILD_DIR/Build/Products/Debug/OpenJoystickVirtualHID.dext"
+DEXT_PRODUCT="$DEXT_BUILD_DIR/Build/Products/Debug-driverkit/OpenJoystickVirtualHID.dext"
 
 # ---------------------------------------------------------------------------
 # Step 1: Validate signing requirements
@@ -87,14 +87,63 @@ echo "Built: $DEXT_PRODUCT"
 # SPM builds the GUI as a plain executable; for dext embedding we need an
 # app bundle wrapper. Check if one exists (created by build-dev.sh or Xcode).
 GUI_APP="$PROJECT_DIR/.build/debug/OpenJoystickDriver.app"
-DEXT_DEST="$GUI_APP/Contents/Library/SystemExtensions"
+DEXT_SYSEXT="$GUI_APP/Contents/Library/SystemExtensions"
+
+# OSSystemExtensionManager looks up extensions by bundle-ID-based filename,
+# e.g. "com.openjoystickdriver.VirtualHIDDevice.dext" — not the product name.
+DEXT_BUNDLE_ID=$(plutil -extract CFBundleIdentifier raw "$DEXT_PRODUCT/Info.plist")
+DEXT_FILENAME="${DEXT_BUNDLE_ID}.dext"
 
 if [[ -d "$GUI_APP" ]]; then
     echo "Embedding dext into app bundle..."
-    mkdir -p "$DEXT_DEST"
-    rm -rf "$DEXT_DEST/OpenJoystickVirtualHID.dext"
-    cp -R "$DEXT_PRODUCT" "$DEXT_DEST/"
-    echo "Embedded at: $DEXT_DEST/OpenJoystickVirtualHID.dext"
+    echo "  Dext bundle ID: $DEXT_BUNDLE_ID"
+    echo "  Dext filename:  $DEXT_FILENAME"
+
+    # Place in Library/SystemExtensions/ named by bundle ID —
+    # this is where OSSystemExtensionManager discovers extensions
+    mkdir -p "$DEXT_SYSEXT"
+    rm -rf "$DEXT_SYSEXT/$DEXT_FILENAME"
+    rm -rf "$DEXT_SYSEXT/OpenJoystickVirtualHID.dext"  # clean up old name
+    cp -R "$DEXT_PRODUCT" "$DEXT_SYSEXT/$DEXT_FILENAME"
+
+    # Flat bundles without CFBundleExecutable use the directory name (minus .dext)
+    # as the executable name. Since we renamed the directory to the bundle ID,
+    # we must add CFBundleExecutable pointing to the actual binary.
+    DEXT_EXEC_NAME=$(ls "$DEXT_SYSEXT/$DEXT_FILENAME/" | grep -v -E 'Info\.plist|_CodeSignature|embedded\.provisionprofile')
+    plutil -insert CFBundleExecutable -string "$DEXT_EXEC_NAME" \
+        "$DEXT_SYSEXT/$DEXT_FILENAME/Info.plist"
+
+    # Extract original entitlements before re-signing (xcodebuild applied
+    # DriverKit entitlements from the provisioning profile)
+    DEXT_ENTITLEMENTS_TMP="$PROJECT_DIR/.build/dext-entitlements.plist"
+    codesign -d --entitlements - --xml "$DEXT_SYSEXT/$DEXT_FILENAME" > "$DEXT_ENTITLEMENTS_TMP" 2>/dev/null
+
+    # Re-sign the dext after modifying Info.plist, preserving entitlements
+    codesign --sign "$CODESIGN_IDENTITY" --force --generate-entitlement-der \
+        --entitlements "$DEXT_ENTITLEMENTS_TMP" \
+        "$DEXT_SYSEXT/$DEXT_FILENAME"
+
+    echo "Embedded at: $DEXT_SYSEXT/$DEXT_FILENAME (exec: $DEXT_EXEC_NAME)"
+
+    # Resolve entitlements if not already done by build-dev.sh
+    if [[ ! -f "$GUI_ENTITLEMENTS" ]]; then
+      mkdir -p "$PROJECT_DIR/.build"
+      resolve_entitlements "$GUI_ENTITLEMENTS_TEMPLATE" "$GUI_ENTITLEMENTS"
+    fi
+
+    # Re-sign outer app. The dext in PlugIns/ is sealed as nested code.
+    # The dext in Library/SystemExtensions/ is sealed as opaque data but
+    # retains its own independent signature for OSSystemExtensionManager.
+    echo "Re-signing app bundle..."
+    codesign --sign "$CODESIGN_IDENTITY" --force --generate-entitlement-der \
+        --entitlements "$GUI_ENTITLEMENTS" "$GUI_APP"
+
+    # Always copy to /Applications/ — sysextd requires the containing app
+    # to be in /Applications/ for system extension discovery
+    echo "Installing to /Applications/OpenJoystickDriver.app..."
+    rm -rf /Applications/OpenJoystickDriver.app
+    cp -R "$GUI_APP" /Applications/
+    echo "Copied to /Applications"
 else
     echo "Note: GUI app bundle not found at $GUI_APP — build the main project first."
     echo "      Run ./scripts/build-dev.sh, then ./scripts/build-dext.sh again."
