@@ -38,7 +38,7 @@ static const IOUserClientMethodDispatch DISPATCH_TABLE[] = {
 static constexpr uint32_t DISPATCH_TABLE_COUNT =
     sizeof(DISPATCH_TABLE) / sizeof(DISPATCH_TABLE[0]);
 
-bool OpenJoystickUserClient::init() {
+auto OpenJoystickUserClient::init() -> bool {
     if (!super::init()) {
         return false;
     }
@@ -49,14 +49,14 @@ bool OpenJoystickUserClient::init() {
     return true;
 }
 
-void OpenJoystickUserClient::free() {
+auto OpenJoystickUserClient::free() -> void {
     OSSafeReleaseNULL(ivars->m_device);
     IOSafeDeleteNULL(ivars, OpenJoystickUserClient_IVars, 1);
     super::free();
 }
 
-kern_return_t OpenJoystickUserClient::Start_Impl(IOService *provider) {
-    kern_return_t ret = Start(provider, SUPERDISPATCH);
+auto OpenJoystickUserClient::Start_Impl(IOService *provider) -> kern_return_t {
+    auto ret = Start(provider, SUPERDISPATCH);
     if (ret != kIOReturnSuccess) {
         return ret;
     }
@@ -69,17 +69,17 @@ kern_return_t OpenJoystickUserClient::Start_Impl(IOService *provider) {
     return kIOReturnSuccess;
 }
 
-kern_return_t OpenJoystickUserClient::Stop_Impl(IOService *provider) {
+auto OpenJoystickUserClient::Stop_Impl(IOService *provider) -> kern_return_t {
     OSSafeReleaseNULL(ivars->m_device);
     return Stop(provider, SUPERDISPATCH);
 }
 
-kern_return_t OpenJoystickUserClient::ExternalMethod(
+auto OpenJoystickUserClient::ExternalMethod(
     uint64_t selector,
     IOUserClientMethodArguments *arguments,
     const IOUserClientMethodDispatch *dispatch,
     OSObject *target,
-    void *reference) {
+    void *reference) -> kern_return_t {
     if (selector >= DISPATCH_TABLE_COUNT) {
         return kIOReturnUnsupported;
     }
@@ -97,14 +97,14 @@ static kern_return_t static_handle_send_report(OSObject *target, void * /* refer
         return kIOReturnNotAttached;
     }
 
-    OSData *input_data = arguments->structureInput;
+    auto *input_data = arguments->structureInput;
     if (input_data == nullptr) {
         return kIOReturnBadArgument;
     }
 
     // Create a memory descriptor from the incoming data.
     IOBufferMemoryDescriptor *mem = nullptr;
-    kern_return_t ret = IOBufferMemoryDescriptor::Create(
+    auto ret = IOBufferMemoryDescriptor::Create(
         kIOMemoryDirectionInOut, REPORT_SIZE, 0, &mem);
     if (ret != kIOReturnSuccess || mem == nullptr) {
         return kIOReturnNoMemory;
