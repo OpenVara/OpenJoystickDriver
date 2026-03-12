@@ -13,7 +13,7 @@
     <key>CFBundleShortVersionString</key>
     <string>1.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>9</string>
 
     <!-- Shown in System Settings → Privacy & Security when user approves the extension -->
     <key>OSBundleUsageDescription</key>
@@ -42,6 +42,10 @@
                 <key>IOUserClass</key>
                 <string>OpenJoystickUserClient</string>
             </dict>
+
+            <!-- Tell IOKit which dext process to launch for this personality -->
+            <key>IOUserServerName</key>
+            <string>com.openjoystickdriver.VirtualHIDDevice</string>
 
             <!-- Virtual device pattern: matches IOUserResources so it starts at boot
                  with no physical hardware requirement. -->
