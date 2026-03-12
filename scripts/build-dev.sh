@@ -142,7 +142,7 @@ echo "Signing using: $IDENTITY"
 # Sign daemon binary inside its bundle
 ojd_sign "$DAEMON_BUNDLE_MACOS/OpenJoystickDriverDaemon" --entitlements "$DAEMON_ENTITLEMENTS"
 # Sign daemon bundle
-codesign --sign "$IDENTITY" --force --generate-entitlement-der "$DAEMON_BUNDLE"
+ojd_sign "$DAEMON_BUNDLE"
 
 # Also keep a signed copy at the top level of MacOS/ for backward compat
 # (LaunchAgent plist may still point here until re-installed)
@@ -150,8 +150,7 @@ ojd_sign "$GUI_MACOS/OpenJoystickDriverDaemon" --entitlements "$DAEMON_ENTITLEME
 
 # Sign the outer app bundle (must be last, with GUI entitlements so the
 # main executable retains system-extension.install)
-codesign --sign "$IDENTITY" --force --generate-entitlement-der \
-    --entitlements "$GUI_ENTITLEMENTS" "$GUI_APP"
+ojd_sign "$GUI_APP" --entitlements "$GUI_ENTITLEMENTS"
 
 echo ""
 echo "Signed with: $IDENTITY"

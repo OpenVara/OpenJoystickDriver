@@ -33,11 +33,15 @@ GUI_PROFILE="${GUI_PROVISIONING_PROFILE:-$HOME/Library/MobileDevice/Provisioning
 
 # Sign binary with configured identity.
 # Usage: ojd_sign <binary> [--entitlements <path>]
+# When OJD_ENV=release, adds hardened runtime (required for notarization).
 ojd_sign() {
   local binary="$1"
   local extra_args=()
   if [[ "${2:-}" == "--entitlements" && -n "${3:-}" ]]; then
     extra_args=(--entitlements "$3")
+  fi
+  if [[ "$OJD_ENV" == "release" ]]; then
+    extra_args+=(--options runtime)
   fi
   codesign --sign "$IDENTITY" --force --generate-entitlement-der "${extra_args[@]}" "$binary"
 }

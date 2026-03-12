@@ -27,7 +27,12 @@ DEXT_DIR="$PROJECT_DIR/DriverKitExtension"
 DEXT_PROJECT="$DEXT_DIR/OpenJoystickVirtualHID.xcodeproj"
 DEXT_SCHEME="OpenJoystickVirtualHID"
 DEXT_BUILD_DIR="$PROJECT_DIR/.build/dext"
-DEXT_PRODUCT="$DEXT_BUILD_DIR/Build/Products/Debug-driverkit/OpenJoystickVirtualHID.dext"
+if [[ "$OJD_ENV" == "release" ]]; then
+  DEXT_CONFIG="Release"
+else
+  DEXT_CONFIG="Debug"
+fi
+DEXT_PRODUCT="$DEXT_BUILD_DIR/Build/Products/${DEXT_CONFIG}-driverkit/OpenJoystickVirtualHID.dext"
 
 # ---------------------------------------------------------------------------
 # Step 1: Validate signing requirements
@@ -59,18 +64,25 @@ fi
 # ---------------------------------------------------------------------------
 # Step 2: Build with xcodebuild
 # ---------------------------------------------------------------------------
+# DriverKit xcodebuild requires an Apple Development identity + a dev profile
+# with both iOS and macOS platforms. The dext is re-signed with the final
+# identity (e.g. Developer ID) after embedding into the app bundle.
+DEXT_BUILD_IDENTITY="Apple Development: Krystian Järveäär (29KTR9G2UW)"
+DEXT_BUILD_PROFILE="OpenJoystickDriver (VirtualHIDDevice)"
+
 echo "Building DriverKit extension..."
-echo "  Identity: $CODESIGN_IDENTITY"
+echo "  Build identity: $DEXT_BUILD_IDENTITY"
+echo "  Build profile:  $DEXT_BUILD_PROFILE"
+echo "  Final identity: $CODESIGN_IDENTITY"
 echo "  Team: $DEVELOPMENT_TEAM"
-echo "  Profile: ${PROVISIONING_PROFILE_SPECIFIER:-<not set>}"
 xcodebuild \
     -project "$DEXT_PROJECT" \
     -scheme "$DEXT_SCHEME" \
-    -configuration Debug \
+    -configuration "$DEXT_CONFIG" \
     -derivedDataPath "$DEXT_BUILD_DIR" \
-    CODE_SIGN_IDENTITY="$CODESIGN_IDENTITY" \
+    CODE_SIGN_IDENTITY="$DEXT_BUILD_IDENTITY" \
     DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
-    PROVISIONING_PROFILE_SPECIFIER="${PROVISIONING_PROFILE_SPECIFIER:-}" \
+    PROVISIONING_PROFILE_SPECIFIER="$DEXT_BUILD_PROFILE" \
     CODE_SIGN_STYLE=Manual \
     build
 
@@ -118,10 +130,20 @@ if [[ -d "$GUI_APP" ]]; then
     DEXT_ENTITLEMENTS_TMP="$PROJECT_DIR/.build/dext-entitlements.plist"
     codesign -d --entitlements - --xml "$DEXT_SYSEXT/$DEXT_FILENAME" > "$DEXT_ENTITLEMENTS_TMP" 2>/dev/null
 
+    # For release builds, strip debug entitlements that block notarization
+    # (PlistBuddy required because plutil treats dots as key path separators)
+    if [[ "$OJD_ENV" == "release" ]]; then
+      /usr/libexec/PlistBuddy -c "Delete :com.apple.security.get-task-allow" "$DEXT_ENTITLEMENTS_TMP" 2>/dev/null || true
+      /usr/libexec/PlistBuddy -c "Delete :get-task-allow" "$DEXT_ENTITLEMENTS_TMP" 2>/dev/null || true
+    fi
+
     # Re-sign the dext after modifying Info.plist, preserving entitlements
-    codesign --sign "$CODESIGN_IDENTITY" --force --generate-entitlement-der \
-        --entitlements "$DEXT_ENTITLEMENTS_TMP" \
-        "$DEXT_SYSEXT/$DEXT_FILENAME"
+    DEXT_SIGN_ARGS=(--sign "$CODESIGN_IDENTITY" --force --generate-entitlement-der
+        --entitlements "$DEXT_ENTITLEMENTS_TMP")
+    if [[ "$OJD_ENV" == "release" ]]; then
+      DEXT_SIGN_ARGS+=(--options runtime)
+    fi
+    codesign "${DEXT_SIGN_ARGS[@]}" "$DEXT_SYSEXT/$DEXT_FILENAME"
 
     echo "Embedded at: $DEXT_SYSEXT/$DEXT_FILENAME (exec: $DEXT_EXEC_NAME)"
 
@@ -135,8 +157,12 @@ if [[ -d "$GUI_APP" ]]; then
     # The dext in Library/SystemExtensions/ is sealed as opaque data but
     # retains its own independent signature for OSSystemExtensionManager.
     echo "Re-signing app bundle..."
-    codesign --sign "$CODESIGN_IDENTITY" --force --generate-entitlement-der \
-        --entitlements "$GUI_ENTITLEMENTS" "$GUI_APP"
+    APP_SIGN_ARGS=(--sign "$CODESIGN_IDENTITY" --force --generate-entitlement-der
+        --entitlements "$GUI_ENTITLEMENTS")
+    if [[ "$OJD_ENV" == "release" ]]; then
+      APP_SIGN_ARGS+=(--options runtime)
+    fi
+    codesign "${APP_SIGN_ARGS[@]}" "$GUI_APP"
 
     # Always copy to /Applications/ — sysextd requires the containing app
     # to be in /Applications/ for system extension discovery
