@@ -111,6 +111,7 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
     _ request: OSSystemExtensionRequest,
     didFinishWithResult result: OSSystemExtensionRequest.Result
   ) {
+    print("[SysExt] didFinishWithResult: \(result) (rawValue: \(result.rawValue))")
     Task { @MainActor [weak self] in self?.installState = .installed }
   }
 
@@ -136,7 +137,9 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
     actionForReplacingExtension existing: OSSystemExtensionProperties,
     withExtension ext: OSSystemExtensionProperties
   ) -> OSSystemExtensionRequest.ReplacementAction {
-    // Always upgrade in place — no manual removal needed on update.
-    .replace
+    print("[SysExt] actionForReplacingExtension called")
+    print("[SysExt]   existing: \(existing.bundleIdentifier) v\(existing.bundleVersion) (\(existing.bundleShortVersion))")
+    print("[SysExt]   new:      \(ext.bundleIdentifier) v\(ext.bundleVersion) (\(ext.bundleShortVersion))")
+    return .replace
   }
 }
