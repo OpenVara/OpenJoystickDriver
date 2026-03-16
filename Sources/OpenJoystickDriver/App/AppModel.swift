@@ -177,8 +177,14 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     let task = Task.detached { DaemonManager.restart() }
     await task.value
     client.disconnect()
-    try? await Task.sleep(for: .seconds(2))
-    await poll()
+    for _ in 0..<3 {
+      try? await Task.sleep(for: .seconds(2))
+      await poll()
+      if daemonConnected { break }
+    }
+    if !daemonConnected {
+      daemonError = "Daemon failed to restart. Try reinstalling."
+    }
     daemonRestarting = false
   }
 

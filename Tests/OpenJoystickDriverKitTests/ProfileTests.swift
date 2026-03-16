@@ -13,7 +13,7 @@ import Testing
     #expect(profile.name == "Default")
     #expect(profile.stickDeadzone == 0.15)
     // Default profile has no pre-populated button mappings —
-    // IOHIDVirtualOutputDispatcher passes through all buttons as raw HID.
+    // the dispatcher passes through all buttons as raw HID.
     #expect(profile.buttonMappings.isEmpty)
   }
 

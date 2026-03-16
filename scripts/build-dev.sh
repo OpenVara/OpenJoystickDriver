@@ -35,10 +35,24 @@ for profile_var in DAEMON_PROFILE GUI_PROFILE; do
     fi
 done
 
-echo "Building debug binaries..."
-cd "$PROJECT_DIR"
-swift build --product OpenJoystickDriverDaemon
-swift build --product OpenJoystickDriver
+# For release builds routed through rebuild.sh, link against our static
+# universal libusb instead of Homebrew's dynamic dylib. This avoids a
+# Team ID mismatch SIGKILL under hardened runtime + library validation.
+if [[ "$OJD_ENV" == "release" ]]; then
+  setup_libusb_pkgconfig
+fi
+
+if [[ "$OJD_ENV" == "release" ]]; then
+  echo "Building release binaries (universal)..."
+  cd "$PROJECT_DIR"
+  swift build -c release --product OpenJoystickDriverDaemon --arch arm64 --arch x86_64
+  swift build -c release --product OpenJoystickDriver --arch arm64 --arch x86_64
+else
+  echo "Building debug binaries..."
+  cd "$PROJECT_DIR"
+  swift build --product OpenJoystickDriverDaemon
+  swift build --product OpenJoystickDriver
+fi
 
 # ---------------------------------------------------------------------------
 # Resolve entitlements templates (replace ${DEVELOPMENT_TEAM} placeholder)
@@ -57,11 +71,20 @@ GUI_MACOS="$GUI_CONTENTS/MacOS"
 echo "Creating app bundle..."
 rm -rf "$GUI_APP"
 mkdir -p "$GUI_MACOS"
-cp "$GUI_DEBUG" "$GUI_MACOS/OpenJoystickDriver"
-cp "$DAEMON_DEBUG" "$GUI_MACOS/OpenJoystickDriverDaemon"
+cp "$GUI_BIN" "$GUI_MACOS/OpenJoystickDriver"
+cp "$DAEMON_BIN" "$GUI_MACOS/OpenJoystickDriverDaemon"
+
+# Copy SPM resource bundles so Bundle.module resolves at runtime
+BUILD_DIR="$(dirname "$DAEMON_BIN")"
+GUI_RESOURCES="$GUI_CONTENTS/Resources"
+mkdir -p "$GUI_RESOURCES"
+for bundle in "$BUILD_DIR"/OpenJoystickDriver_*.bundle; do
+    [[ -d "$bundle" ]] && cp -R "$bundle" "$GUI_RESOURCES/"
+done
 
 # Embed GUI provisioning profile in app bundle
 cp "$GUI_PROFILE" "$GUI_CONTENTS/embedded.provisionprofile"
+xattr -d com.apple.quarantine "$GUI_CONTENTS/embedded.provisionprofile" 2>/dev/null || true
 
 # Write Info.plist
 cat > "$GUI_CONTENTS/Info.plist" << 'PLIST'
@@ -106,8 +129,16 @@ DAEMON_BUNDLE_MACOS="$DAEMON_BUNDLE_CONTENTS/MacOS"
 
 echo "Creating daemon bundle..."
 mkdir -p "$DAEMON_BUNDLE_MACOS"
-cp "$DAEMON_DEBUG" "$DAEMON_BUNDLE_MACOS/OpenJoystickDriverDaemon"
+cp "$DAEMON_BIN" "$DAEMON_BUNDLE_MACOS/OpenJoystickDriverDaemon"
 cp "$DAEMON_PROFILE" "$DAEMON_BUNDLE_CONTENTS/embedded.provisionprofile"
+xattr -d com.apple.quarantine "$DAEMON_BUNDLE_CONTENTS/embedded.provisionprofile" 2>/dev/null || true
+
+# Copy SPM resource bundles into daemon mini-bundle
+DAEMON_RESOURCES="$DAEMON_BUNDLE_CONTENTS/Resources"
+mkdir -p "$DAEMON_RESOURCES"
+for bundle in "$BUILD_DIR"/OpenJoystickDriver_*.bundle; do
+    [[ -d "$bundle" ]] && cp -R "$bundle" "$DAEMON_RESOURCES/"
+done
 
 cat > "$DAEMON_BUNDLE_CONTENTS/Info.plist" << 'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -151,6 +182,13 @@ ojd_sign "$GUI_MACOS/OpenJoystickDriverDaemon" --entitlements "$DAEMON_ENTITLEME
 # Sign the outer app bundle (must be last, with GUI entitlements so the
 # main executable retains system-extension.install)
 ojd_sign "$GUI_APP" --entitlements "$GUI_ENTITLEMENTS"
+
+# Verify provisioning profile certs match signing identity (release only).
+# Catches cert mismatch early instead of AMFI rejecting at launch (error 163).
+if [[ "$OJD_ENV" == "release" ]]; then
+  verify_profile_cert "$GUI_PROFILE" "$IDENTITY"
+  verify_profile_cert "$DAEMON_PROFILE" "$IDENTITY"
+fi
 
 echo ""
 echo "Signed with: $IDENTITY"

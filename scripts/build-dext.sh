@@ -122,6 +122,10 @@ if [[ -d "$GUI_APP" ]]; then
     # as the executable name. Since we renamed the directory to the bundle ID,
     # we must add CFBundleExecutable pointing to the actual binary.
     DEXT_EXEC_NAME=$(ls "$DEXT_SYSEXT/$DEXT_FILENAME/" | grep -v -E 'Info\.plist|_CodeSignature|embedded\.provisionprofile')
+
+    # Ensure dext binary is executable — xcodebuild may produce 644 for
+    # DriverKit targets, causing launchd to reject with "Permission denied"
+    chmod +x "$DEXT_SYSEXT/$DEXT_FILENAME/$DEXT_EXEC_NAME"
     plutil -insert CFBundleExecutable -string "$DEXT_EXEC_NAME" \
         "$DEXT_SYSEXT/$DEXT_FILENAME/Info.plist"
 
@@ -141,7 +145,7 @@ if [[ -d "$GUI_APP" ]]; then
     DEXT_SIGN_ARGS=(--sign "$CODESIGN_IDENTITY" --force --generate-entitlement-der
         --entitlements "$DEXT_ENTITLEMENTS_TMP")
     if [[ "$OJD_ENV" == "release" ]]; then
-      DEXT_SIGN_ARGS+=(--options runtime)
+      DEXT_SIGN_ARGS+=(--options runtime --timestamp)
     fi
     codesign "${DEXT_SIGN_ARGS[@]}" "$DEXT_SYSEXT/$DEXT_FILENAME"
 
@@ -160,7 +164,7 @@ if [[ -d "$GUI_APP" ]]; then
     APP_SIGN_ARGS=(--sign "$CODESIGN_IDENTITY" --force --generate-entitlement-der
         --entitlements "$GUI_ENTITLEMENTS")
     if [[ "$OJD_ENV" == "release" ]]; then
-      APP_SIGN_ARGS+=(--options runtime)
+      APP_SIGN_ARGS+=(--options runtime --timestamp)
     fi
     codesign "${APP_SIGN_ARGS[@]}" "$GUI_APP"
 

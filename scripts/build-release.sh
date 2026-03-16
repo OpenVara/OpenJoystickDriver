@@ -11,118 +11,16 @@
 #
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-DAEMON_ENTITLEMENTS="$PROJECT_DIR/Sources/OpenJoystickDriverDaemon/OpenJoystickDriverDaemon.entitlements"
+# Force release environment so lib.sh loads .env.release
+export OJD_ENV="release"
+source "$(dirname "$0")/lib.sh"
 
-ENV_FILE="$PROJECT_DIR/.env"
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo "Error: .env not found."
-  echo "Copy .env.example to .env and fill in your Apple Developer credentials."
-  exit 1
-fi
-# shellcheck source=/dev/null
-source "$ENV_FILE"
+DAEMON_ENTITLEMENTS_RELEASE="$PROJECT_DIR/Sources/OpenJoystickDriverDaemon/OpenJoystickDriverDaemon.entitlements"
 
-: "${CODESIGN_IDENTITY:?CODESIGN_IDENTITY not set in .env}"
-: "${APPLE_TEAM_ID:?APPLE_TEAM_ID not set in .env}"
-: "${APPLE_ID:?APPLE_ID not set in .env}"
-: "${APPLE_ID_PASSWORD:?APPLE_ID_PASSWORD not set in .env}"
-
-# ---------------------------------------------------------------------------
-# Universal (fat) libusb - Homebrew only ships arm64 on Apple Silicon.
-# We cross-compile x86_64 from source and lipo both slices into one .a that
-# SPM/xcodebuild can link when targeting both architectures.
-# Result is cached under .build/libusb-universal so it only builds once.
-# ---------------------------------------------------------------------------
-LIBUSB_VERSION="1.0.29"
-LIBUSB_CACHE_DIR="$PROJECT_DIR/.build/libusb-universal"
-LIBUSB_UNIVERSAL_A="$LIBUSB_CACHE_DIR/lib/libusb-1.0.a"
-LIBUSB_PC="$LIBUSB_CACHE_DIR/libusb-1.0.pc"
-SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
-
-build_universal_libusb() {
-  echo "Building universal libusb ${LIBUSB_VERSION} (arm64 + x86_64)..."
-  local tmpdir
-  tmpdir="$(mktemp -d)"
-  # shellcheck disable=SC2064
-  trap "rm -rf '$tmpdir'" RETURN
-
-  local tarball="$tmpdir/libusb.tar.bz2"
-  echo "  Downloading libusb ${LIBUSB_VERSION}..."
-  curl -fsSL \
-    "https://github.com/libusb/libusb/releases/download/v${LIBUSB_VERSION}/libusb-${LIBUSB_VERSION}.tar.bz2" \
-    -o "$tarball"
-
-  local ncpu
-  ncpu="$(sysctl -n hw.ncpu)"
-
-  echo "  Configuring arm64..."
-  mkdir -p "$tmpdir/src-arm64"
-  tar -xjf "$tarball" -C "$tmpdir/src-arm64" --strip-components=1
-  (
-    cd "$tmpdir/src-arm64"
-    ./configure \
-      CC="clang" \
-      CFLAGS="-arch arm64 -target arm64-apple-macos13.0 -isysroot $SDK_PATH" \
-      LDFLAGS="-arch arm64 -target arm64-apple-macos13.0" \
-      --host=aarch64-apple-darwin \
-      --prefix="$tmpdir/install-arm64" \
-      --disable-shared --enable-static \
-      --quiet 2>&1 | tail -5
-    make -j"$ncpu" install --quiet
-  )
-
-  echo "  Configuring x86_64..."
-  mkdir -p "$tmpdir/src-x86_64"
-  tar -xjf "$tarball" -C "$tmpdir/src-x86_64" --strip-components=1
-  (
-    cd "$tmpdir/src-x86_64"
-    ./configure \
-      CC="clang" \
-      CFLAGS="-arch x86_64 -target x86_64-apple-macos13.0 -isysroot $SDK_PATH" \
-      LDFLAGS="-arch x86_64 -target x86_64-apple-macos13.0" \
-      --host=x86_64-apple-darwin \
-      --prefix="$tmpdir/install-x86_64" \
-      --disable-shared --enable-static \
-      --quiet 2>&1 | tail -5
-    make -j"$ncpu" install --quiet
-  )
-
-  mkdir -p "$LIBUSB_CACHE_DIR/lib" "$LIBUSB_CACHE_DIR/include"
-  lipo -create \
-    "$tmpdir/install-arm64/lib/libusb-1.0.a" \
-    "$tmpdir/install-x86_64/lib/libusb-1.0.a" \
-    -output "$LIBUSB_UNIVERSAL_A"
-  cp -r "$tmpdir/install-arm64/include/libusb-1.0" "$LIBUSB_CACHE_DIR/include/"
-
-  echo "  Universal libusb ready: $(lipo -info "$LIBUSB_UNIVERSAL_A")"
-}
-
-setup_libusb_pkgconfig() {
-  if [[ ! -f "$LIBUSB_UNIVERSAL_A" ]]; then
-    build_universal_libusb
-  else
-    echo "Universal libusb cache hit: $LIBUSB_UNIVERSAL_A"
-  fi
-
-  # Write pkg-config .pc that points to our fat static lib.
-  # When SPM resolves CLibUSB via pkgConfig, it will pick up -L and -I from
-  # this file and linker will find both arm64 and x86_64 slices.
-  cat > "$LIBUSB_PC" << EOF
-prefix=$LIBUSB_CACHE_DIR
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: libusb-1.0
-Description: C API for USB device access (universal binary)
-Version: $LIBUSB_VERSION
-Libs: -L\${libdir} -lusb-1.0
-Cflags: -I\${includedir}/libusb-1.0
-EOF
-
-  export PKG_CONFIG_PATH="$LIBUSB_CACHE_DIR${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-}
+: "${CODESIGN_IDENTITY:?CODESIGN_IDENTITY not set in .env.release}"
+: "${APPLE_TEAM_ID:?APPLE_TEAM_ID not set in .env.release}"
+: "${APPLE_ID:?APPLE_ID not set in .env.release}"
+: "${APPLE_ID_PASSWORD:?APPLE_ID_PASSWORD not set in .env.release}"
 
 echo "Running lint checks..."
 cd "$PROJECT_DIR"
@@ -131,11 +29,8 @@ swiftlint lint --strict
 setup_libusb_pkgconfig
 
 echo "Building universal binaries..."
-swift build -c release \
-  --product OpenJoystickDriverDaemon \
-  --product OpenJoystickDriver \
-  --arch arm64 \
-  --arch x86_64
+swift build -c release --product OpenJoystickDriverDaemon --arch arm64 --arch x86_64
+swift build -c release --product OpenJoystickDriver --arch arm64 --arch x86_64
 
 RELEASE="$PROJECT_DIR/.build/apple/Products/Release"
 DAEMON="$RELEASE/OpenJoystickDriverDaemon"
@@ -146,16 +41,18 @@ codesign \
   --sign "$CODESIGN_IDENTITY" \
   --force \
   --options runtime \
-  --entitlements "$DAEMON_ENTITLEMENTS" \
+  --timestamp \
+  --entitlements "$DAEMON_ENTITLEMENTS_RELEASE" \
   "$DAEMON"
 
 echo "Signing GUI (hardened runtime + system-extension entitlement)..."
-GUI_ENTITLEMENTS="$PROJECT_DIR/Sources/OpenJoystickDriver/OpenJoystickDriver.entitlements"
+GUI_ENTITLEMENTS_RELEASE="$PROJECT_DIR/Sources/OpenJoystickDriver/OpenJoystickDriver.entitlements"
 codesign \
   --sign "$CODESIGN_IDENTITY" \
   --force \
   --options runtime \
-  --entitlements "$GUI_ENTITLEMENTS" \
+  --timestamp \
+  --entitlements "$GUI_ENTITLEMENTS_RELEASE" \
   "$GUI"
 
 echo "Verifying signatures..."

@@ -19,11 +19,6 @@
     <key>com.apple.security.device.usb</key>
     <true/>
 
-    <!-- Allows loading third-party signed dylibs such as libusb from  -->
-    <!-- Homebrew, which carries Homebrew's certificate, not ours.     -->
-    <key>com.apple.security.cs.disable-library-validation</key>
-    <true/>
-
     <!-- Allows the daemon to open a user-client connection to the OJD  -->
     <!-- DriverKit extension (com.openjoystickdriver.VirtualHIDDevice). -->
     <key>com.apple.developer.driverkit.userclient-access</key>

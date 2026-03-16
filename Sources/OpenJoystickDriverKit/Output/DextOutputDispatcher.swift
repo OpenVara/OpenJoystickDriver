@@ -10,12 +10,9 @@ import IOKit
 /// DriverKit extension.
 ///
 /// If ``connect()`` returns `false` (extension not installed / not yet approved),
-/// `main.swift` falls back to ``IOHIDVirtualOutputDispatcher``.
+/// ``dispatch(events:from:)`` will auto-retry on every call until the dext loads.
 ///
-/// Report layout is identical to ``IOHIDVirtualOutputDispatcher`` — 13 bytes
-/// as defined by ``GamepadHIDDescriptor``. The two classes share the same
-/// event-application and report-building logic; a future refactor could extract
-/// a shared `GamepadReportBuilder` helper.
+/// Report layout is 13 bytes as defined by ``GamepadHIDDescriptor``.
 ///
 /// - Note: Marked `@unchecked Sendable` because `io_connect_t` is a plain
 ///   `mach_port_t` integer. Mutable report state is protected by `stateLock`.
@@ -67,16 +64,16 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   /// Opens an IOKit user-client connection to the DriverKit extension.
   ///
   /// - Returns: `true` when the extension is found and the connection succeeds.
-  ///   The caller should fall back to ``IOHIDVirtualOutputDispatcher`` on `false`.
+  ///   When `false`, ``dispatch(events:from:)`` will auto-retry on each call.
   @discardableResult
   public func connect() -> Bool {
     let conn = makeConnection()
     connectionLock.withLock { connection = conn }
     let ok = conn != IO_OBJECT_NULL
     if ok {
-      debugPrint("[DextOutputDispatcher] Connected to \(Self.dextBundleID)")
+      print("[DextOutputDispatcher] Connected to \(Self.dextBundleID)")
     } else {
-      debugPrint("[DextOutputDispatcher] Extension not found — not installed or not approved")
+      print("[DextOutputDispatcher] Extension not found — not installed or not approved")
     }
     return ok
   }
@@ -138,6 +135,9 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     var activeConn = conn
     if activeConn == IO_OBJECT_NULL {
       activeConn = makeConnection()
+      if activeConn != IO_OBJECT_NULL {
+        print("[DextOutputDispatcher] Auto-retry connected to \(Self.dextBundleID)")
+      }
       connectionLock.withLock { connection = activeConn }
     }
     guard activeConn != IO_OBJECT_NULL else { return }

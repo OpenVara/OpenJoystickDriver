@@ -154,14 +154,11 @@ GIP controllers (Xbox One / Series) require a CMD 0x06 authentication handshake 
 
 ### Output
 
-Two output paths with automatic fallback:
-
 ```
-DextOutputDispatcher       →  DriverKit extension (IOUserHIDDevice + user-client IPC)
-IOHIDVirtualOutputDispatcher  →  IOHIDUserDeviceCreateWithProperties (fallback)
+DextOutputDispatcher  →  DriverKit extension (IOUserHIDDevice + user-client IPC)
 ```
 
-The DriverKit extension (`OpenJoystickVirtualHIDDevice`) registers as a system HID device and accepts 13-byte input reports from the daemon via user-client IPC. If the extension is not installed or not approved, the daemon falls back to `IOHIDUserDevice`.
+The DriverKit extension (`OpenJoystickVirtualHIDDevice`) registers as a system HID device and accepts 13-byte input reports from the daemon via user-client IPC. If the extension is not yet loaded, the dispatcher auto-retries on each input event until the connection succeeds.
 
 ### IPC and profiles
 

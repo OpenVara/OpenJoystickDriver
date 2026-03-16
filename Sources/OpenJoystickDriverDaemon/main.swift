@@ -7,16 +7,14 @@ setbuf(stdout, nil)
 let permissionManager = PermissionManager()
 let profileStore = ProfileStore()
 
-// Prefer the DriverKit virtual HID extension (no hid.virtual.device entitlement
-// required). Fall back to IOHIDUserDevice if the extension is not installed yet.
-let dextDispatcher = DextOutputDispatcher(profileStore: profileStore)
-let dispatcher: any OutputDispatcher
-if dextDispatcher.connect() {
-  dispatcher = dextDispatcher
-  print("[Daemon] Using DextOutputDispatcher (DriverKit virtual HID)")
+// Always use the DriverKit virtual HID extension. If the dext isn't available yet
+// (e.g. pending reboot after first approval), dispatch() will auto-retry on each
+// input event until the connection succeeds.
+let dispatcher = DextOutputDispatcher(profileStore: profileStore)
+if dispatcher.connect() {
+  print("[Daemon] Connected to DriverKit virtual HID extension")
 } else {
-  dispatcher = IOHIDVirtualOutputDispatcher(profileStore: profileStore)
-  print("[Daemon] Using IOHIDVirtualOutputDispatcher (fallback — install dext for production)")
+  print("[Daemon] DriverKit extension not yet available — will auto-retry on first device input")
 }
 
 let manager = DeviceManager(dispatcher: dispatcher)

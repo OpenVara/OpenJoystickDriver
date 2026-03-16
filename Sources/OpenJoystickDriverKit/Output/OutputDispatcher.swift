@@ -4,8 +4,7 @@ import Foundation
 ///
 /// Implement this protocol to decide what happens when a button is pressed
 /// or a stick is moved. The built-in conformances are
-/// ``DextOutputDispatcher`` (DriverKit virtual HID, preferred),
-/// ``IOHIDVirtualOutputDispatcher`` (IOHIDUserDevice fallback), and
+/// ``DextOutputDispatcher`` (DriverKit virtual HID) and
 /// ``LoggingOutputDispatcher`` (prints events for debugging).
 public protocol OutputDispatcher: AnyObject, Sendable {
   /// When `true`, all report/event output is suppressed (e.g. during developer
