@@ -25,12 +25,14 @@ final class SystemExtensionManager: NSObject, ObservableObject, @unchecked Senda
     case installing
     case requiresApproval
     case installed
+    case removing
     case failed(String)
 
     static func == (lhs: Self, rhs: Self) -> Bool {
       switch (lhs, rhs) {
       case (.unknown, .unknown), (.installing, .installing),
-           (.requiresApproval, .requiresApproval), (.installed, .installed):
+           (.requiresApproval, .requiresApproval), (.installed, .installed),
+           (.removing, .removing):
         return true
       case (.failed(let a), .failed(let b)):
         return a == b
@@ -45,6 +47,7 @@ final class SystemExtensionManager: NSObject, ObservableObject, @unchecked Senda
       case .installing:       return "Installing…"
       case .requiresApproval: return "Requires Approval"
       case .installed:        return "Installed"
+      case .removing:         return "Removing…"
       case .failed(let msg):  return "Failed: \(msg)"
       }
     }
@@ -54,6 +57,7 @@ final class SystemExtensionManager: NSObject, ObservableObject, @unchecked Senda
   }
 
   @Published var installState: InstallState = .unknown
+  private var pendingDeactivation = false
 
   // MARK: - Constants
 
@@ -94,6 +98,8 @@ final class SystemExtensionManager: NSObject, ObservableObject, @unchecked Senda
   }
 
   func uninstallExtension() {
+    installState = .removing
+    pendingDeactivation = true
     let request = OSSystemExtensionRequest.deactivationRequest(
       forExtensionWithIdentifier: extensionBundleID,
       queue: .main
@@ -101,6 +107,7 @@ final class SystemExtensionManager: NSObject, ObservableObject, @unchecked Senda
     request.delegate = self
     OSSystemExtensionManager.shared.submitRequest(request)
   }
+
 }
 
 // MARK: - OSSystemExtensionRequestDelegate
@@ -112,7 +119,15 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
     didFinishWithResult result: OSSystemExtensionRequest.Result
   ) {
     print("[SysExt] didFinishWithResult: \(result) (rawValue: \(result.rawValue))")
-    Task { @MainActor [weak self] in self?.installState = .installed }
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      if self.pendingDeactivation {
+        self.pendingDeactivation = false
+        self.installState = .unknown
+      } else {
+        self.installState = .installed
+      }
+    }
   }
 
   nonisolated func request(
@@ -125,7 +140,10 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
     print("[SysExt]   userInfo: \(nsError.userInfo)")
 
     let message = "\(error.localizedDescription) [code=\(nsError.code)]"
-    Task { @MainActor [weak self] in self?.installState = .failed(message) }
+    Task { @MainActor [weak self] in
+      self?.pendingDeactivation = false
+      self?.installState = .failed(message)
+    }
   }
 
   nonisolated func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {

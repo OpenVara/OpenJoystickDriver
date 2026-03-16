@@ -48,12 +48,11 @@ echo "=== Pre-launch cleanup ==="
 killall OpenJoystickDriver 2>/dev/null || true
 killall OpenJoystickVirtualHID 2>/dev/null || true
 
-# Warn if installed sysext binary is not executable (sysextd crash can corrupt permissions)
+# Warn about non-executable sysext binaries (SIP prevents fixing — reboot clears stale state)
 for sysext_dir in /Library/SystemExtensions/*/com.openjoystickdriver.VirtualHIDDevice.dext; do
   binary="$sysext_dir/OpenJoystickVirtualHID"
   if [[ -f "$binary" && ! -x "$binary" ]]; then
-    echo "  ⚠ Installed sysext binary is not executable: $binary"
-    echo "    Stale sysext state detected — a reboot may be required."
+    echo "  ⚠ Stale sysext binary (not executable): $binary"
   fi
 done
 

@@ -90,13 +90,20 @@ struct PermissionsView: View {
               : (ext.installState.isPending ? .orange : .secondary)
           )
         if ext.installState == .requiresApproval {
-          HStack(spacing: 6) {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).imageScale(
-              .small
-            )
-            Text("Open System Settings → Privacy & Security to approve the extension.").font(
-              .caption
-            ).foregroundStyle(.secondary)
+          VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+              Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).imageScale(
+                .small
+              )
+              Text("Allow the extension in System Settings → Login Items & Extensions.").font(
+                .caption
+              ).foregroundStyle(.secondary)
+            }
+            SwiftUI.Button("Open Login Items & Extensions") {
+              if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
+                NSWorkspace.shared.open(url)
+              }
+            }.buttonStyle(.bordered).controlSize(.small)
           }.padding(8).frame(maxWidth: .infinity, alignment: .leading).background(
             Color.orange.opacity(0.08)
           ).clipShape(RoundedRectangle(cornerRadius: 6))
@@ -107,10 +114,11 @@ struct PermissionsView: View {
           }.buttonStyle(.bordered).disabled(
             ext.installState.isInstalled || ext.installState.isPending
           )
-          if ext.installState.isInstalled {
+          if ext.installState.isInstalled || ext.installState == .removing {
             SwiftUI.Button("Remove") {
               ext.uninstallExtension()
             }.buttonStyle(.bordered).foregroundStyle(.red)
+              .disabled(ext.installState == .removing)
           }
         }
       }
