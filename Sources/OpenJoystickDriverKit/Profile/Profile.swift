@@ -20,7 +20,9 @@ public enum StickMode: String, Codable, Sendable {
 /// `~/Library/Application Support/OpenJoystickDriver/profiles/`.
 /// A device can have multiple profiles; the active one is used for output dispatch.
 public struct Profile: Codable, Sendable {
-  /// Unique identifier for this profile. Generated automatically for new profiles.
+  /// Unique identifier for this profile.
+  ///
+  /// Generated automatically for new profiles.
   public var id: UUID
   /// Human-readable name shown in the profile picker (e.g. "Racing", "Default").
   public var name: String
@@ -29,6 +31,7 @@ public struct Profile: Codable, Sendable {
   /// USB product ID of the device this profile belongs to.
   public var productID: UInt16
   /// Maps each button name (``Button/rawValue``) to a virtual HID button index (1-based).
+  ///
   /// Empty by default; reserved for future per-device button remapping.
   public var buttonMappings: [String: UInt16]
   /// Minimum stick deflection (0...1) before movement is registered.
@@ -38,6 +41,7 @@ public struct Profile: Codable, Sendable {
   /// Multiplier applied to right-stick input when scrolling.
   public var stickScrollSensitivity: Float
   /// Half-width of the cursor region in pixels used by the ``StickMode/mouseRegion`` mode.
+  ///
   /// Full stick deflection moves the cursor exactly this many pixels from the center point.
   public var stickMouseRegionRadius: Float
   /// Output mode for the left stick.
@@ -45,9 +49,11 @@ public struct Profile: Codable, Sendable {
   /// Output mode for the right stick.
   public var rightStickMode: StickMode
   /// Bundle ID of the target application.
+  ///
   /// Reserved for future use.
   public var targetBundleID: String?
 
+  /// Creates a new Profile.
   public init(
     id: UUID = UUID(),
     name: String,
@@ -83,6 +89,7 @@ public struct Profile: Codable, Sendable {
     case targetBundleID
   }
 
+  /// Creates a Profile by decoding from the given decoder.
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = (try? container.decode(UUID.self, forKey: .id)) ?? UUID()
@@ -100,6 +107,7 @@ public struct Profile: Codable, Sendable {
     targetBundleID = try? container.decode(String.self, forKey: .targetBundleID)
   }
 
+  /// Returns a default profile for the given device identifier.
   public static func makeDefault(for identifier: DeviceIdentifier) -> Self {
     Self(
       id: UUID(),

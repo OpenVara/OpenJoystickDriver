@@ -386,29 +386,27 @@ struct MappingEditorView: View {
     ) { code in updateStickKeyMapping(key: prefix + "Right", keyCode: code) }.padding(.vertical, 2)
   }
 
-  private func updateStickKeyMapping(key: String, keyCode: UInt16) {
+  private func updateProfile(_ mutate: (inout Profile) -> Void) {
     var updated = currentProfile
-    if keyCode == 0 {
-      updated.buttonMappings.removeValue(forKey: key)
-    } else {
-      updated.buttonMappings[key] = keyCode
-    }
+    mutate(&updated)
     profile = updated
     saveCurrentProfile(updated)
   }
 
-  private func updateLeftStickMode(_ mode: StickMode) {
-    var updated = currentProfile
-    updated.leftStickMode = mode
-    profile = updated
-    saveCurrentProfile(updated)
+  private func updateStickKeyMapping(key: String, keyCode: UInt16) {
+    updateProfile {
+      if keyCode == 0 {
+        $0.buttonMappings.removeValue(forKey: key)
+      } else {
+        $0.buttonMappings[key] = keyCode
+      }
+    }
   }
+
+  private func updateLeftStickMode(_ mode: StickMode) { updateProfile { $0.leftStickMode = mode } }
 
   private func updateRightStickMode(_ mode: StickMode) {
-    var updated = currentProfile
-    updated.rightStickMode = mode
-    profile = updated
-    saveCurrentProfile(updated)
+    updateProfile { $0.rightStickMode = mode }
   }
 
   @ViewBuilder private var errorBanner: some View {
@@ -480,10 +478,7 @@ struct MappingEditorView: View {
   }
 
   private func updateMouseRegionRadius(_ value: Float) {
-    var updated = currentProfile
-    updated.stickMouseRegionRadius = value
-    profile = updated
-    saveCurrentProfile(updated)
+    updateProfile { $0.stickMouseRegionRadius = value }
   }
 
   private func loadAllProfiles() {
@@ -507,105 +502,94 @@ struct MappingEditorView: View {
     }
   }
 
-  private func switchToProfile(id: UUID) {
+  private func profileAction(errorPrefix: String = "", _ body: @escaping () async throws -> Void) {
     Task { @MainActor in
       do {
-        try await model.setActiveProfile(
-          id: id,
-          vendorID: device.vendorID,
-          productID: device.productID
-        )
-        await model.refreshProfiles()
-        allProfiles = try await model.allProfiles(
-          vendorID: device.vendorID,
-          productID: device.productID
-        )
-        if let active = allProfiles.first(where: { $0.id == id }) { profile = active }
+        try await body()
         profileError = nil
-      } catch { profileError = "Switch failed: \(error.localizedDescription)" }
+      } catch {
+        profileError =
+          errorPrefix.isEmpty
+          ? error.localizedDescription : "\(errorPrefix)\(error.localizedDescription)"
+      }
+    }
+  }
+
+  private func switchToProfile(id: UUID) {
+    profileAction(errorPrefix: "Switch failed: ") {
+      try await model.setActiveProfile(
+        id: id,
+        vendorID: device.vendorID,
+        productID: device.productID
+      )
+      await model.refreshProfiles()
+      allProfiles = try await model.allProfiles(
+        vendorID: device.vendorID,
+        productID: device.productID
+      )
+      if let active = allProfiles.first(where: { $0.id == id }) { profile = active }
     }
   }
 
   private func saveNewProfile() {
     let name = newProfileName.trimmingCharacters(in: .whitespaces)
     guard !name.isEmpty else { return }
-    Task { @MainActor in
-      do {
-        let newProfile = try await model.addProfile(name: name, basedOn: currentProfile)
-        try await model.setActiveProfile(
-          id: newProfile.id,
-          vendorID: device.vendorID,
-          productID: device.productID
-        )
-        await model.refreshProfiles()
-        allProfiles = try await model.allProfiles(
-          vendorID: device.vendorID,
-          productID: device.productID
-        )
-        if let active = allProfiles.first(where: { $0.id == newProfile.id }) { profile = active }
-        creatingProfile = false
-        newProfileName = ""
-        profileError = nil
-      } catch { profileError = "Create failed: \(error.localizedDescription)" }
+    profileAction(errorPrefix: "Create failed: ") {
+      let newProfile = try await model.addProfile(name: name, basedOn: currentProfile)
+      try await model.setActiveProfile(
+        id: newProfile.id,
+        vendorID: device.vendorID,
+        productID: device.productID
+      )
+      await model.refreshProfiles()
+      allProfiles = try await model.allProfiles(
+        vendorID: device.vendorID,
+        productID: device.productID
+      )
+      if let active = allProfiles.first(where: { $0.id == newProfile.id }) { profile = active }
+      creatingProfile = false
+      newProfileName = ""
     }
   }
 
   private func deleteCurrentProfile() {
-    Task { @MainActor in
-      do {
-        try await model.deleteProfile(
-          id: currentProfile.id,
-          vendorID: device.vendorID,
-          productID: device.productID
-        )
-        await model.refreshProfiles()
-        allProfiles = try await model.allProfiles(
-          vendorID: device.vendorID,
-          productID: device.productID
-        )
-        profile = allProfiles.first
-        profileError = nil
-      } catch { profileError = "Delete failed: \(error.localizedDescription)" }
+    profileAction(errorPrefix: "Delete failed: ") {
+      try await model.deleteProfile(
+        id: currentProfile.id,
+        vendorID: device.vendorID,
+        productID: device.productID
+      )
+      await model.refreshProfiles()
+      allProfiles = try await model.allProfiles(
+        vendorID: device.vendorID,
+        productID: device.productID
+      )
+      profile = allProfiles.first
     }
   }
 
   private func updateMapping(button: OpenJoystickDriverKit.Button, keyCode: UInt16) {
-    var updated = currentProfile
-    updated.buttonMappings[button.rawValue] = keyCode
-    profile = updated
-    saveCurrentProfile(updated)
+    updateProfile { $0.buttonMappings[button.rawValue] = keyCode }
   }
 
   private func updateTriggerMapping(key: String, keyCode: UInt16) {
-    var updated = currentProfile
-    if keyCode == 0 {
-      updated.buttonMappings.removeValue(forKey: key)
-    } else {
-      updated.buttonMappings[key] = keyCode
+    updateProfile {
+      if keyCode == 0 {
+        $0.buttonMappings.removeValue(forKey: key)
+      } else {
+        $0.buttonMappings[key] = keyCode
+      }
     }
-    profile = updated
-    saveCurrentProfile(updated)
   }
 
-  private func updateDeadzone(_ value: Float) {
-    var updated = currentProfile
-    updated.stickDeadzone = value
-    profile = updated
-    saveCurrentProfile(updated)
-  }
+  private func updateDeadzone(_ value: Float) { updateProfile { $0.stickDeadzone = value } }
 
   private func updateMouseSensitivity(_ value: Float) {
-    var updated = currentProfile
-    updated.stickMouseSensitivity = value
-    profile = updated
-    saveCurrentProfile(updated)
+    updateProfile { $0.stickMouseSensitivity = value }
   }
 
   private func updateScrollSensitivity(_ value: Float) {
-    var updated = currentProfile
-    updated.stickScrollSensitivity = value
-    profile = updated
-    saveCurrentProfile(updated)
+    updateProfile { $0.stickScrollSensitivity = value }
   }
 
   private func saveCurrentProfile(_ newProfile: Profile) {

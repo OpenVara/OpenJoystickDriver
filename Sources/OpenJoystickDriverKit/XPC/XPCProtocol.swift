@@ -1,6 +1,7 @@
 import Foundation
 
 /// Mach service name shared by the daemon and any client (GUI or CLI).
+///
 /// Both sides must use the same name to establish a connection.
 public let xpcServiceName = "com.openjoystickdriver.xpc"
 
@@ -79,6 +80,39 @@ public let xpcServiceName = "com.openjoystickdriver.xpc"
   @objc func setSuppressOutput(_ suppress: Bool, reply: @escaping (Bool) -> Void)
 }
 
+/// Structured description of a connected controller, used in ``XPCStatusPayload``.
+public struct XPCDeviceDescription: Codable, Sendable {
+  /// Human-readable controller name.
+  public let name: String
+  /// USB vendor ID.
+  public let vendorID: UInt16
+  /// USB product ID.
+  public let productID: UInt16
+  /// Name of the protocol parser in use (e.g. "GIP", "DS4").
+  public let parser: String
+  /// Connection type (e.g. "USB", "HID").
+  public let connection: String
+  /// USB serial number, or nil if not reported.
+  public let serialNumber: String?
+
+  /// Creates a new XPCDeviceDescription.
+  public init(
+    name: String,
+    vendorID: UInt16,
+    productID: UInt16,
+    parser: String,
+    connection: String,
+    serialNumber: String?
+  ) {
+    self.name = name
+    self.vendorID = vendorID
+    self.productID = productID
+    self.parser = parser
+    self.connection = connection
+    self.serialNumber = serialNumber
+  }
+}
+
 /// Status snapshot returned by ``OpenJoystickDriverXPCProtocol/getStatus(reply:)``.
 ///
 /// Contains the current macOS permission states (as human-readable strings like
@@ -86,10 +120,11 @@ public let xpcServiceName = "com.openjoystickdriver.xpc"
 public struct XPCStatusPayload: Codable, Sendable {
   /// Input Monitoring permission state (e.g. "granted", "denied").
   public let inputMonitoring: String
-  /// Human-readable descriptions of all connected controllers.
-  public let connectedDevices: [String]
+  /// Structured descriptions of all connected controllers.
+  public let connectedDevices: [XPCDeviceDescription]
 
-  public init(inputMonitoring: String, connectedDevices: [String]) {
+  /// Creates a new XPCStatusPayload.
+  public init(inputMonitoring: String, connectedDevices: [XPCDeviceDescription]) {
     self.inputMonitoring = inputMonitoring
     self.connectedDevices = connectedDevices
   }

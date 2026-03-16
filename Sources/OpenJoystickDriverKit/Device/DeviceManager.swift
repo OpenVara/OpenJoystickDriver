@@ -59,6 +59,7 @@ public actor DeviceManager {
   }
 
   /// Returns the latest input snapshot for a device matched by vendor and product ID.
+  ///
   /// Returns nil if no pipeline is active for the device.
   public func inputState(for identifier: DeviceIdentifier) async -> DeviceInputState? {
     guard let key = pipelines.keys.first(where: { $0.modelMatches(identifier) }) else { return nil }
@@ -66,23 +67,27 @@ public actor DeviceManager {
   }
 
   /// Returns recent raw USB packets for a device matched by vendor and product ID.
+  ///
   /// Returns an empty array if no pipeline is active for the device.
   public func packetLog(for identifier: DeviceIdentifier) async -> [PacketLogEntry] {
     guard let key = pipelines.keys.first(where: { $0.modelMatches(identifier) }) else { return [] }
     return await pipelines[key]?.getPacketLog() ?? []
   }
 
-  /// Returns description strings for all connected controllers.
-  /// Format: "NAME (VID:D PID:D PARSER [CONNECTION] SN:SERIAL)"
+  /// Returns structured descriptions for all connected controllers.
+  ///
   /// Used by XPCService to report live device list.
-  public func connectedDeviceDescriptions() -> [String] {
+  public func connectedDeviceDescriptions() -> [XPCDeviceDescription] {
     pipelines.keys.map { id in
       let info = deviceInfos[id]
-      let name = info?.name ?? "Controller"
-      let connection = info?.connection ?? "USB"
-      let parser = parserRegistry.parserName(for: id)
-      let sn = info?.serialNumber ?? "none"
-      return "\(name) (VID:\(id.vendorID) PID:\(id.productID) \(parser) [\(connection)] SN:\(sn))"
+      return XPCDeviceDescription(
+        name: info?.name ?? "Controller",
+        vendorID: id.vendorID,
+        productID: id.productID,
+        parser: parserRegistry.parserName(for: id),
+        connection: info?.connection ?? "USB",
+        serialNumber: info?.serialNumber
+      )
     }
   }
 

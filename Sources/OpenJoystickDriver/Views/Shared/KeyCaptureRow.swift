@@ -3,7 +3,9 @@ import OpenJoystickDriverKit
 import SwiftUI
 
 private let captureRowLabelWidth: CGFloat = 110
-/// Inner label width for key-name buttons. The bordered style adds ~12 pt per side,
+/// Inner label width for key-name buttons.
+///
+/// The bordered style adds ~12 pt per side,
 /// giving a total button width of roughly captureKeyButtonWidth + 24 pt.
 /// Setting it on the Text (not the outer button) is what forces identical widths.
 private let captureKeyButtonWidth: CGFloat = 80

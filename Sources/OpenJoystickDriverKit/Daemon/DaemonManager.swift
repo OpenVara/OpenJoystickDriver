@@ -1,8 +1,8 @@
 import Foundation
 
 /// Manages daemon LaunchAgent lifecycle.
-/// Provides install and uninstall operations via launchctl
-/// operating on ~/Library/LaunchAgents.
+///
+/// Provides install and uninstall operations via launchctl operating on `~/Library/LaunchAgents`.
 public enum DaemonManager: Sendable {
   /// Mach service label - also used as plist filename stem.
   public static let label = "com.openjoystickdriver.daemon"
@@ -19,10 +19,10 @@ public enum DaemonManager: Sendable {
     FileManager.default.fileExists(atPath: plistURL.path(percentEncoded: false))
   }
 
-  /// Writes LaunchAgent plist and bootstraps daemon
-  /// into current user GUI session.
+  /// Writes LaunchAgent plist and bootstraps daemon into the current user GUI session.
   ///
   /// - Parameter daemonExecutable: Full path to daemon binary.
+  /// - Throws: A file system error if writing the plist or creating the directory fails.
   public static func install(daemonExecutable: URL) throws {
     let plist = makePlist(daemonPath: daemonExecutable.path(percentEncoded: false))
     let agentsDir = plistURL.deletingLastPathComponent()
@@ -36,6 +36,7 @@ public enum DaemonManager: Sendable {
   }
 
   /// Starts daemon via launchctl kickstart.
+  ///
   /// Use when LaunchAgent is installed but not running.
   public static func start() {
     let uid = String(getuid())
@@ -44,6 +45,7 @@ public enum DaemonManager: Sendable {
   }
 
   /// Kills and restarts daemon via launchctl kickstart -k.
+  ///
   /// Use to apply permission grants without full reinstall.
   public static func restart() {
     let uid = String(getuid())
@@ -52,6 +54,7 @@ public enum DaemonManager: Sendable {
   }
 
   /// Returns daemon executable path from installed LaunchAgent plist.
+  ///
   /// Returns nil if plist is absent or unparseable.
   public static var installedDaemonPath: String? {
     guard let data = try? Data(contentsOf: plistURL),
@@ -89,33 +92,41 @@ public enum DaemonManager: Sendable {
     // MachServices must be declared so launchd allows NSXPCListener to register
     // service. Without this entry, launchd kills process with SIGKILL
     // exactly when NSXPCListener.resume() is called.
-    """
-    <?xml version="1.0" encoding="UTF-8"?>
-    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-        "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-    <plist version="1.0">
-    <dict>
-      <key>Label</key>
-      <string>\(label)</string>
-      <key>ProgramArguments</key>
-      <array>
-        <string>\(daemonPath)</string>
-      </array>
-      <key>MachServices</key>
+    let escapedLabel = xmlEscape(label)
+    let escapedPath = xmlEscape(daemonPath)
+    let escapedService = xmlEscape(xpcServiceName)
+    return """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+          "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0">
       <dict>
-        <key>\(xpcServiceName)</key>
+        <key>Label</key>
+        <string>\(escapedLabel)</string>
+        <key>ProgramArguments</key>
+        <array>
+          <string>\(escapedPath)</string>
+        </array>
+        <key>MachServices</key>
+        <dict>
+          <key>\(escapedService)</key>
+          <true/>
+        </dict>
+        <key>KeepAlive</key>
         <true/>
+        <key>RunAtLoad</key>
+        <true/>
+        <key>StandardErrorPath</key>
+        <string>/tmp/\(escapedLabel).err</string>
+        <key>StandardOutPath</key>
+        <string>/tmp/\(escapedLabel).out</string>
       </dict>
-      <key>KeepAlive</key>
-      <true/>
-      <key>RunAtLoad</key>
-      <true/>
-      <key>StandardErrorPath</key>
-      <string>/tmp/\(label).err</string>
-      <key>StandardOutPath</key>
-      <string>/tmp/\(label).out</string>
-    </dict>
-    </plist>
-    """
+      </plist>
+      """
+  }
+
+  private static func xmlEscape(_ string: String) -> String {
+    string.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
+      .replacingOccurrences(of: ">", with: "&gt;")
   }
 }

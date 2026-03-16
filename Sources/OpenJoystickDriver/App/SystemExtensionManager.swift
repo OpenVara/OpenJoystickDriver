@@ -15,8 +15,7 @@ import SystemExtensions
 ///   when `AppModel` (a `@MainActor` class) holds a reference to this object.
 ///   All `@Published` mutations happen on the main queue (the delegate callbacks
 ///   use `queue: .main` and `Task { @MainActor in }`).
-@MainActor
-final class SystemExtensionManager: NSObject, ObservableObject, @unchecked Sendable {
+@MainActor final class SystemExtensionManager: NSObject, ObservableObject, @unchecked Sendable {
 
   // MARK: - Install state
 
@@ -30,25 +29,22 @@ final class SystemExtensionManager: NSObject, ObservableObject, @unchecked Senda
 
     static func == (lhs: Self, rhs: Self) -> Bool {
       switch (lhs, rhs) {
-      case (.unknown, .unknown), (.installing, .installing),
-           (.requiresApproval, .requiresApproval), (.installed, .installed),
-           (.removing, .removing):
+      case (.unknown, .unknown), (.installing, .installing), (.requiresApproval, .requiresApproval),
+        (.installed, .installed), (.removing, .removing):
         return true
-      case (.failed(let a), .failed(let b)):
-        return a == b
-      default:
-        return false
+      case (.failed(let a), .failed(let b)): return a == b
+      default: return false
       }
     }
 
     var label: String {
       switch self {
-      case .unknown:          return "Unknown"
-      case .installing:       return "Installing…"
+      case .unknown: return "Unknown"
+      case .installing: return "Installing…"
       case .requiresApproval: return "Requires Approval"
-      case .installed:        return "Installed"
-      case .removing:         return "Removing…"
-      case .failed(let msg):  return "Failed: \(msg)"
+      case .installed: return "Installed"
+      case .removing: return "Removing…"
+      case .failed(let msg): return "Failed: \(msg)"
       }
     }
 
@@ -130,10 +126,7 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
     }
   }
 
-  nonisolated func request(
-    _ request: OSSystemExtensionRequest,
-    didFailWithError error: Error
-  ) {
+  nonisolated func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
     let nsError = error as NSError
     print("[SysExt] FAILED — domain: \(nsError.domain), code: \(nsError.code)")
     print("[SysExt]   localizedDescription: \(nsError.localizedDescription)")
@@ -156,8 +149,14 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
     withExtension ext: OSSystemExtensionProperties
   ) -> OSSystemExtensionRequest.ReplacementAction {
     print("[SysExt] actionForReplacingExtension called")
-    print("[SysExt]   existing: \(existing.bundleIdentifier) v\(existing.bundleVersion) (\(existing.bundleShortVersion))")
-    print("[SysExt]   new:      \(ext.bundleIdentifier) v\(ext.bundleVersion) (\(ext.bundleShortVersion))")
+    print(
+      "[SysExt]   existing: \(existing.bundleIdentifier)"
+        + " v\(existing.bundleVersion) (\(existing.bundleShortVersion))"
+    )
+    print(
+      "[SysExt]   new:      \(ext.bundleIdentifier)"
+        + " v\(ext.bundleVersion) (\(ext.bundleShortVersion))"
+    )
     return .replace
   }
 }

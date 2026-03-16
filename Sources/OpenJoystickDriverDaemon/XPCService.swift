@@ -1,13 +1,13 @@
 import Foundation
 import OpenJoystickDriverKit
 
-/// Wraps non-Sendable XPC reply closure so it can
-/// cross Task boundary. Safe because XPC dispatches
-/// reply blocks on its own serial queue.
+/// Wraps non-Sendable XPC reply closure so it can cross Task boundary.
+///
+/// Safe because XPC dispatches reply blocks on its own serial queue.
 private struct SendableReply<T>: @unchecked Sendable { let call: (T) -> Void }
 
-/// NSXPCListener server that exposes DeviceManager
-/// state to GUI/CLI over Mach IPC.
+/// NSXPCListener server that exposes DeviceManager state to GUI/CLI over Mach IPC.
+///
 /// Call start() once; listener lives for process lifetime.
 /// - Note: @unchecked Sendable: XPCService is thread-safe -
 ///   actor-isolated DeviceManager/PermissionManager handle
@@ -23,6 +23,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
   private let dispatcher: any OutputDispatcher
   private var listener: NSXPCListener?
 
+  /// Creates an XPCService backed by the given device manager, permission manager, profile store, and output dispatcher.
   public init(
     deviceManager: DeviceManager,
     permissionManager: PermissionManager,
@@ -46,6 +47,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
 
   // MARK: - NSXPCListenerDelegate
 
+  /// Configures and resumes each incoming XPC connection.
   public func listener(
     _ listener: NSXPCListener,
     shouldAcceptNewConnection connection: NSXPCConnection
@@ -59,15 +61,22 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
 
   // MARK: - OpenJoystickDriverXPCProtocol
 
+  /// Returns a list of connected device descriptions.
   public func listDevices(reply: @escaping ([String]) -> Void) {
     let callback = SendableReply(call: reply)
     let dm = deviceManager
     Task {
       let devices = await dm.connectedDeviceDescriptions()
-      callback.call(devices)
+      let strings = devices.map { d in
+        let sn = d.serialNumber ?? "none"
+        return "\(d.name) (VID:\(d.vendorID)" + " PID:\(d.productID) \(d.parser)"
+          + " [\(d.connection)] SN:\(sn))"
+      }
+      callback.call(strings)
     }
   }
 
+  /// Returns the current daemon status including input monitoring state and connected devices.
   public func getStatus(reply: @escaping (Data) -> Void) {
     let callback = SendableReply(call: reply)
     let dm = deviceManager
@@ -75,15 +84,13 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     Task {
       let inputState = await pm.inputMonitoringState
       let devices = await dm.connectedDeviceDescriptions()
-      let payload = XPCStatusPayload(
-        inputMonitoring: "\(inputState)",
-        connectedDevices: devices
-      )
+      let payload = XPCStatusPayload(inputMonitoring: "\(inputState)", connectedDevices: devices)
       let data = (try? JSONEncoder().encode(payload)) ?? Data()
       callback.call(data)
     }
   }
 
+  /// Returns all stored profiles as encoded JSON data.
   public func listProfiles(reply: @escaping (Data) -> Void) {
     let callback = SendableReply(call: reply)
     let ps = profileStore
@@ -94,6 +101,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
+  /// Returns the active profile for the specified device as encoded JSON data.
   public func getProfile(vendorID: Int, productID: Int, reply: @escaping (Data) -> Void) {
     let callback = SendableReply(call: reply)
     let ps = profileStore
@@ -105,6 +113,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
+  /// Decodes and persists the given profile data, returning whether the save succeeded.
   public func saveProfile(profileData: Data, reply: @escaping (Bool) -> Void) {
     let callback = SendableReply(call: reply)
     let ps = profileStore
@@ -123,6 +132,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
+  /// Resets the profile for the specified device to its default state.
   public func resetProfile(vendorID: Int, productID: Int, reply: @escaping (Bool) -> Void) {
     let callback = SendableReply(call: reply)
     let ps = profileStore
@@ -138,6 +148,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
+  /// Returns all profiles for the specified device as encoded JSON data.
   public func allProfiles(vendorID: Int, productID: Int, reply: @escaping (Data) -> Void) {
     let callback = SendableReply(call: reply)
     let ps = profileStore
@@ -149,6 +160,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
+  /// Decodes the given profile data, assigns it to the specified device, and returns the saved profile as JSON.
   public func addProfile(
     profileData: Data,
     vendorID: Int,
@@ -174,6 +186,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
+  /// Deletes the profile with the given ID from the specified device's profile list.
   public func deleteProfile(
     profileId: String,
     vendorID: Int,
@@ -198,6 +211,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
+  /// Sets the active profile for the specified device to the profile matching the given ID.
   public func setActiveProfile(
     profileId: String,
     vendorID: Int,
@@ -222,6 +236,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
+  /// Returns the current input state for the specified device as encoded JSON data.
   public func getDeviceInputState(vendorID: Int, productID: Int, reply: @escaping (Data?) -> Void) {
     let callback = SendableReply(call: reply)
     let dm = deviceManager
@@ -232,6 +247,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
+  /// Returns the recent packet log for the specified device as encoded JSON data.
   public func getPacketLog(vendorID: Int, productID: Int, reply: @escaping (Data) -> Void) {
     let callback = SendableReply(call: reply)
     let dm = deviceManager
@@ -242,6 +258,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
+  /// Enables or disables virtual output suppression and reports success.
   public func setSuppressOutput(_ suppress: Bool, reply: @escaping (Bool) -> Void) {
     dispatcher.suppressOutput = suppress
     reply(true)

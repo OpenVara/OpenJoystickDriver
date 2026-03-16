@@ -8,6 +8,7 @@ private let gamesirVID: UInt16 = 13623  // 0x3537
 private let gamesirPID: UInt16 = 4112  // 0x1010
 
 /// Shared USBContext for all hardware tests.
+///
 /// Avoids creating/destroying multiple libusb contexts
 /// which can cause crashes due to event loop thread races.
 private let sharedContext: USBContext? = try? USBContext()

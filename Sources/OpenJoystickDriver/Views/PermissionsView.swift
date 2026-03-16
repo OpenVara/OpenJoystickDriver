@@ -56,9 +56,8 @@ struct PermissionsView: View {
         )
         VStack(alignment: .leading, spacing: 2) {
           Text("Permissions reset after rebuild").fontWeight(.semibold)
-          Text(
-            "Daemon binary changed - re-grant Input Monitoring above, then restart daemon."
-          ).font(.caption).foregroundStyle(.secondary)
+          Text("Daemon binary changed - re-grant Input Monitoring above, then restart daemon.")
+            .font(.caption).foregroundStyle(.secondary)
         }
         Spacer()
         SwiftUI.Button("Restart Daemon") { Task { await model.restartDaemon() } }.buttonStyle(
@@ -82,43 +81,34 @@ struct PermissionsView: View {
           "DriverKit extension that exposes a virtual gamepad to SDL3, GCController, and "
             + "any HID-aware app — no Accessibility permission required."
         ).font(.caption).foregroundStyle(.secondary)
-        Text(ext.installState.label)
-          .font(.caption)
-          .foregroundStyle(
-            ext.installState.isInstalled
-              ? .green
-              : (ext.installState.isPending ? .orange : .secondary)
-          )
+        Text(ext.installState.label).font(.caption).foregroundStyle(
+          ext.installState.isInstalled
+            ? .green : (ext.installState.isPending ? .orange : .secondary)
+        )
         if ext.installState == .requiresApproval {
           VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-              Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).imageScale(
-                .small
-              )
+              Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                .imageScale(.small)
               Text("Allow the extension in System Settings → Login Items & Extensions.").font(
                 .caption
               ).foregroundStyle(.secondary)
             }
+            let loginItemsURL =
+              "x-apple.systempreferences:" + "com.apple.LoginItems-Settings.extension"
             SwiftUI.Button("Open Login Items & Extensions") {
-              if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
-                NSWorkspace.shared.open(url)
-              }
+              if let url = URL(string: loginItemsURL) { NSWorkspace.shared.open(url) }
             }.buttonStyle(.bordered).controlSize(.small)
           }.padding(8).frame(maxWidth: .infinity, alignment: .leading).background(
             Color.orange.opacity(0.08)
           ).clipShape(RoundedRectangle(cornerRadius: 6))
         }
         HStack(spacing: 8) {
-          SwiftUI.Button("Install Extension") {
-            ext.installExtension()
-          }.buttonStyle(.bordered).disabled(
-            ext.installState.isInstalled || ext.installState.isPending
-          )
+          SwiftUI.Button("Install Extension") { ext.installExtension() }.buttonStyle(.bordered)
+            .disabled(ext.installState.isInstalled || ext.installState.isPending)
           if ext.installState.isInstalled || ext.installState == .removing {
-            SwiftUI.Button("Remove") {
-              ext.uninstallExtension()
-            }.buttonStyle(.bordered).foregroundStyle(.red)
-              .disabled(ext.installState == .removing)
+            SwiftUI.Button("Remove") { ext.uninstallExtension() }.buttonStyle(.bordered)
+              .foregroundStyle(.red).disabled(ext.installState == .removing)
           }
         }
       }
@@ -131,19 +121,16 @@ struct PermissionsView: View {
     GroupBox {
       VStack(alignment: .leading, spacing: 8) {
         if let path = model.daemonExecutablePath {
-          Text(path)
-            .font(.system(.caption, design: .monospaced))
-            .textSelection(.enabled)
-            .padding(6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+          Text(path).font(.system(.caption, design: .monospaced)).textSelection(.enabled).padding(6)
+            .frame(maxWidth: .infinity, alignment: .leading).background(
+              Color(nsColor: .textBackgroundColor).opacity(0.5)
+            ).clipShape(RoundedRectangle(cornerRadius: 4))
         } else {
           Text("Not found").font(.caption).foregroundStyle(.secondary)
         }
-        Text("Grant permissions to this binary. Permissions reset after each rebuild.")
-          .font(.caption)
-          .foregroundStyle(.secondary)
+        Text("Grant permissions to this binary. Permissions reset after each rebuild.").font(
+          .caption
+        ).foregroundStyle(.secondary)
       }
     } label: {
       Label("Daemon Binary", systemImage: "terminal").fontWeight(.semibold)

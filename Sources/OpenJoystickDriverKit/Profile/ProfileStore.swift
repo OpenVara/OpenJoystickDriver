@@ -19,6 +19,7 @@ public actor ProfileStore {
   }
 
   /// Creates a store that reads and writes profiles in `directory`.
+  ///
   /// Pass `nil` to use the default location:
   /// `~/Library/Application Support/OpenJoystickDriver/profiles/`.
   public init(directory: URL? = nil) {

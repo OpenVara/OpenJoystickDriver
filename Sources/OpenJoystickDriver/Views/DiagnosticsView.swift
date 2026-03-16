@@ -172,7 +172,7 @@ struct DiagnosticsView: View {
               HStack {
                 Text(device.name).fontWeight(.medium)
                 Spacer()
-                protocolBadge(device.parser)
+                ProtocolBadge(parser: device.parser)
               }
               HStack(spacing: 12) {
                 Text(String(format: "VID 0x%04X  PID 0x%04X", device.vendorID, device.productID))
@@ -191,15 +191,6 @@ struct DiagnosticsView: View {
     } label: {
       Label("Controllers", systemImage: "gamecontroller").fontWeight(.semibold)
     }
-  }
-
-  private func protocolBadge(_ parser: String) -> some View {
-    HStack(spacing: 3) {
-      Image(systemName: protocolIcon(for: parser)).imageScale(.small)
-      Text(parser)
-    }.font(.caption).fontWeight(.medium).padding(.horizontal, 8).padding(.vertical, 3).background(
-      protocolColor(for: parser).opacity(0.15)
-    ).foregroundStyle(protocolColor(for: parser)).clipShape(Capsule())
   }
 
   private var logCard: some View {
@@ -262,8 +253,8 @@ struct DiagnosticsView: View {
     let version = ProcessInfo.processInfo.operatingSystemVersionString
     var lines: [String] = [
       "OpenJoystickDriver Diagnostics", "==============================", "macOS: \(version)",
-      "Daemon: \(daemonStatusText)", "Input Monitoring: \(model.inputMonitoring)",
-      "", "Controllers:",
+      "Daemon: \(daemonStatusText)", "Input Monitoring: \(model.inputMonitoring)", "",
+      "Controllers:",
     ]
     if model.devices.isEmpty {
       lines.append("  (none)")

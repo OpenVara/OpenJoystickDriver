@@ -8,10 +8,12 @@ import Foundation
 public struct GIPSequencer: Sendable {
   private var counters: [UInt8: UInt8] = [:]
 
+  /// Creates a new GIPSequencer with all counters at zero.
   public init() {}
 
-  /// Returns the next sequence number for the given command ID and advances
-  /// the counter. Wraps from 255 back to 0.
+  /// Returns the next sequence number for the given command ID and advances the counter.
+  ///
+  /// Wraps from 255 back to 0.
   public mutating func next(for commandID: UInt8) -> UInt8 {
     let current = counters[commandID, default: 0]
     counters[commandID] = current &+ 1

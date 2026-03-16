@@ -17,8 +17,7 @@ struct ProfileCommand {
     default:
       print("Unknown profile subcommand: \(sub)")
       print(
-        "Usage: OpenJoystickDriver --headless"
-          + " profile [list|show VID:PID"
+        "Usage: OpenJoystickDriver --headless" + " profile [list|show VID:PID"
           + "|set VID:PID BUTTON KEYCODE|reset VID:PID]"
       )
     }
@@ -65,15 +64,10 @@ struct ProfileCommand {
   }
 
   private func setMapping(store: ProfileStore, args: [String]) {
-    guard args.count == 3,
-      let (vid, pid) = parseVidPid(args[0]),
-      let button = resolveButton(args[1]),
-      let keyCode = resolveKeyCode(args[2])
+    guard args.count == 3, let (vid, pid) = parseVidPid(args[0]),
+      let button = resolveButton(args[1]), let keyCode = resolveKeyCode(args[2])
     else {
-      print(
-        "Usage: profile set VID:PID BUTTON KEYCODE"
-          + "  (e.g. profile set 13623:4112 a 36)"
-      )
+      print("Usage: profile set VID:PID BUTTON KEYCODE" + "  (e.g. profile set 13623:4112 a 36)")
       print(
         "  BUTTON: a, b, x, y, start, back, guide,"
           + " lb, rb, dpadup, dpaddown, dpadleft, dpadright"
@@ -118,10 +112,8 @@ struct ProfileCommand {
   private func resolveButton(_ input: String) -> Button? {
     let lower = input.lowercased()
     let aliases: [String: Button] = [
-      "lb": .leftBumper, "rb": .rightBumper,
-      "lsb": .leftStick, "rsb": .rightStick,
-      "dpadup": .dpadUp, "dpaddown": .dpadDown,
-      "dpadleft": .dpadLeft, "dpadright": .dpadRight,
+      "lb": .leftBumper, "rb": .rightBumper, "lsb": .leftStick, "rsb": .rightStick,
+      "dpadup": .dpadUp, "dpaddown": .dpadDown, "dpadleft": .dpadLeft, "dpadright": .dpadRight,
     ]
     if let aliased = aliases[lower] { return aliased }
     return Button.allCases.first { $0.rawValue.lowercased() == lower }

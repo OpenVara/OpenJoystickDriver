@@ -290,8 +290,8 @@ private struct StickVisualizer: View {
   /// Snaps to zero when inside deadzone so the dot sits exactly at centre
   /// rather than wobbling with sub-deadzone drift.
   private var cx: CGFloat { abs(x) > deadzone ? CGFloat(max(-1, min(1, x))) : 0 }
-  /// GIPParser convention: negative y = physical up, which already aligns with
-  /// SwiftUI where negative offset-y moves a view upward. No flip needed.
+  /// GIPParser convention: negative y = physical up, which already aligns
+  /// with SwiftUI where negative offset-y moves a view upward.
   private var cy: CGFloat { abs(y) > deadzone ? CGFloat(max(-1, min(1, y))) : 0 }
 
   private var isActive: Bool { abs(x) > deadzone || abs(y) > deadzone }

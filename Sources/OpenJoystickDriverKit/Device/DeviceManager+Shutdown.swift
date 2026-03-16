@@ -1,8 +1,9 @@
 import Foundation
 
 extension DeviceManager {
-  /// Installs SIGTERM and SIGINT handlers that stop
-  /// device manager and exit cleanly. Call once at startup.
+  /// Installs SIGTERM and SIGINT handlers that stop device manager and exit cleanly.
+  ///
+  /// Call once at startup.
   nonisolated public func setupGracefulShutdown(label: String) {
     let dm = self
     let sigterm = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)

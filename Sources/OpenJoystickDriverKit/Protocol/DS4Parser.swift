@@ -5,10 +5,9 @@ private let ds4AxisCenter: Float = 128
 private let ds4HatNeutral: UInt8 = 0xFF
 private let ds4TriggerMax: Float = 255
 
-/// Parser for Sony DualShock 4 controllers
-/// (USB HID, Report ID 0x01).
-/// No handshake required -- DS4 sends input reports
-/// automatically on USB connection.
+/// Parser for Sony DualShock 4 controllers (USB HID, Report ID 0x01).
+///
+/// No handshake required — DS4 sends input reports automatically on USB connection.
 public final class DS4Parser: InputParser, @unchecked Sendable {
 
   private enum ReportOffset {
@@ -34,14 +33,17 @@ public final class DS4Parser: InputParser, @unchecked Sendable {
   private var prevRSX = UInt8(ds4AxisCenter)
   private var prevRSY = UInt8(ds4AxisCenter)
 
+  /// Creates a new DS4Parser.
   public init() {}
 
   // swiftlint:disable async_without_await
+  /// No-op; DS4 requires no handshake.
   public func performHandshake(handle: USBDeviceHandle?) async throws {
     // DS4 requires no handshake; protocol conformance.
   }
   // swiftlint:enable async_without_await
 
+  /// Parses one DS4 HID input report and returns zero or more controller events.
   public func parse(data: Data) throws -> [ControllerEvent] {
     guard data.count >= 10 else { return [] }
     let bytes = Array(data)

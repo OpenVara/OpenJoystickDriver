@@ -20,16 +20,20 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   // MARK: - OutputDispatcher
 
-  /// When true, report injection is suppressed (e.g. during developer packet
-  /// capture). Invalidates the profile cache on change.
+  /// When true, report injection is suppressed (e.g. during developer packet capture).
+  ///
+  /// Invalidates the profile cache on change.
   public var suppressOutput = false {
-    didSet { if suppressOutput != oldValue { profileCache.removeAll() } }
+    didSet { if suppressOutput != oldValue { stateLock.withLock { profileCache.removeAll() } } }
   }
 
   // MARK: - Profile cache
 
   private let profileStore: ProfileStore
-  private struct ProfileCacheEntry { var profile: Profile; var fetchedAt: Date }
+  private struct ProfileCacheEntry {
+    var profile: Profile
+    var fetchedAt: Date
+  }
   private var profileCache: [String: ProfileCacheEntry] = [:]
   private let profileCacheTTL: TimeInterval = 1.0
 
@@ -53,9 +57,8 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   // MARK: - Init / deinit
 
-  public init(profileStore: ProfileStore = ProfileStore()) {
-    self.profileStore = profileStore
-  }
+  /// Creates a new DextOutputDispatcher.
+  public init(profileStore: ProfileStore = ProfileStore()) { self.profileStore = profileStore }
 
   deinit { closeConnection() }
 
@@ -65,8 +68,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   ///
   /// - Returns: `true` when the extension is found and the connection succeeds.
   ///   When `false`, ``dispatch(events:from:)`` will auto-retry on each call.
-  @discardableResult
-  public func connect() -> Bool {
+  @discardableResult public func connect() -> Bool {
     let conn = makeConnection()
     connectionLock.withLock { connection = conn }
     let ok = conn != IO_OBJECT_NULL
@@ -112,9 +114,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
           "CFBundleIdentifier" as CFString,
           kCFAllocatorDefault,
           0
-        ),
-        let bundleID = propRef.takeRetainedValue() as? String,
-        bundleID == Self.dextBundleID
+        ), let bundleID = propRef.takeRetainedValue() as? String, bundleID == Self.dextBundleID
       else { continue }
 
       var conn: io_connect_t = 0
@@ -126,6 +126,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   // MARK: - OutputDispatcher
 
+  /// Applies controller events and sends an updated HID report to the dext.
   public func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) async {
     guard !suppressOutput else { return }
 
@@ -174,11 +175,13 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   private func cachedProfile(for identifier: DeviceIdentifier) async -> Profile {
     let key = "\(identifier.vendorID):\(identifier.productID)"
     let now = Date()
-    if let entry = profileCache[key], now.timeIntervalSince(entry.fetchedAt) < profileCacheTTL {
+    if let entry = stateLock.withLock({ profileCache[key] }),
+      now.timeIntervalSince(entry.fetchedAt) < profileCacheTTL
+    {
       return entry.profile
     }
     let fresh = await profileStore.profile(for: identifier)
-    profileCache[key] = ProfileCacheEntry(profile: fresh, fetchedAt: now)
+    stateLock.withLock { profileCache[key] = ProfileCacheEntry(profile: fresh, fetchedAt: now) }
     return fresh
   }
 
@@ -186,22 +189,18 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   private func applyEvent(_ event: ControllerEvent, deadzone: Float) {
     switch event {
-    case .buttonPressed(let btn):
-      if let bit = buttonBit(for: btn) { buttons |= (1 << bit) }
-    case .buttonReleased(let btn):
-      if let bit = buttonBit(for: btn) { buttons &= ~(1 << bit) }
+    case .buttonPressed(let btn): if let bit = buttonBit(for: btn) { buttons |= (1 << bit) }
+    case .buttonReleased(let btn): if let bit = buttonBit(for: btn) { buttons &= ~(1 << bit) }
     case .leftStickChanged(let x, let y):
       leftStickX = axisValue(x, deadzone: deadzone)
       leftStickY = axisValue(y, deadzone: deadzone)
     case .rightStickChanged(let x, let y):
       rightStickX = axisValue(x, deadzone: deadzone)
       rightStickY = axisValue(y, deadzone: deadzone)
-    case .leftTriggerChanged(let v):
-      leftTrigger = UInt8(clamping: Int(v.clamped(to: 0...1) * 255))
+    case .leftTriggerChanged(let v): leftTrigger = UInt8(clamping: Int(v.clamped(to: 0...1) * 255))
     case .rightTriggerChanged(let v):
       rightTrigger = UInt8(clamping: Int(v.clamped(to: 0...1) * 255))
-    case .dpadChanged(let dir):
-      hat = hatValue(for: dir)
+    case .dpadChanged(let dir): hat = hatValue(for: dir)
     }
   }
 
@@ -212,13 +211,17 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     r[0] = UInt8(buttons & 0xFF)
     r[1] = UInt8((buttons >> 8) & 0xFF)
     let lsxB = leftStickX.littleEndianBytes
-    r[2] = lsxB.0; r[3] = lsxB.1
+    r[2] = lsxB.0
+    r[3] = lsxB.1
     let lsyB = leftStickY.littleEndianBytes
-    r[4] = lsyB.0; r[5] = lsyB.1
+    r[4] = lsyB.0
+    r[5] = lsyB.1
     let rsxB = rightStickX.littleEndianBytes
-    r[6] = rsxB.0; r[7] = rsxB.1
+    r[6] = rsxB.0
+    r[7] = rsxB.1
     let rsyB = rightStickY.littleEndianBytes
-    r[8] = rsyB.0; r[9] = rsyB.1
+    r[8] = rsyB.0
+    r[9] = rsyB.1
     r[10] = leftTrigger
     r[11] = rightTrigger
     r[12] = hat.rawValue & 0x0F
@@ -229,25 +232,24 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   private func buttonBit(for button: Button) -> UInt16? {
     switch button {
-    case .a, .cross:                          return 0
-    case .b, .circle:                         return 1
-    case .x, .square:                         return 2
-    case .y, .triangle:                       return 3
-    case .leftBumper, .l1:                    return 4
-    case .rightBumper, .r1:                   return 5
-    case .leftStick:                          return 6
-    case .rightStick:                         return 7
-    case .start, .options:                    return 8
-    case .back, .share:                       return 9
-    case .guide, .ps:                         return 10
-    case .touchpad:                           return 11
-    case .genericButton1:                     return 12
-    case .genericButton2:                     return 13
-    case .genericButton3:                     return 14
-    case .genericButton4:                     return 15
-    case .genericButton5, .genericButton6,
-         .genericButton7, .genericButton8:    return nil
-    case .l2Digital, .r2Digital:              return nil
+    case .a, .cross: return 0
+    case .b, .circle: return 1
+    case .x, .square: return 2
+    case .y, .triangle: return 3
+    case .leftBumper, .l1: return 4
+    case .rightBumper, .r1: return 5
+    case .leftStick: return 6
+    case .rightStick: return 7
+    case .start, .options: return 8
+    case .back, .share: return 9
+    case .guide, .ps: return 10
+    case .touchpad: return 11
+    case .genericButton1: return 12
+    case .genericButton2: return 13
+    case .genericButton3: return 14
+    case .genericButton4: return 15
+    case .genericButton5, .genericButton6, .genericButton7, .genericButton8: return nil
+    case .l2Digital, .r2Digital: return nil
     case .dpadUp, .dpadDown, .dpadLeft, .dpadRight: return nil
     }
   }
@@ -262,14 +264,14 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   private func hatValue(for direction: DpadDirection) -> GamepadHIDDescriptor.Hat {
     switch direction {
-    case .neutral:   return .neutral
-    case .north:     return .north
+    case .neutral: return .neutral
+    case .north: return .north
     case .northEast: return .northEast
-    case .east:      return .east
+    case .east: return .east
     case .southEast: return .southEast
-    case .south:     return .south
+    case .south: return .south
     case .southWest: return .southWest
-    case .west:      return .west
+    case .west: return .west
     case .northWest: return .northWest
     }
   }
@@ -277,16 +279,16 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
 // MARK: - Float clamping
 
-private extension Float {
-  func clamped(to range: ClosedRange<Float>) -> Float {
+extension Float {
+  private func clamped(to range: ClosedRange<Float>) -> Float {
     Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
   }
 }
 
 // MARK: - Int16 little-endian byte pair
 
-private extension Int16 {
-  var littleEndianBytes: (UInt8, UInt8) {
+extension Int16 {
+  private var littleEndianBytes: (UInt8, UInt8) {
     let le = littleEndian
     return (UInt8(le & 0xFF), UInt8((le >> 8) & 0xFF))
   }

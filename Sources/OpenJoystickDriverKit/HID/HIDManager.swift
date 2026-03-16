@@ -9,6 +9,7 @@ import IOKit.hid
 public final class HIDManager: Sendable {
   private let stream: HIDDeviceStream
 
+  /// Creates a new HIDManager.
   public init() { stream = HIDDeviceStream() }
 
   /// Returns a live stream of HID device events (connect, disconnect, input report).

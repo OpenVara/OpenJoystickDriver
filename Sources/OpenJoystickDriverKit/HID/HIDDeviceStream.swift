@@ -103,7 +103,9 @@ public final class HIDDeviceStream: @unchecked Sendable {
     continuation?.yield(.inputReport(locationID: locationID, data: data))
   }
 
-  /// Reads an integer property from an IOKit HID device. Returns 0 if missing.
+  /// Reads an integer property from an IOKit HID device.
+  ///
+  /// Returns 0 if missing.
   private func deviceProperty(_ device: IOHIDDevice, _ key: String) -> Int {
     IOHIDDeviceGetProperty(device, key as CFString) as? Int ?? 0
   }

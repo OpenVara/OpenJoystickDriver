@@ -5,6 +5,7 @@ import Foundation
 let xpcCallTimeoutSeconds: Double = 0.5
 
 /// Blocks current thread until `block` completes.
+///
 /// Safe for CLI use only - never call from main actor or async context.
 func runSync(_ block: @Sendable @escaping () async -> Void) {
   let semaphore = DispatchSemaphore(value: 0)
@@ -16,6 +17,7 @@ func runSync(_ block: @Sendable @escaping () async -> Void) {
 }
 
 /// Blocks current thread until `block` completes, returning its value.
+///
 /// Safe for CLI use only - never call from main actor or async context.
 func runSyncResult<T: Sendable>(_ block: @Sendable @escaping () async -> T) -> T {
   let semaphore = DispatchSemaphore(value: 0)
@@ -25,6 +27,8 @@ func runSyncResult<T: Sendable>(_ block: @Sendable @escaping () async -> T) -> T
     semaphore.signal()
   }
   semaphore.wait()
-  // swiftlint:disable:next force_unwrapping
-  return result!
+  guard let value = result else {
+    fatalError("runSyncResult: block completed without setting result")
+  }
+  return value
 }

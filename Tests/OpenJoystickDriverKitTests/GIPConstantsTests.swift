@@ -29,8 +29,7 @@ import Testing
   @Test func test_authState_isDeviceToHost_correct_for_all_cases() {
     // Device -> Host states (rawValue < 0x20)
     let deviceStates: [GIPAuthState] = [
-      .devInit, .devCertificate, .devIntermediate,
-      .devData1, .devData2, .devFinal, .devComplete,
+      .devInit, .devCertificate, .devIntermediate, .devData1, .devData2, .devFinal, .devComplete,
       .devStatus, .devAck1, .devAck2,
     ]
     for state in deviceStates {
@@ -39,8 +38,8 @@ import Testing
 
     // Host -> Device states (rawValue >= 0x20)
     let hostStates: [GIPAuthState] = [
-      .hostInit, .hostResponse1, .hostResponse2, .hostResponse3,
-      .hostResponse4, .hostResponse5, .hostComplete,
+      .hostInit, .hostResponse1, .hostResponse2, .hostResponse3, .hostResponse4, .hostResponse5,
+      .hostComplete,
     ]
     for state in hostStates {
       #expect(!state.isDeviceToHost, "Expected \(state) to be host->device")
@@ -59,12 +58,14 @@ import Testing
 
   @Test func test_deviceState_expectedPayloadSize_nil_for_device_states() {
     let deviceStates: [GIPAuthState] = [
-      .devInit, .devCertificate, .devIntermediate,
-      .devData1, .devData2, .devFinal, .devComplete,
+      .devInit, .devCertificate, .devIntermediate, .devData1, .devData2, .devFinal, .devComplete,
       .devStatus, .devAck1, .devAck2,
     ]
     for state in deviceStates {
-      #expect(state.expectedPayloadSize == nil, "Device state \(state) should have nil payload size")
+      #expect(
+        state.expectedPayloadSize == nil,
+        "Device state \(state) should have nil payload size"
+      )
     }
   }
 

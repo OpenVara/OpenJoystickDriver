@@ -9,6 +9,7 @@ private enum WindowMetrics {
 }
 
 /// Application delegate: sets up menu bar icon and manages main window.
+///
 /// App runs as accessory (no Dock icon) - it is persistent system utility.
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
   private var statusItem: NSStatusItem?
@@ -25,10 +26,9 @@ private enum WindowMetrics {
   }
 
   /// Trigger system permission dialogs on first launch.
+  ///
   /// These are no-ops if already granted.
-  private func requestPermissions() {
-    IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
-  }
+  private func requestPermissions() { IOHIDRequestAccess(kIOHIDRequestTypeListenEvent) }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 

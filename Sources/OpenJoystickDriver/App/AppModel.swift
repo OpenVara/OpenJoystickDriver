@@ -10,97 +10,25 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   let vendorID: UInt16
   let productID: UInt16
   let parser: String
-  /// "USB" or "HID"
+  /// "USB" or "HID".
   let connection: String
   /// USB serial number string, nil when unavailable.
   let serialNumber: String?
 
-  /// Parse daemon description string of form:
-  /// "NAME (VID:X PID:X PARSER [CONNECTION] SN:SERIAL)"
-  static func parse(description: String) -> Self? {
-    guard
-      let parenRange = description.range(
-        of: #"\(VID:(\d+) PID:(\d+) (\w+)"#,
-        options: .regularExpression
-      )
-    else {
-      return Self(
-        id: description,
-        name: description,
-        vendorID: 0,
-        productID: 0,
-        parser: "Unknown",
-        connection: "USB",
-        serialNumber: nil
-      )
-    }
-
-    let vid = parseVendorID(from: description, parenRange: parenRange)
-    let pid = parseProductID(from: description, parenRange: parenRange)
-    let parser = parseParser(from: description, parenRange: parenRange)
-    let name = parseName(from: description)
-    let connection = parseConnection(from: description)
-    let serialNumber = parseSerialNumber(from: description)
-
-    return Self(
-      id: description,
-      name: name.isEmpty ? description : name,
-      vendorID: vid,
-      productID: pid,
-      parser: parser,
-      connection: connection,
-      serialNumber: serialNumber
-    )
-  }
-
-  // MARK: - Private Parsers
-
-  private static func parseVendorID(from description: String, parenRange: Range<String.Index>)
-    -> UInt16
-  {
-    let parenStr = String(description[parenRange])
-    let parts = parenStr.replacingOccurrences(of: "(", with: "").components(separatedBy: " ")
-    return parts.first { $0.hasPrefix("VID:") }.flatMap { UInt16($0.dropFirst(4)) } ?? 0
-  }
-
-  private static func parseProductID(from description: String, parenRange: Range<String.Index>)
-    -> UInt16
-  {
-    let parenStr = String(description[parenRange])
-    let parts = parenStr.replacingOccurrences(of: "(", with: "").components(separatedBy: " ")
-    return parts.first { $0.hasPrefix("PID:") }.flatMap { UInt16($0.dropFirst(4)) } ?? 0
-  }
-
-  private static func parseParser(from description: String, parenRange: Range<String.Index>)
-    -> String
-  {
-    let parenStr = String(description[parenRange])
-    let parts = parenStr.replacingOccurrences(of: "(", with: "").components(separatedBy: " ")
-    return parts.first { !$0.hasPrefix("VID:") && !$0.hasPrefix("PID:") } ?? "Unknown"
-  }
-
-  private static func parseName(from description: String) -> String {
-    guard let idx = description.firstIndex(of: "(") else { return description }
-    return String(description[..<idx]).trimmingCharacters(in: .whitespaces)
-  }
-
-  private static func parseConnection(from description: String) -> String {
-    guard let open = description.firstIndex(of: "["), let close = description.firstIndex(of: "]"),
-      open < close
-    else { return "USB" }
-    return String(description[description.index(after: open)..<close])
-  }
-
-  private static func parseSerialNumber(from description: String) -> String? {
-    guard let snRange = description.range(of: "SN:") else { return nil }
-    let rest = description[snRange.upperBound...]
-    let sn = String(rest.prefix { !$0.isWhitespace && $0 != ")" })
-    return (sn.isEmpty || sn == "none") ? nil : sn
+  init(from description: XPCDeviceDescription) {
+    self.id = "\(description.vendorID):\(description.productID):\(description.name)"
+    self.name = description.name
+    self.vendorID = description.vendorID
+    self.productID = description.productID
+    self.parser = description.parser
+    self.connection = description.connection
+    self.serialNumber = description.serialNumber
   }
 
 }
 
 /// Central observable model for GUI.
+///
 /// Polls daemon via XPC every 2 seconds.
 @MainActor final class AppModel: ObservableObject {
   @Published var daemonConnected = false
@@ -114,6 +42,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   var developerMode: Bool
 
   private let client = XPCClient()
+  private let permissionManager = PermissionManager()
   private var pollTask: Task<Void, Never>?
 
   init(developerMode: Bool = false) { self.developerMode = developerMode }
@@ -128,13 +57,14 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   func refreshDaemonStatus() { daemonInstalled = DaemonManager.isInstalled }
 
   /// Path to daemon binary as recorded in installed LaunchAgent plist.
+  ///
   /// Falls back to expected path relative to this app's executable.
   var daemonExecutablePath: String? {
     if let installed = DaemonManager.installedDaemonPath { return installed }
     guard let macosDir = Bundle.main.executableURL?.deletingLastPathComponent() else { return nil }
     // Prefer daemon inside its own bundle (required for provisioning profile on macOS 26+)
-    let bundled = macosDir
-      .appendingPathComponent("OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon")
+    let daemonSubpath = "OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon"
+    let bundled = macosDir.appendingPathComponent(daemonSubpath)
     if FileManager.default.fileExists(atPath: bundled.path(percentEncoded: false)) {
       return bundled.path(percentEncoded: false)
     }
@@ -148,11 +78,12 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       return
     }
     let macosDir = execURL.deletingLastPathComponent()
-    let bundledDaemon = macosDir
-      .appendingPathComponent("OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon")
+    let daemonSubpath = "OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon"
+    let bundledDaemon = macosDir.appendingPathComponent(daemonSubpath)
     let legacyDaemon = macosDir.appendingPathComponent("OpenJoystickDriverDaemon")
-    let daemonURL = FileManager.default.fileExists(atPath: bundledDaemon.path(percentEncoded: false))
-      ? bundledDaemon : legacyDaemon
+    let bundledPath = bundledDaemon.path(percentEncoded: false)
+    let daemonURL =
+      FileManager.default.fileExists(atPath: bundledPath) ? bundledDaemon : legacyDaemon
     do {
       let task = Task.detached { try DaemonManager.install(daemonExecutable: daemonURL) }
       try await task.value
@@ -182,9 +113,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       await poll()
       if daemonConnected { break }
     }
-    if !daemonConnected {
-      daemonError = "Daemon failed to restart. Try reinstalling."
-    }
+    if !daemonConnected { daemonError = "Daemon failed to restart. Try reinstalling." }
     daemonRestarting = false
   }
 
@@ -252,14 +181,13 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       let status = try await client.getStatus()
       daemonConnected = true
       inputMonitoring = status.inputMonitoring
-      devices = status.connectedDevices.compactMap(DeviceViewModel.parse(description:))
+      devices = status.connectedDevices.map { DeviceViewModel(from: $0) }
     } catch {
       daemonConnected = false
       devices = []
       // Daemon unreachable - fall back to checking this process's own permissions
       // so UI shows something useful rather than stale "unknown".
-      let pm = PermissionManager()
-      inputMonitoring = "\(await pm.checkAccess())"
+      inputMonitoring = "\(await permissionManager.checkAccess())"
     }
 
     await refreshProfiles()

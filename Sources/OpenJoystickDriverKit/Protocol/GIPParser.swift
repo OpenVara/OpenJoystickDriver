@@ -48,10 +48,12 @@ public final class GIPParser: InputParser, @unchecked Sendable {
   private var prevRSX: Int16 = 0
   private var prevRSY: Int16 = 0
 
+  /// Creates a new GIPParser.
   public init() {}
 
   // MARK: - InputParser
 
+  /// Sends the GIP init sequence to the controller.
   public func performHandshake(handle: USBDeviceHandle?) async throws {
     guard let handle else {
       throw GIPError.handshakeFailed("No USB handle provided for GIP handshake")
@@ -78,6 +80,7 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     _ = try handle.interruptTransfer(endpoint: outEndpoint, data: packet, timeout: 2000)
   }
 
+  /// Parses one GIP packet and returns zero or more controller events.
   public func parse(data: Data) throws -> [ControllerEvent] {
     guard data.count >= 4 else {
       throw GIPError.malformedPacket("Packet too short: \(data.count) bytes")
@@ -99,17 +102,14 @@ public final class GIPParser: InputParser, @unchecked Sendable {
 
     guard data.count >= headerSize + payloadLength else {
       throw GIPError.malformedPacket(
-        "Packet shorter than declared payload: "
-          + "\(data.count) < \(headerSize + payloadLength)"
+        "Packet shorter than declared payload: " + "\(data.count) < \(headerSize + payloadLength)"
       )
     }
     let payload = data.dropFirst(headerSize).prefix(payloadLength)
 
     switch data[0] {
-    case GIPCommand.input:
-      return parseMainInput(payload: Data(payload))
-    case GIPCommand.virtualKey:
-      return parseGuideButton(payload: Data(payload))
+    case GIPCommand.input: return parseMainInput(payload: Data(payload))
+    case GIPCommand.virtualKey: return parseGuideButton(payload: Data(payload))
     case GIPCommand.authenticate:
       if let handle {
         do {
@@ -118,13 +118,10 @@ public final class GIPParser: InputParser, @unchecked Sendable {
             handle: handle,
             sequencer: &sequencer
           )
-        } catch {
-          print("[GIPParser] Auth error: \(error)")
-        }
+        } catch { print("[GIPParser] Auth error: \(error)") }
       }
       return []
-    default:
-      return []
+    default: return []
     }
   }
 
@@ -264,6 +261,7 @@ public final class GIPParser: InputParser, @unchecked Sendable {
   }
 
   /// Parse extended button byte present in G7 SE 32-byte INPUT payload at offset 14.
+  ///
   /// Confirmed: bit 0x01 = Share.
   private func parseExtendedButtons(extByte: UInt8) -> [ControllerEvent] {
     diffButtons(prev: prevExtButtons, curr: extByte, mapping: [(1, .share)])

@@ -33,7 +33,7 @@ struct DeviceDetailView: View {
           HStack(spacing: 8) {
             vidPidChip(label: "VID", value: String(format: "0x%04X", device.vendorID))
             vidPidChip(label: "PID", value: String(format: "0x%04X", device.productID))
-            parserBadge
+            ProtocolBadge(parser: device.parser)
           }
         }
         Spacer()
@@ -79,15 +79,6 @@ struct DeviceDetailView: View {
     Text("\(label): \(value)").font(.system(.caption, design: .monospaced)).padding(.horizontal, 6)
       .padding(.vertical, 2).background(Color.secondary.opacity(0.12)).foregroundStyle(.secondary)
       .clipShape(RoundedRectangle(cornerRadius: 4))
-  }
-
-  private var parserBadge: some View {
-    HStack(spacing: 3) {
-      Image(systemName: protocolIcon(for: device.parser)).imageScale(.small)
-      Text(device.parser)
-    }.font(.caption).fontWeight(.medium).padding(.horizontal, 8).padding(.vertical, 3).background(
-      protocolColor(for: device.parser).opacity(0.15)
-    ).foregroundStyle(protocolColor(for: device.parser)).clipShape(Capsule())
   }
 
   private var infoTab: some View {

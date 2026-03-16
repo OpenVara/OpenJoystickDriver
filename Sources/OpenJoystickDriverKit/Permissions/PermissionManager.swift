@@ -25,21 +25,23 @@ public actor PermissionManager {
     }
   }
 
-  /// Current state of the Input Monitoring permission. Updated by ``startPolling()`` and ``requestAccess()``.
+  /// Current state of the Input Monitoring permission.
+  ///
+  /// Updated by ``startPolling()`` and ``requestAccess()``.
   public private(set) var inputMonitoringState: AccessState = .unknown
   private var pollingTask: Task<Void, Never>?
 
+  /// Creates a new PermissionManager.
   public init() {}
 
-  /// Check current Input Monitoring permission state
-  /// (does not prompt).
+  /// Checks current Input Monitoring permission state without prompting.
   public func checkAccess() -> AccessState {
     let result = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent)
     return mapAccess(result)
   }
 
-  /// Request Input Monitoring permission
-  /// (shows system dialog if needed).
+  /// Requests Input Monitoring permission, showing the system dialog if needed.
+  ///
   /// Returns updated state.
   @discardableResult public func requestAccess() -> AccessState {
     IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)

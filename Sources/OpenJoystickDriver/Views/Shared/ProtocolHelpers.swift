@@ -15,3 +15,16 @@ func protocolColor(for parser: String) -> Color {
   default: return .secondary
   }
 }
+
+struct ProtocolBadge: View {
+  let parser: String
+
+  var body: some View {
+    HStack(spacing: 3) {
+      Image(systemName: protocolIcon(for: parser)).imageScale(.small)
+      Text(parser)
+    }.font(.caption).fontWeight(.medium).padding(.horizontal, 8).padding(.vertical, 3).background(
+      protocolColor(for: parser).opacity(0.15)
+    ).foregroundStyle(protocolColor(for: parser)).clipShape(Capsule())
+  }
+}

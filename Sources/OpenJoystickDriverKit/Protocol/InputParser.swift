@@ -12,6 +12,7 @@ public protocol InputParser: AnyObject, Sendable {
   /// For example, GIP controllers require a power-on packet. Protocols that
   /// have no handshake (DS4, GenericHID) leave this as a no-op.
   /// - Parameter handle: The USB device handle. Pass `nil` for HID devices.
+  /// - Throws: A protocol-specific error if the handshake fails.
   func performHandshake(handle: USBDeviceHandle?) async throws
 
   /// Reads one raw data packet and returns zero or more controller events.
@@ -28,4 +29,7 @@ public protocol InputParser: AnyObject, Sendable {
   func keepAlive(handle: USBDeviceHandle?) throws
 }
 
-extension InputParser { public func keepAlive(handle: USBDeviceHandle?) throws {} }
+extension InputParser {
+  /// Default no-op keep-alive implementation.
+  public func keepAlive(handle: USBDeviceHandle?) throws {}
+}

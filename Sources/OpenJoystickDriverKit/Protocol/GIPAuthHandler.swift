@@ -16,12 +16,8 @@ final class GIPAuthHandler: @unchecked Sendable {
 
   /// Maps device auth states to the host response state we should send.
   private static let responseMap: [GIPAuthState: GIPAuthState] = [
-    .devInit: .hostInit,
-    .devCertificate: .hostResponse1,
-    .devIntermediate: .hostResponse2,
-    .devData1: .hostResponse3,
-    .devData2: .hostResponse4,
-    .devFinal: .hostResponse5,
+    .devInit: .hostInit, .devCertificate: .hostResponse1, .devIntermediate: .hostResponse2,
+    .devData1: .hostResponse3, .devData2: .hostResponse4, .devFinal: .hostResponse5,
     .devComplete: .hostComplete,
   ]
 
@@ -29,11 +25,9 @@ final class GIPAuthHandler: @unchecked Sendable {
   ///
   /// Parses the auth sub-header, determines the appropriate response,
   /// and sends it. Updates `deviceState` on key transitions.
-  func handleAuthMessage(
-    payload: Data,
-    handle: USBDeviceHandle,
-    sequencer: inout GIPSequencer
-  ) throws {
+  func handleAuthMessage(payload: Data, handle: USBDeviceHandle, sequencer: inout GIPSequencer)
+    throws
+  {
     guard payload.count >= 6 else {
       print("[GIPAuth] Auth payload too short: \(payload.count) bytes")
       return
@@ -75,11 +69,7 @@ final class GIPAuthHandler: @unchecked Sendable {
     }
 
     let responsePayload = buildAuthResponse(state: responseState)
-    try sendAuthPacket(
-      payload: responsePayload,
-      handle: handle,
-      sequencer: &sequencer
-    )
+    try sendAuthPacket(payload: responsePayload, handle: handle, sequencer: &sequencer)
     print("[GIPAuth] Sent \(responseState)")
   }
 
@@ -89,11 +79,7 @@ final class GIPAuthHandler: @unchecked Sendable {
   func buildAuthResponse(state: GIPAuthState) -> [UInt8] {
     guard let size = state.expectedPayloadSize else { return [] }
     var response: [UInt8] = [
-      GIPAuthType.host,
-      GIPAuthType.version,
-      state.rawValue,
-      0x00,
-      UInt8((size >> 8) & 0xFF),
+      GIPAuthType.host, GIPAuthType.version, state.rawValue, 0x00, UInt8((size >> 8) & 0xFF),
       UInt8(size & 0xFF),
     ]
     response += [UInt8](repeating: 0, count: size)

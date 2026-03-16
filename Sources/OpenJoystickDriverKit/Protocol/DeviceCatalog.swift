@@ -11,7 +11,7 @@ struct DeviceCatalog: Sendable {
       let decoded = try? JSONDecoder().decode(DeviceList.self, from: data)
     {
       var map: [String: String] = [:]
-      for entry in decoded.devices { map["\(entry.vendor_id):\(entry.product_id)"] = entry.parser }
+      for entry in decoded.devices { map["\(entry.vendorId):\(entry.productId)"] = entry.parser }
       entries = map
     } else {
       print("[DeviceCatalog] Could not load devices.json - using built-in fallbacks")
@@ -33,9 +33,15 @@ struct DeviceCatalog: Sendable {
   // MARK: - Internal JSON shape
 
   private struct DeviceEntry: Decodable {
-    let vendor_id: Int
-    let product_id: Int
+    let vendorId: Int
+    let productId: Int
     let parser: String
+
+    enum CodingKeys: String, CodingKey {
+      case vendorId = "vendor_id"
+      case productId = "product_id"
+      case parser
+    }
   }
 
   private struct DeviceList: Decodable { let devices: [DeviceEntry] }

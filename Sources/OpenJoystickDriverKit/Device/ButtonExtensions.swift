@@ -1,5 +1,6 @@
 extension Button {
   /// A short, human-readable label for the button (e.g. `"Left Bumper (LB)"`).
+  ///
   /// Used in the mapping editor and profile display.
   public var displayName: String {
     switch self {

@@ -5,6 +5,7 @@ import Foundation
 public final class ParserRegistry: Sendable {
   private let catalog = DeviceCatalog()
 
+  /// Creates a new ParserRegistry.
   public init() {}
 
   /// Returns parser name for given device identifier.

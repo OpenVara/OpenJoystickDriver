@@ -10,12 +10,17 @@ public struct DeviceIdentifier: Hashable, Sendable {
   public let vendorID: UInt16
   /// Product ID (PID) - identifies which model of controller (e.g. 0x1010 = G7 SE).
   public let productID: UInt16
-  /// USB serial number reported by the controller. Nil if the controller does not provide one.
+  /// USB serial number reported by the controller.
+  ///
+  /// Nil if the controller does not provide one.
   public let serialNumber: String?
-  /// USB location encoded as `(bus << 16 | address)`. Stable within a single session
-  /// but may change after reboot or replug. Used as a fallback when serial is unavailable.
+  /// USB location encoded as `(bus << 16 | address)`.
+  ///
+  /// Stable within a single session but may change after reboot or replug.
+  /// Used as a fallback when serial is unavailable.
   public let locationID: UInt32?
 
+  /// Creates a new DeviceIdentifier.
   public init(
     vendorID: UInt16,
     productID: UInt16,
@@ -29,20 +34,23 @@ public struct DeviceIdentifier: Hashable, Sendable {
   }
 
   /// Returns true when both identifiers point to the same physical device.
+  ///
   /// Requires matching vendor ID, product ID, and a non-nil serial number.
   public func exactlyMatches(_ other: Self) -> Bool {
     vendorID == other.vendorID && productID == other.productID && serialNumber != nil
       && serialNumber == other.serialNumber
   }
 
-  /// Returns true when both identifiers have the same vendor and product ID,
-  /// regardless of serial number or location. Used for model-level profile matching.
+  /// Returns true when both identifiers have the same vendor and product ID.
+  ///
+  /// Regardless of serial number or location. Used for model-level profile matching.
   public func modelMatches(_ other: Self) -> Bool {
     vendorID == other.vendorID && productID == other.productID
   }
 }
 
 extension DeviceIdentifier: CustomStringConvertible {
+  /// Returns a human-readable representation of the device identifier.
   public var description: String {
     let vid = String(format: "0x%04X", vendorID)
     let pid = String(format: "0x%04X", productID)

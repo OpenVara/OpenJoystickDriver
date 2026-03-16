@@ -18,9 +18,7 @@ import Testing
     #expect(response[4] == 0x00)
     #expect(response[5] == 0x28)
     // Payload is all zeros
-    for i in 6..<response.count {
-      #expect(response[i] == 0x00)
-    }
+    for i in 6..<response.count { #expect(response[i] == 0x00) }
   }
 
   @Test func test_buildAuthResponse_hostResponse2_large_payload() {
@@ -37,13 +35,8 @@ import Testing
   @Test func test_buildAuthResponse_all_host_states_have_correct_sizes() {
     let handler = GIPAuthHandler()
     let expected: [(GIPAuthState, Int)] = [
-      (.hostInit, 40),
-      (.hostResponse1, 176),
-      (.hostResponse2, 772),
-      (.hostResponse3, 132),
-      (.hostResponse4, 68),
-      (.hostResponse5, 36),
-      (.hostComplete, 68),
+      (.hostInit, 40), (.hostResponse1, 176), (.hostResponse2, 772), (.hostResponse3, 132),
+      (.hostResponse4, 68), (.hostResponse5, 36), (.hostComplete, 68),
     ]
     for (state, size) in expected {
       let response = handler.buildAuthResponse(state: state)

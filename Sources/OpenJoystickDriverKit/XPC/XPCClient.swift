@@ -24,12 +24,16 @@ public enum XPCError: Error, Sendable {
 /// If the daemon is not running, ``connect()`` will succeed but subsequent
 /// method calls will throw ``XPCError/notConnected`` once the connection is
 /// invalidated by the system.
+///
+/// - Important: Thread-safe only when accessed from a single isolation domain (e.g. `@MainActor`).
 public final class XPCClient: @unchecked Sendable {
   private var connection: NSXPCConnection?
 
+  /// Creates a new XPCClient.
   public init() {}
 
   /// Opens a connection to the daemon's Mach service.
+  ///
   /// Safe to call multiple times - replaces any existing connection.
   public func connect() {
     let conn = NSXPCConnection(machServiceName: xpcServiceName)
@@ -49,12 +53,15 @@ public final class XPCClient: @unchecked Sendable {
     connection = nil
   }
 
-  /// True while a connection exists. Does not guarantee the daemon is still alive.
+  /// True while a connection exists.
+  ///
+  /// Does not guarantee the daemon is still alive.
   public var isConnected: Bool { connection != nil }
 
   // MARK: - XPC Methods
 
   /// Returns device descriptions from daemon.
+  ///
   /// Throws XPCError.notConnected if daemon is not running.
   public func listDevices() async throws -> [String] {
     try await xpcCall { service, reply in service.listDevices(reply: reply) }
@@ -78,7 +85,9 @@ public final class XPCClient: @unchecked Sendable {
     return profiles
   }
 
-  /// Gets the active profile for a specific device. Returns nil if no profile is saved.
+  /// Gets the active profile for a specific device.
+  ///
+  /// Returns nil if no profile is saved.
   public func getProfile(vendorID: UInt16, productID: UInt16) async throws -> Profile? {
     let data: Data = try await xpcCall { service, reply in
       service.getProfile(vendorID: Int(vendorID), productID: Int(productID), reply: reply)
@@ -90,7 +99,9 @@ public final class XPCClient: @unchecked Sendable {
     return profile
   }
 
-  /// Saves a profile to disk on the daemon side. Throws on failure.
+  /// Saves a profile to disk on the daemon side.
+  ///
+  /// Throws on failure.
   public func saveProfile(_ profile: Profile) async throws {
     guard let data = try? JSONEncoder().encode(profile) else { throw XPCError.invalidResponse }
     let success: Bool = try await xpcCall { service, reply in
@@ -118,7 +129,9 @@ public final class XPCClient: @unchecked Sendable {
     return profiles
   }
 
-  /// Adds a new profile to the device library. Returns the saved profile with its assigned ID.
+  /// Adds a new profile to the device library.
+  ///
+  /// Returns the saved profile with its assigned ID.
   public func addProfile(_ profile: Profile) async throws -> Profile {
     guard let data = try? JSONEncoder().encode(profile) else { throw XPCError.invalidResponse }
     let responseData: Data? = try await xpcCall { service, reply in
@@ -134,7 +147,9 @@ public final class XPCClient: @unchecked Sendable {
     return saved
   }
 
-  /// Removes a profile from the device library. Throws if it is the last remaining profile.
+  /// Removes a profile from the device library.
+  ///
+  /// Throws if it is the last remaining profile.
   public func deleteProfile(id: UUID, vendorID: UInt16, productID: UInt16) async throws {
     let success: Bool = try await xpcCall { service, reply in
       service.deleteProfile(
@@ -147,7 +162,9 @@ public final class XPCClient: @unchecked Sendable {
     if !success { throw XPCError.invalidResponse }
   }
 
-  /// Makes a profile the active one for its device. The previous active profile is deactivated.
+  /// Makes a profile the active one for its device.
+  ///
+  /// The previous active profile is deactivated.
   public func setActiveProfile(id: UUID, vendorID: UInt16, productID: UInt16) async throws {
     let success: Bool = try await xpcCall { service, reply in
       service.setActiveProfile(
@@ -161,6 +178,7 @@ public final class XPCClient: @unchecked Sendable {
   }
 
   /// Gets the latest input snapshot (buttons, sticks, triggers) for a device.
+  ///
   /// Returns nil if no input has been received from the controller yet.
   public func deviceInputState(vendorID: UInt16, productID: UInt16) async throws
     -> DeviceInputState?
@@ -172,7 +190,9 @@ public final class XPCClient: @unchecked Sendable {
     return try? JSONDecoder().decode(DeviceInputState.self, from: data)
   }
 
-  /// Gets recent raw USB packets exchanged with a device. Useful for debugging protocols.
+  /// Gets recent raw USB packets exchanged with a device.
+  ///
+  /// Useful for debugging protocols.
   public func packetLog(vendorID: UInt16, productID: UInt16) async throws -> [PacketLogEntry] {
     let data: Data = try await xpcCall { service, reply in
       service.getPacketLog(vendorID: Int(vendorID), productID: Int(productID), reply: reply)
@@ -184,6 +204,7 @@ public final class XPCClient: @unchecked Sendable {
   }
 
   /// Enables or disables keyboard/mouse output from button mappings.
+  ///
   /// Pass true to suppress output during developer packet capture.
   public func setSuppressOutput(_ suppress: Bool) async throws {
     let _: Bool = try await xpcCall { service, reply in

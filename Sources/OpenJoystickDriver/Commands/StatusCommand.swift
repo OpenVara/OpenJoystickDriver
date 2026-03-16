@@ -43,7 +43,15 @@ struct StatusCommand {
       print("Devices: (none connected)")
     } else {
       print("Devices" + " (\(payload.connectedDevices.count)):")
-      for dev in payload.connectedDevices { print("  \(dev)") }
+      for dev in payload.connectedDevices {
+        let sn = dev.serialNumber ?? "none"
+        let vid = dev.vendorID
+        let pid = dev.productID
+        print(
+          "  \(dev.name)" + " (VID:\(vid) PID:\(pid)" + " \(dev.parser) [\(dev.connection)]"
+            + " SN:\(sn))"
+        )
+      }
     }
   }
 

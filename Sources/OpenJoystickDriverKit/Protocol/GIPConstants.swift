@@ -14,9 +14,7 @@ public enum GIPCommand {
 }
 
 /// GIP packet option flags.
-public enum GIPOption {
-  static let `internal`: UInt8 = 0x20
-}
+public enum GIPOption { static let `internal`: UInt8 = 0x20 }
 
 /// Device power states from the xboxgip.sys state machine.
 public enum GIPDeviceState: UInt8, Sendable, CustomStringConvertible {
@@ -29,6 +27,7 @@ public enum GIPDeviceState: UInt8, Sendable, CustomStringConvertible {
   case enroll = 0x06
   case reset = 0x07
 
+  /// Returns a short uppercase label for the device state.
   public var description: String {
     switch self {
     case .start: "START"
@@ -82,6 +81,7 @@ public enum GIPAuthState: UInt8, Sendable, CustomStringConvertible {
   /// Whether this state represents a device-to-host message.
   public var isDeviceToHost: Bool { rawValue < 0x20 }
 
+  /// Returns a short uppercase label for the auth state.
   public var description: String {
     switch self {
     case .devInit: "DEV_INIT"
@@ -107,7 +107,7 @@ public enum GIPAuthState: UInt8, Sendable, CustomStringConvertible {
 
 /// Auth message direction markers.
 public enum GIPAuthType {
-  static let host: UInt8 = 0x41      // 'A'
-  static let device: UInt8 = 0x42    // 'B'
+  static let host: UInt8 = 0x41  // 'A'
+  static let device: UInt8 = 0x42  // 'B'
   static let version: UInt8 = 0x01
 }
