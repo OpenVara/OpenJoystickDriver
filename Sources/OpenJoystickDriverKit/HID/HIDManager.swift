@@ -10,7 +10,11 @@ public final class HIDManager: Sendable {
   private let stream: HIDDeviceStream
 
   /// Creates a new HIDManager.
-  public init() { stream = HIDDeviceStream() }
+  ///
+  /// - Parameter virtualProfile: Profile of the virtual device to exclude from detection.
+  public init(virtualProfile: VirtualDeviceProfile = .default) {
+    stream = HIDDeviceStream(virtualProfile: virtualProfile)
+  }
 
   /// Returns a live stream of HID device events (connect, disconnect, input report).
   public func deviceEvents() -> AsyncStream<HIDDeviceEvent> { stream.deviceEvents() }

@@ -8,7 +8,8 @@
 			"name": "GameSir-G7 SE Controller for Xbox",
 			"short_name": "G7SE",
 			"parser": "GIP",
-			"usb_class": 255
+			"usb_class": 255,
+			"virtual_profile": "xboxOneS"
 		},
 		{
 			"vendor_id": 1356,
@@ -16,7 +17,8 @@
 			"name": "DualShock 4 v1",
 			"short_name": "DS4v1",
 			"parser": "DS4",
-			"usb_class": 3
+			"usb_class": 3,
+			"virtual_profile": "xboxOneS"
 		},
 		{
 			"vendor_id": 1356,
@@ -24,7 +26,8 @@
 			"name": "DualShock 4 v2",
 			"short_name": "DS4v2",
 			"parser": "DS4",
-			"usb_class": 3
+			"usb_class": 3,
+			"virtual_profile": "xboxOneS"
 		}
 	]
 }

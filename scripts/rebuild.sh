@@ -195,7 +195,7 @@ ioreg -r -c IOUserHIDDevice 2>/dev/null | head -5 || echo "(not found)"
 
 echo ""
 echo "--- hidutil ---"
-hidutil list 2>/dev/null | grep -i "openjoystick\|1234.*0001" || echo "(not found)"
+hidutil list 2>/dev/null | grep -i "openjoystick\|045E.*02EA\|Xbox" || echo "(not found)"
 
 echo ""
 echo "--- Daemon log (fresh) ---"

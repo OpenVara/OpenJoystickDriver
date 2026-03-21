@@ -78,6 +78,8 @@ echo "  Build identity: $DEXT_BUILD_IDENTITY"
 echo "  Build profile:  $DEXT_BUILD_PROFILE"
 echo "  Final identity: $CODESIGN_IDENTITY"
 echo "  Team: $DEVELOPMENT_TEAM"
+# Always clean build — stale .iig stubs cause vtable mismatches that
+# produce kIOReturnNotPermitted (0xe00002eb) on setReport at runtime.
 xcodebuild \
     -project "$DEXT_PROJECT" \
     -scheme "$DEXT_SCHEME" \
@@ -87,7 +89,7 @@ xcodebuild \
     DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
     PROVISIONING_PROFILE_SPECIFIER="$DEXT_BUILD_PROFILE" \
     CODE_SIGN_STYLE=Manual \
-    build
+    clean build
 
 if [[ ! -d "$DEXT_PRODUCT" ]]; then
     echo "ERROR: .dext not found at expected path: $DEXT_PRODUCT"

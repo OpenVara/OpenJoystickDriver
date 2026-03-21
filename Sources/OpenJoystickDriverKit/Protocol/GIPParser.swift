@@ -40,7 +40,6 @@ public final class GIPParser: InputParser, @unchecked Sendable {
 
   private var prevButtons0: UInt8 = 0
   private var prevButtons1: UInt8 = 0
-  private var prevExtButtons: UInt8 = 0
   private var prevLT: UInt16 = 0
   private var prevRT: UInt16 = 0
   private var prevLSX: Int16 = 0
@@ -125,6 +124,30 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     }
   }
 
+  /// Sends a GIP rumble command (CMD=0x09) to the physical controller.
+  ///
+  /// - Parameters:
+  ///   - handle: Active USB device handle for the physical controller.
+  ///   - left: Left main motor intensity (0–255).
+  ///   - right: Right main motor intensity (0–255).
+  ///   - ltMotor: Left trigger motor intensity (0–255).
+  ///   - rtMotor: Right trigger motor intensity (0–255).
+  public func sendRumble(
+    handle: USBDeviceHandle,
+    left: UInt8,
+    right: UInt8,
+    ltMotor: UInt8,
+    rtMotor: UInt8
+  ) throws {
+    let seq = sequencer.next(for: GIPCommand.rumble)
+    let activation: UInt8 = 0x0F  // all four motors
+    let packet: [UInt8] = [
+      GIPCommand.rumble, GIPOption.internal, seq, 0x09, 0x00, activation, ltMotor, rtMotor, left,
+      right, 0x20, 0x00, 0x00,  // duration=32, delay=0, repeat=0
+    ]
+    _ = try handle.interruptTransfer(endpoint: outEndpoint, data: packet, timeout: 2000)
+  }
+
   // MARK: - Private
 
   /// Send full 3-packet GIP init sequence:
@@ -180,11 +203,8 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     events += parseSticksEvents(lsx: lsx, lsy: lsy, rsx: rsx, rsy: rsy)
     events += parseTriggers(lt: lt, rt: rt)
 
-    if bytes.count >= 15 { events += parseExtendedButtons(extByte: bytes[14]) }
-
     prevButtons0 = buttons0
     prevButtons1 = buttons1
-    prevExtButtons = bytes.count >= 15 ? bytes[14] : prevExtButtons
     prevLT = lt
     prevRT = rt
 
@@ -258,13 +278,6 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     guard let first = payload.first else { return [] }
     if (first & gipGuideButtonMask) != 0 { return [.buttonPressed(.guide)] }
     return [.buttonReleased(.guide)]
-  }
-
-  /// Parse extended button byte present in G7 SE 32-byte INPUT payload at offset 14.
-  ///
-  /// Confirmed: bit 0x01 = Share.
-  private func parseExtendedButtons(extByte: UInt8) -> [ControllerEvent] {
-    diffButtons(prev: prevExtButtons, curr: extByte, mapping: [(1, .share)])
   }
 
   private func diffButtons(prev: UInt8, curr: UInt8, mapping: [(UInt8, Button)])

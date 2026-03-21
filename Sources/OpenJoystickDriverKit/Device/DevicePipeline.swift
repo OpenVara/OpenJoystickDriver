@@ -122,6 +122,16 @@ actor DevicePipeline {
     }
   }
 
+  // MARK: - Rumble
+
+  func sendRumble(left: UInt8, right: UInt8, lt: UInt8, rt: UInt8) {
+    guard let handle = usbHandle else { return }
+    guard let gipParser = parser as? GIPParser else { return }
+    do {
+      try gipParser.sendRumble(handle: handle, left: left, right: right, ltMotor: lt, rtMotor: rt)
+    } catch { print("[DevicePipeline] Rumble send failed for \(identifier): \(error)") }
+  }
+
   // MARK: - Private USB pipeline
 
   private func startUSBPipeline(vendorID: UInt16, productID: UInt16) async {

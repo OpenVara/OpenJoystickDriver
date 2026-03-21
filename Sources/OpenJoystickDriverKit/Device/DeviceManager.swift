@@ -24,11 +24,15 @@ public actor DeviceManager {
   private var detectionTasks: [Task<Void, Never>] = []
 
   /// Creates a manager that sends all output to `dispatcher`.
-  public init(dispatcher: any OutputDispatcher) {
+  ///
+  /// - Parameters:
+  ///   - dispatcher: Output dispatcher for sending HID reports.
+  ///   - virtualProfile: Virtual device profile for self-exclusion filtering.
+  public init(dispatcher: any OutputDispatcher, virtualProfile: VirtualDeviceProfile = .default) {
     self.dispatcher = dispatcher
     self.parserRegistry = ParserRegistry()
     self.permissionManager = PermissionManager()
-    self.hidManager = HIDManager()
+    self.hidManager = HIDManager(virtualProfile: virtualProfile)
   }
 
   /// Start device detection and input processing.

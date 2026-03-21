@@ -5,7 +5,7 @@ import IOKit.hid
 /// Sends HID reports to the DriverKit virtual gamepad via `IOHIDDeviceSetReport`.
 ///
 /// The daemon finds the virtual device by VID/PID through IOHIDManager,
-/// then sends 13-byte output reports. The dext's `setReport` override
+/// then sends 15-byte output reports. The dext's `setReport` override
 /// relays them as input reports via `handleReport`.
 ///
 /// If ``connect()`` returns `false`, ``dispatch(events:from:)`` auto-retries
@@ -33,8 +33,8 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   // MARK: - HID device connection
 
-  private static let virtualVID: Int = 0x1234
-  private static let virtualPID: Int = 0x0001
+  /// Identity of the virtual gamepad presented to the OS.
+  private let profile: VirtualDeviceProfile
   private var hidDevice: IOHIDDevice?
   private var hidManager: IOHIDManager?
   private let connectionLock = NSLock()
@@ -42,19 +42,27 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   // MARK: - Report state
 
   private let stateLock = NSLock()
-  private var buttons: UInt16 = 0
+  private var buttons: UInt32 = 0
   private var leftStickX: Int16 = 0
   private var leftStickY: Int16 = 0
   private var rightStickX: Int16 = 0
   private var rightStickY: Int16 = 0
-  private var leftTrigger: UInt8 = 0
-  private var rightTrigger: UInt8 = 0
+  private var leftTrigger: Int16 = 0
+  private var rightTrigger: Int16 = 0
   private var hat: GamepadHIDDescriptor.Hat = .neutral
 
   // MARK: - Init / deinit
 
   /// Creates a new DextOutputDispatcher.
-  public init(profileStore: ProfileStore = ProfileStore()) { self.profileStore = profileStore }
+  ///
+  /// - Parameters:
+  ///   - profile: Virtual device identity used for HID device matching.
+  ///   - profileStore: User profile store for deadzone/sensitivity settings.
+  public init(profile: VirtualDeviceProfile = .default, profileStore: ProfileStore = ProfileStore())
+  {
+    self.profile = profile
+    self.profileStore = profileStore
+  }
 
   deinit { closeDevice() }
 
@@ -70,7 +78,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       hidManager = mgr
     }
     print(
-      "[DextOutputDispatcher] Connected to virtual gamepad (VID:\(Self.virtualVID) PID:\(Self.virtualPID))"
+      "[DextOutputDispatcher] Connected to virtual gamepad (VID:\(profile.vendorID) PID:\(profile.productID))"
     )
     return true
   }
@@ -89,7 +97,8 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   private func findDevice() -> (IOHIDDevice, IOHIDManager)? {
     let matching: [String: Any] = [
-      kIOHIDVendorIDKey as String: Self.virtualVID, kIOHIDProductIDKey as String: Self.virtualPID,
+      kIOHIDVendorIDKey as String: profile.vendorID,
+      kIOHIDProductIDKey as String: profile.productID,
     ]
     let mgr = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
     IOHIDManagerSetDeviceMatching(mgr, matching as CFDictionary)
@@ -187,10 +196,13 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     case .rightStickChanged(let x, let y):
       rightStickX = axisValue(x, deadzone: deadzone)
       rightStickY = axisValue(y, deadzone: deadzone)
-    case .leftTriggerChanged(let v): leftTrigger = UInt8(clamping: Int(v.clamped(to: 0...1) * 255))
-    case .rightTriggerChanged(let v):
-      rightTrigger = UInt8(clamping: Int(v.clamped(to: 0...1) * 255))
-    case .dpadChanged(let dir): hat = hatValue(for: dir)
+    case .leftTriggerChanged(let v): leftTrigger = Int16(v.clamped(to: 0...1) * 32_767)
+    case .rightTriggerChanged(let v): rightTrigger = Int16(v.clamped(to: 0...1) * 32_767)
+    case .dpadChanged(let dir):
+      hat = hatValue(for: dir)
+      // Dual encode: set D-pad button bits 11–14 alongside the hat switch.
+      let dpadMask: UInt32 = 0xF << 11  // bits 11-14
+      buttons = (buttons & ~dpadMask) | GamepadHIDDescriptor.dpadButtonBits(for: hat)
     }
   }
 
@@ -206,21 +218,25 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     let lsyB = leftStickY.littleEndianBytes
     r[4] = lsyB.0
     r[5] = lsyB.1
+    let ltB = leftTrigger.littleEndianBytes
+    r[6] = ltB.0
+    r[7] = ltB.1
     let rsxB = rightStickX.littleEndianBytes
-    r[6] = rsxB.0
-    r[7] = rsxB.1
+    r[8] = rsxB.0
+    r[9] = rsxB.1
     let rsyB = rightStickY.littleEndianBytes
-    r[8] = rsyB.0
-    r[9] = rsyB.1
-    r[10] = leftTrigger
-    r[11] = rightTrigger
-    r[12] = hat.rawValue & 0x0F
+    r[10] = rsyB.0
+    r[11] = rsyB.1
+    let rtB = rightTrigger.littleEndianBytes
+    r[12] = rtB.0
+    r[13] = rtB.1
+    r[14] = hat.rawValue & 0x0F
     return r
   }
 
-  // MARK: - Button mapping
+  // MARK: - Button mapping (XInputHID order)
 
-  private func buttonBit(for button: Button) -> UInt16? {
+  private func buttonBit(for button: Button) -> UInt32? {
     switch button {
     case .a, .cross: return 0
     case .b, .circle: return 1
@@ -233,14 +249,15 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     case .start, .options: return 8
     case .back, .share: return 9
     case .guide, .ps: return 10
-    case .touchpad: return 11
-    case .genericButton1: return 12
-    case .genericButton2: return 13
-    case .genericButton3: return 14
-    case .genericButton4: return 15
+    case .dpadUp: return 11
+    case .dpadDown: return 12
+    case .dpadLeft: return 13
+    case .dpadRight: return 14
+    case .l2Digital, .r2Digital: return nil  // triggers are analog only in XInputHID
+    case .touchpad: return nil
+    case .genericButton1, .genericButton2: return nil
+    case .genericButton3, .genericButton4: return nil
     case .genericButton5, .genericButton6, .genericButton7, .genericButton8: return nil
-    case .l2Digital, .r2Digital: return nil
-    case .dpadUp, .dpadDown, .dpadLeft, .dpadRight: return nil
     }
   }
 

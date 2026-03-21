@@ -11,8 +11,16 @@ public final class HIDDeviceStream: @unchecked Sendable {
   private let manager: IOHIDManager
   private var continuation: AsyncStream<HIDDeviceEvent>.Continuation?
 
+  /// VID/PID of the virtual gamepad, used to filter it from the input stream.
+  private let virtualVID: UInt16
+  private let virtualPID: UInt16
+
   /// Creates a new stream that matches HID gamepad devices.
-  public init() {
+  ///
+  /// - Parameter virtualProfile: The virtual device profile to exclude from detection.
+  public init(virtualProfile: VirtualDeviceProfile = .default) {
+    virtualVID = UInt16(virtualProfile.vendorID)
+    virtualPID = UInt16(virtualProfile.productID)
     manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
     let matching: [String: Any] = [
       kIOHIDDeviceUsagePageKey: kHIDPage_GenericDesktop, kIOHIDDeviceUsageKey: kHIDUsage_GD_GamePad,
@@ -66,8 +74,12 @@ public final class HIDDeviceStream: @unchecked Sendable {
     let vid = deviceProperty(device, kIOHIDVendorIDKey)
     let pid = deviceProperty(device, kIOHIDProductIDKey)
 
-    // Skip our own virtual gamepad to prevent a feedback loop.
-    if UInt16(truncatingIfNeeded: vid) == 0x1234 && UInt16(truncatingIfNeeded: pid) == 0x0001 {
+    // Skip our virtual gamepad to prevent a feedback loop.
+    // Distinguish from real controllers by checking transport = "Virtual".
+    let transport = IOHIDDeviceGetProperty(device, kIOHIDTransportKey as CFString) as? String ?? ""
+    if UInt16(truncatingIfNeeded: vid) == virtualVID
+      && UInt16(truncatingIfNeeded: pid) == virtualPID && transport == "Virtual"
+    {
       return
     }
 
