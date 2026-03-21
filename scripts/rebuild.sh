@@ -1,26 +1,39 @@
 #!/usr/bin/env bash
-# Full rebuild: app + dext, then verify bundle IDs.
+# Full rebuild: nuke, build, deploy, activate, verify.
+# The only script a developer runs during iteration.
+#
 # Use OJD_ENV=release for Developer ID signing + notarization.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OJD_ENV="${OJD_ENV:-dev}"
+source "$SCRIPT_DIR/lib.sh"
 
 # zsh has a 'log' builtin that shadows /usr/bin/log — always use full path
 LOG=/usr/bin/log
+DEXT_PLIST="$SCRIPT_DIR/../DriverKitExtension/Info.plist"
 
-echo "=== Building app ==="
+echo "=== Step 1: Nuke all stale state ==="
+"$SCRIPT_DIR/nuke.sh"
+
+echo ""
+echo "=== Step 2: Bump CFBundleVersion ==="
+OLD_VERSION=$(plutil -extract CFBundleVersion raw "$DEXT_PLIST" 2>/dev/null || echo "0")
+NEW_BUILD_VERSION=$(( OLD_VERSION + 1 ))
+plutil -replace CFBundleVersion -string "$NEW_BUILD_VERSION" "$DEXT_PLIST"
+echo "  Bumped CFBundleVersion: $OLD_VERSION → $NEW_BUILD_VERSION"
+
+echo ""
+echo "=== Step 3: Build app ==="
 "$SCRIPT_DIR/build-dev.sh"
 
 echo ""
-echo "=== Building dext ==="
+echo "=== Step 4: Build dext ==="
 "$SCRIPT_DIR/build-dext.sh"
 
 echo ""
-echo "=== Verifying bundle IDs ==="
+echo "=== Step 5: Verify bundle IDs ==="
 APP_ID=$(plutil -extract CFBundleIdentifier raw \
   .build/debug/OpenJoystickDriver.app/Contents/Info.plist 2>/dev/null || echo "MISSING")
-# Dext is now named by bundle ID in Library/SystemExtensions/
 DEXT_ID=$(plutil -extract CFBundleIdentifier raw \
   ".build/debug/OpenJoystickDriver.app/Contents/Library/SystemExtensions/${APP_ID}.VirtualHIDDevice.dext/Info.plist" 2>/dev/null || echo "MISSING")
 
@@ -34,9 +47,6 @@ else
   exit 1
 fi
 
-# ---------------------------------------------------------------------------
-# Notarize for release builds (must happen after install to /Applications)
-# ---------------------------------------------------------------------------
 if [[ "$OJD_ENV" == "release" ]]; then
   echo ""
   echo "=== Notarizing ==="
@@ -44,31 +54,43 @@ if [[ "$OJD_ENV" == "release" ]]; then
 fi
 
 echo ""
-echo "=== Pre-launch cleanup ==="
-killall OpenJoystickDriver 2>/dev/null || true
-killall OpenJoystickVirtualHID 2>/dev/null || true
+echo "=== Step 6: Launch app ==="
+: > /tmp/com.openjoystickdriver.daemon.out 2>/dev/null || true
+: > /tmp/com.openjoystickdriver.daemon.err 2>/dev/null || true
 
-# Warn about non-executable sysext binaries (SIP prevents fixing — reboot clears stale state)
-for sysext_dir in /Library/SystemExtensions/*/com.openjoystickdriver.VirtualHIDDevice.dext; do
-  binary="$sysext_dir/OpenJoystickVirtualHID"
-  if [[ -f "$binary" && ! -x "$binary" ]]; then
-    echo "  ⚠ Stale sysext binary (not executable): $binary"
+open /Applications/OpenJoystickDriver.app
+echo "  Launched /Applications/OpenJoystickDriver.app"
+
+echo ""
+echo "=== Step 7: Wait for sysext activation ==="
+echo "  Click 'Install Extension' in the app if prompted…"
+echo ""
+
+NEW_VERSION=$(plutil -extract CFBundleVersion raw \
+  /Applications/OpenJoystickDriver.app/Contents/Library/SystemExtensions/com.openjoystickdriver.VirtualHIDDevice.dext/Info.plist 2>/dev/null || echo "")
+SYSEXT_TIMEOUT=30
+SYSEXT_ELAPSED=0
+while (( SYSEXT_ELAPSED < SYSEXT_TIMEOUT )); do
+  sleep 2
+  SYSEXT_ELAPSED=$(( SYSEXT_ELAPSED + 2 ))
+  if systemextensionsctl list 2>&1 | grep -q "1.0/${NEW_VERSION}.*activated enabled"; then
+    echo "  ✓ Sysext v${NEW_VERSION} activated after ${SYSEXT_ELAPSED}s"
+    break
   fi
+  printf "  …waiting for sysext v%s (%ds)\n" "$NEW_VERSION" "$SYSEXT_ELAPSED"
 done
 
-sleep 1
+if (( SYSEXT_ELAPSED >= SYSEXT_TIMEOUT )); then
+  echo "  ⚠ Sysext v${NEW_VERSION} not activated after ${SYSEXT_TIMEOUT}s — continuing anyway"
+fi
+
+# Do NOT kill the dext here — sysext activation already replaced it.
+# Killing it would destroy the IOUserService (Manager) personality, which
+# the kernel does not auto-restart (only AppleUserHIDDevice auto-restarts).
 
 echo ""
-echo "=== Launching from /Applications/ ==="
-open /Applications/OpenJoystickDriver.app
-echo "Done. Launched /Applications/OpenJoystickDriver.app"
+echo "=== Step 8: Wait for dext start ==="
 
-echo ""
-echo "=== Waiting for sysext activation + dext start ==="
-echo "Click 'Install Extension' in the app, then wait…"
-echo ""
-
-# Poll for up to 60s until the dext logs appear or start fail is detected
 TIMEOUT=60
 ELAPSED=0
 while (( ELAPSED < TIMEOUT )); do
@@ -78,21 +100,21 @@ while (( ELAPSED < TIMEOUT )); do
   # Check for start failure
   if $LOG show --last 10s --predicate 'process == "kernel" AND eventMessage CONTAINS "DK:"' \
        --info --debug --style compact 2>/dev/null | grep -q "start fail"; then
-    echo "✗ Kernel DK log shows 'start fail' after ${ELAPSED}s"
+    echo "  ✗ Kernel DK log shows 'start fail' after ${ELAPSED}s"
     break
   fi
 
   # Check for user server timeout
   if $LOG show --last 10s --predicate 'process == "kernel" AND eventMessage CONTAINS "DK:"' \
        --info --debug --style compact 2>/dev/null | grep -q "user server timeout"; then
-    echo "✗ Kernel DK log shows 'user server timeout' after ${ELAPSED}s"
+    echo "  ✗ Kernel DK log shows 'user server timeout' after ${ELAPSED}s"
     break
   fi
 
   # Check for successful dext os_log output
   if $LOG show --last 10s --predicate 'eventMessage CONTAINS "OpenJoystickVirtualHID:"' \
        --info --debug --style compact 2>/dev/null | grep -q "OpenJoystickVirtualHID:"; then
-    echo "✓ Dext logs detected after ${ELAPSED}s"
+    echo "  ✓ Dext logs detected after ${ELAPSED}s"
     break
   fi
 
@@ -100,11 +122,57 @@ while (( ELAPSED < TIMEOUT )); do
 done
 
 if (( ELAPSED >= TIMEOUT )); then
-  echo "⚠ Timed out after ${TIMEOUT}s — no dext logs or start fail detected"
+  echo "  ⚠ Timed out after ${TIMEOUT}s — no dext logs or start fail detected"
 fi
 
 echo ""
-echo "--- Dext os_log output (last 60s) ---"
+echo "=== Step 9: Restart daemon ==="
+
+DAEMON_PLIST=~/Library/LaunchAgents/com.openjoystickdriver.daemon.plist
+DAEMON_BIN_PATH="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon"
+DAEMON_LABEL="com.openjoystickdriver.daemon"
+
+mkdir -p ~/Library/LaunchAgents
+cat > "$DAEMON_PLIST" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${DAEMON_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${DAEMON_BIN_PATH}</string>
+  </array>
+  <key>MachServices</key>
+  <dict>
+    <key>com.openjoystickdriver.xpc</key>
+    <true/>
+  </dict>
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardErrorPath</key>
+  <string>/tmp/${DAEMON_LABEL}.err</string>
+  <key>StandardOutPath</key>
+  <string>/tmp/${DAEMON_LABEL}.out</string>
+</dict>
+</plist>
+EOF
+echo "  Wrote $DAEMON_PLIST"
+
+launchctl bootstrap "gui/$(id -u)" "$DAEMON_PLIST" 2>/dev/null || true
+launchctl kickstart -k "gui/$(id -u)/$DAEMON_LABEL" 2>/dev/null \
+  && echo "  ✓ Daemon restarted" \
+  || echo "  ⚠ Daemon kickstart failed"
+sleep 3
+
+echo ""
+echo "=== Step 10: Diagnostics ==="
+
+echo "--- Dext os_log (last 60s) ---"
 $LOG show --last 60s --predicate 'eventMessage CONTAINS "OpenJoystickVirtualHID"' \
   --info --debug --style compact 2>/dev/null || echo "(none)"
 
@@ -118,5 +186,17 @@ echo "--- Sysext status ---"
 systemextensionsctl list 2>&1 || true
 
 echo ""
-echo "--- IOUserHIDDevice in ioreg ---"
-ioreg -r -c IOUserHIDDevice 2>/dev/null | head -20 || echo "(not found)"
+echo "--- Processes ---"
+ps -eo pid,comm 2>/dev/null | grep -i "openjoystick\|VirtualHID" | grep -v grep || echo "(none running)"
+
+echo ""
+echo "--- HID Device in ioreg ---"
+ioreg -r -c IOUserHIDDevice 2>/dev/null | head -5 || echo "(not found)"
+
+echo ""
+echo "--- hidutil ---"
+hidutil list 2>/dev/null | grep -i "openjoystick\|1234.*0001" || echo "(not found)"
+
+echo ""
+echo "--- Daemon log (fresh) ---"
+tail -10 /tmp/com.openjoystickdriver.daemon.out 2>/dev/null || echo "(no daemon log)"

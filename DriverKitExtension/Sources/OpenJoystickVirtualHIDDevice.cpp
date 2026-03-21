@@ -4,6 +4,8 @@
 // The HID report layout (13 bytes) matches GamepadHIDDescriptor in
 // Sources/OpenJoystickDriverKit/Output/GamepadHIDDescriptor.swift.
 
+#include "OpenJoystickVirtualHIDDevice.h"
+
 #include <DriverKit/IOBufferMemoryDescriptor.h>
 #include <DriverKit/IOLib.h>
 #include <DriverKit/IOService.h>
@@ -13,12 +15,7 @@
 #include <HIDDriverKit/IOUserHIDDevice.h>
 #include <os/log.h>
 
-#include "OpenJoystickVirtualHIDDevice.h"
-#include "OpenJoystickUserClient.h"
-
-struct OpenJoystickVirtualHIDDevice_IVars {
-    // No instance state needed — the device is stateless once started.
-};
+struct OpenJoystickVirtualHIDDevice_IVars {};
 
 // clang-format off
 
@@ -49,6 +46,9 @@ static const uint8_t HID_REPORT_DESCRIPTOR[] = {
             0x01, 0x81, 0x42,
             // 4-bit pad to byte-align the hat nibble
             0x75, 0x04, 0x95, 0x01, 0x81, 0x03,
+            // 13-byte output report (daemon → dext relay)
+            0x09, 0x01, 0x15, 0x00, 0x26, 0xFF, 0x00,
+            0x75, 0x08, 0x95, 0x0D, 0x91, 0x02,
         // End Collection (Physical)
         0xC0,
     // End Collection (Application)
@@ -60,16 +60,13 @@ static const uint8_t HID_REPORT_DESCRIPTOR[] = {
 static constexpr uint32_t HID_REPORT_DESCRIPTOR_SIZE = sizeof(HID_REPORT_DESCRIPTOR);
 
 auto OpenJoystickVirtualHIDDevice::init() -> bool {
-    os_log(OS_LOG_DEFAULT, "OpenJoystickVirtualHID: init ENTRY");
-    bool ok = super::init();
-    os_log(OS_LOG_DEFAULT, "OpenJoystickVirtualHID: super::init returned %d", ok);
-    if (!ok) return false;
+    if (!super::init())
+        return false;
     ivars = IONewZero(OpenJoystickVirtualHIDDevice_IVars, 1);
     if (ivars == nullptr) {
         os_log(OS_LOG_DEFAULT, "OpenJoystickVirtualHID: failed to allocate ivars");
         return false;
     }
-    os_log(OS_LOG_DEFAULT, "OpenJoystickVirtualHID: init succeeded");
     return true;
 }
 
@@ -78,22 +75,7 @@ auto OpenJoystickVirtualHIDDevice::free() -> void {
     super::free();
 }
 
-auto OpenJoystickVirtualHIDDevice::NewUserClient_Impl(uint32_t type,
-                                                      IOUserClient **userClient) -> kern_return_t {
-    IOService *client = nullptr;
-    auto ret = Create(this, "UserClientProperties", &client);
-    if (ret != kIOReturnSuccess) {
-        return ret;
-    }
-    *userClient = OSDynamicCast(IOUserClient, client);
-    if (*userClient == nullptr) {
-        client->release();
-        return kIOReturnError;
-    }
-    return kIOReturnSuccess;
-}
-
-auto OpenJoystickVirtualHIDDevice::handleStart(IOService *provider) -> bool {
+auto OpenJoystickVirtualHIDDevice::handleStart(IOService* provider) -> bool {
     os_log(OS_LOG_DEFAULT, "OpenJoystickVirtualHID: handleStart ENTRY");
     if (!super::handleStart(provider)) {
         os_log(OS_LOG_DEFAULT, "OpenJoystickVirtualHID: super::handleStart failed");
@@ -106,7 +88,7 @@ auto OpenJoystickVirtualHIDDevice::handleStart(IOService *provider) -> bool {
 auto OpenJoystickVirtualHIDDevice::newDeviceDescription() -> OSDictionary* {
     os_log(OS_LOG_DEFAULT, "OpenJoystickVirtualHID: newDeviceDescription called");
 
-    auto *dict = OSDictionary::withCapacity(12);
+    auto* dict = OSDictionary::withCapacity(12);
     if (dict == nullptr) {
         return nullptr;
     }
@@ -115,43 +97,74 @@ auto OpenJoystickVirtualHIDDevice::newDeviceDescription() -> OSDictionary* {
     OSDictionarySetValue(dict, "RegisterService", kOSBooleanTrue);
     OSDictionarySetValue(dict, "HIDDefaultBehavior", kOSBooleanTrue);
 
-    if (auto *vid = OSNumber::withNumber(static_cast<uint32_t>(0x1234), 32)) {
+    if (auto* transport = OSString::withCString("Virtual")) {
+        OSDictionarySetValue(dict, kIOHIDTransportKey, transport);
+        transport->release();
+    }
+    if (auto* vid = OSNumber::withNumber(static_cast<uint32_t>(0x1234), 32)) {
         OSDictionarySetValue(dict, kIOHIDVendorIDKey, vid);
         vid->release();
     }
-    if (auto *pid = OSNumber::withNumber(static_cast<uint32_t>(0x0001), 32)) {
+    if (auto* pid = OSNumber::withNumber(static_cast<uint32_t>(0x0001), 32)) {
         OSDictionarySetValue(dict, kIOHIDProductIDKey, pid);
         pid->release();
     }
-    if (auto *location = OSNumber::withNumber(static_cast<uint32_t>(0), 32)) {
+    if (auto* location = OSNumber::withNumber(static_cast<uint32_t>(0), 32)) {
         OSDictionarySetValue(dict, kIOHIDLocationIDKey, location);
         location->release();
     }
-    if (auto *product = OSString::withCString("OpenJoystickDriver Virtual Gamepad")) {
+    if (auto* product = OSString::withCString("OpenJoystickDriver Virtual Gamepad")) {
         OSDictionarySetValue(dict, kIOHIDProductKey, product);
         product->release();
     }
-    if (auto *manufacturer = OSString::withCString("OpenJoystickDriver")) {
+    if (auto* manufacturer = OSString::withCString("OpenJoystickDriver")) {
         OSDictionarySetValue(dict, kIOHIDManufacturerKey, manufacturer);
         manufacturer->release();
     }
-    if (auto *usage_page = OSNumber::withNumber(static_cast<uint32_t>(kHIDPage_GenericDesktop), 32)) {
+    if (auto* usage_page =
+            OSNumber::withNumber(static_cast<uint32_t>(kHIDPage_GenericDesktop), 32)) {
         OSDictionarySetValue(dict, kIOHIDPrimaryUsagePageKey, usage_page);
         usage_page->release();
     }
-    if (auto *usage = OSNumber::withNumber(static_cast<uint32_t>(kHIDUsage_GD_GamePad), 32)) {
+    if (auto* usage = OSNumber::withNumber(static_cast<uint32_t>(kHIDUsage_GD_GamePad), 32)) {
         OSDictionarySetValue(dict, kIOHIDPrimaryUsageKey, usage);
         usage->release();
+    }
+    if (auto* version = OSNumber::withNumber(static_cast<uint32_t>(0x0100), 32)) {
+        OSDictionarySetValue(dict, kIOHIDVersionNumberKey, version);
+        version->release();
+    }
+    if (auto* country = OSNumber::withNumber(static_cast<uint32_t>(0), 32)) {
+        OSDictionarySetValue(dict, kIOHIDCountryCodeKey, country);
+        country->release();
     }
 
     return dict;
 }
 
 auto OpenJoystickVirtualHIDDevice::newReportDescriptor() -> OSData* {
-    return OSData::withBytes(HID_REPORT_DESCRIPTOR, HID_REPORT_DESCRIPTOR_SIZE);
+    os_log(
+        OS_LOG_DEFAULT,
+        "OpenJoystickVirtualHID: newReportDescriptor called, size=%u",
+        HID_REPORT_DESCRIPTOR_SIZE);
+    auto* data = OSData::withBytes(HID_REPORT_DESCRIPTOR, HID_REPORT_DESCRIPTOR_SIZE);
+    if (data == nullptr) {
+        os_log(
+            OS_LOG_DEFAULT,
+            "OpenJoystickVirtualHID: newReportDescriptor — OSData::withBytes returned NULL");
+    }
+    return data;
 }
 
-auto OpenJoystickVirtualHIDDevice::send_report(IOMemoryDescriptor *report,
-                                                         uint32_t length) -> kern_return_t {
-    return handleReport(0, report, length, kIOHIDReportTypeInput, 0);
+auto OpenJoystickVirtualHIDDevice::setReport(
+    IOMemoryDescriptor* report,
+    IOHIDReportType reportType,
+    IOOptionBits /* options */,
+    uint32_t /* completionTimeout */,
+    OSAction* /* action */) -> kern_return_t {
+    if (reportType != kIOHIDReportTypeOutput)
+        return kIOReturnUnsupported;
+    uint64_t len = 0;
+    report->GetLength(&len);
+    return handleReport(0, report, static_cast<uint32_t>(len), kIOHIDReportTypeInput, 0);
 }

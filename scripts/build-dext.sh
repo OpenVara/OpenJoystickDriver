@@ -67,8 +67,11 @@ fi
 # DriverKit xcodebuild requires an Apple Development identity + a dev profile
 # with both iOS and macOS platforms. The dext is re-signed with the final
 # identity (e.g. Developer ID) after embedding into the app bundle.
-DEXT_BUILD_IDENTITY="Apple Development: Krystian Järveäär (29KTR9G2UW)"
-DEXT_BUILD_PROFILE="OpenJoystickDriver (VirtualHIDDevice)"
+# DriverKit xcodebuild always requires an Apple Development identity + profile.
+# For dev builds, CODESIGN_IDENTITY is already Apple Development.
+# For release builds, override DEXT_BUILD_IDENTITY in .env.release if different.
+DEXT_BUILD_IDENTITY="${DEXT_BUILD_IDENTITY:-$CODESIGN_IDENTITY}"
+DEXT_BUILD_PROFILE="${DEXT_BUILD_PROFILE:-OpenJoystickDriver (VirtualHIDDevice)}"
 
 echo "Building DriverKit extension..."
 echo "  Build identity: $DEXT_BUILD_IDENTITY"
@@ -126,13 +129,18 @@ if [[ -d "$GUI_APP" ]]; then
     # Ensure dext binary is executable — xcodebuild may produce 644 for
     # DriverKit targets, causing launchd to reject with "Permission denied"
     chmod +x "$DEXT_SYSEXT/$DEXT_FILENAME/$DEXT_EXEC_NAME"
-    plutil -insert CFBundleExecutable -string "$DEXT_EXEC_NAME" \
-        "$DEXT_SYSEXT/$DEXT_FILENAME/Info.plist"
+    plutil -replace CFBundleExecutable -string "$DEXT_EXEC_NAME" \
+        "$DEXT_SYSEXT/$DEXT_FILENAME/Info.plist" 2>/dev/null \
+      || plutil -insert CFBundleExecutable -string "$DEXT_EXEC_NAME" \
+          "$DEXT_SYSEXT/$DEXT_FILENAME/Info.plist"
 
     # Extract original entitlements before re-signing (xcodebuild applied
     # DriverKit entitlements from the provisioning profile)
     DEXT_ENTITLEMENTS_TMP="$PROJECT_DIR/.build/dext-entitlements.plist"
-    codesign -d --entitlements - --xml "$DEXT_SYSEXT/$DEXT_FILENAME" > "$DEXT_ENTITLEMENTS_TMP" 2>/dev/null
+    if ! codesign -d --entitlements - --xml "$DEXT_SYSEXT/$DEXT_FILENAME" > "$DEXT_ENTITLEMENTS_TMP" 2>/dev/null; then
+      echo "ERROR: Failed to extract entitlements from dext — codesign may have stripped them"
+      exit 1
+    fi
 
     # For release builds, strip debug entitlements that block notarization
     # (PlistBuddy required because plutil treats dots as key path separators)

@@ -6,31 +6,13 @@
     <key>com.apple.security.app-sandbox</key>
     <false/>
 
-    <!-- com.apple.developer.hid.virtual.device (IOHIDUserDevice fallback)  -->
-    <!-- was NOT part of the granted DriverKit entitlements — it is a       -->
-    <!-- separate restricted entitlement outside the DriverKit scope.       -->
-    <!-- DextOutputDispatcher is the production output path; it uses the    -->
-    <!-- DriverKit extension (com.openjoystickdriver.VirtualHIDDevice)      -->
-    <!-- via the userclient-access entitlement below.                       -->
-    <!-- No additional keys needed — daemon only requires userclient-access.-->
+    <!-- DextOutputDispatcher sends reports via IOHIDDeviceSetReport (public  -->
+    <!-- HID manager API). No user-client entitlement is needed — the daemon -->
+    <!-- never calls IOServiceOpen on the dext.                              -->
 
     <!-- Allows IOKit USB device access (class 0xFF / vendor-specific) -->
     <!-- without running as root. Requires Developer ID signing.       -->
     <key>com.apple.security.device.usb</key>
     <true/>
-
-    <!-- Allows the daemon to open a user-client connection to the OJD  -->
-    <!-- DriverKit extension (com.openjoystickdriver.VirtualHIDDevice). -->
-    <key>com.apple.developer.driverkit.userclient-access</key>
-    <array>
-        <string>com.openjoystickdriver.VirtualHIDDevice</string>
-    </array>
-
-    <!-- Required by AMFI on macOS 26+ to validate the embedded provisioning
-         profile. Must match the profile's application-identifier. -->
-    <key>com.apple.application-identifier</key>
-    <string>${DEVELOPMENT_TEAM}.com.openjoystickdriver.daemon</string>
-    <key>com.apple.developer.team-identifier</key>
-    <string>${DEVELOPMENT_TEAM}</string>
 </dict>
 </plist>

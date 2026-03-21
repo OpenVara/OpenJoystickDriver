@@ -10,6 +10,8 @@
     <true/>
     <key>com.apple.developer.driverkit.family.hid.eventservice</key>
     <true/>
+    <key>com.apple.developer.hid.virtual.device</key>
+    <true/>
     <!-- Dev-only: allows the daemon to connect without a same-team ID check.
          Not needed with proper provisioning — use driverkit.userclient-access
          on the daemon instead (already present in OpenJoystickDriverDaemon.entitlements).

@@ -16,9 +16,6 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-# ---------------------------------------------------------------------------
-# Validate signing requirements
-# ---------------------------------------------------------------------------
 if [[ "$IDENTITY" == "-" ]]; then
     echo "ERROR: macOS 26+ requires Apple Development signing for restricted entitlements."
     echo "Set CODESIGN_IDENTITY in scripts/.env.dev"
@@ -54,16 +51,10 @@ else
   swift build --product OpenJoystickDriver
 fi
 
-# ---------------------------------------------------------------------------
-# Resolve entitlements templates (replace ${DEVELOPMENT_TEAM} placeholder)
-# ---------------------------------------------------------------------------
 mkdir -p "$PROJECT_DIR/.build"
 resolve_entitlements "$DAEMON_ENTITLEMENTS_TEMPLATE" "$DAEMON_ENTITLEMENTS"
 resolve_entitlements "$GUI_ENTITLEMENTS_TEMPLATE" "$GUI_ENTITLEMENTS"
 
-# ---------------------------------------------------------------------------
-# Create app bundle for GUI (required for system extension installation)
-# ---------------------------------------------------------------------------
 GUI_APP="$PROJECT_DIR/.build/debug/OpenJoystickDriver.app"
 GUI_CONTENTS="$GUI_APP/Contents"
 GUI_MACOS="$GUI_CONTENTS/MacOS"
@@ -118,11 +109,6 @@ cat > "$GUI_CONTENTS/Info.plist" << 'PLIST'
 </plist>
 PLIST
 
-# ---------------------------------------------------------------------------
-# Create daemon mini-bundle (required for provisioning profile on macOS 26+)
-# A standalone Mach-O cannot carry an embedded.provisionprofile — it must be
-# inside a bundle structure for AMFI to find and validate the profile.
-# ---------------------------------------------------------------------------
 DAEMON_BUNDLE="$GUI_MACOS/OpenJoystickDriverDaemon.app"
 DAEMON_BUNDLE_CONTENTS="$DAEMON_BUNDLE/Contents"
 DAEMON_BUNDLE_MACOS="$DAEMON_BUNDLE_CONTENTS/MacOS"
@@ -165,15 +151,12 @@ cat > "$DAEMON_BUNDLE_CONTENTS/Info.plist" << 'PLIST'
 </plist>
 PLIST
 
-# ---------------------------------------------------------------------------
-# Sign everything (inside-out: binaries first, then bundles)
-# ---------------------------------------------------------------------------
 echo "Signing using: $IDENTITY"
 
 # Sign daemon binary inside its bundle
 ojd_sign "$DAEMON_BUNDLE_MACOS/OpenJoystickDriverDaemon" --entitlements "$DAEMON_ENTITLEMENTS"
-# Sign daemon bundle
-ojd_sign "$DAEMON_BUNDLE"
+# Sign daemon bundle (must also pass entitlements — bundle signing re-signs the binary)
+ojd_sign "$DAEMON_BUNDLE" --entitlements "$DAEMON_ENTITLEMENTS"
 
 # Also keep a signed copy at the top level of MacOS/ for backward compat
 # (LaunchAgent plist may still point here until re-installed)
@@ -182,6 +165,11 @@ ojd_sign "$GUI_MACOS/OpenJoystickDriverDaemon" --entitlements "$DAEMON_ENTITLEME
 # Sign the outer app bundle (must be last, with GUI entitlements so the
 # main executable retains system-extension.install)
 ojd_sign "$GUI_APP" --entitlements "$GUI_ENTITLEMENTS"
+
+# Re-apply daemon entitlements — outer app signing overwrites nested code signatures,
+# stripping the daemon's entitlements (e.g. driverkit.userclient-access).
+ojd_sign "$DAEMON_BUNDLE_MACOS/OpenJoystickDriverDaemon" --entitlements "$DAEMON_ENTITLEMENTS"
+ojd_sign "$DAEMON_BUNDLE" --entitlements "$DAEMON_ENTITLEMENTS"
 
 # Verify provisioning profile certs match signing identity (release only).
 # Catches cert mismatch early instead of AMFI rejecting at launch (error 163).

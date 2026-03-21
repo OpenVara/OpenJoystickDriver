@@ -77,6 +77,15 @@ public enum GamepadHIDDescriptor {
     0x95, 0x01,  // Report Count: 1
     0x81, 0x03,  // Input: Constant
 
+    // --- 13-byte output report (daemon → dext relay) ---
+    // Mirrors the input layout. The dext's setReport converts output → input.
+    0x09, 0x01,  // Usage: Pointer (generic output usage)
+    0x15, 0x00,  // Logical Minimum: 0
+    0x26, 0xFF, 0x00,  // Logical Maximum: 255
+    0x75, 0x08,  // Report Size: 8
+    0x95, 0x0D,  // Report Count: 13
+    0x91, 0x02,  // Output: Data, Variable, Absolute
+
     0xC0,  // End Collection (Physical)
     0xC0,  // End Collection (Application)
   ]

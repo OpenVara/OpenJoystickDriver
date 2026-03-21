@@ -26,18 +26,18 @@ ISSUES=()
 
 pass() {
   echo -e "${GREEN}[PASS]${RESET} $1"
-  ((PASS_COUNT++))
+  ((PASS_COUNT++)) || true
 }
 
 fail() {
   echo -e "${RED}[FAIL]${RESET} $1"
-  ((FAIL_COUNT++))
+  ((FAIL_COUNT++)) || true
   ISSUES+=("$1")
 }
 
 warn() {
   echo -e "${YELLOW}[WARN]${RESET} $1"
-  ((WARN_COUNT++))
+  ((WARN_COUNT++)) || true
 }
 
 info() {
@@ -175,9 +175,9 @@ fi
 
 # --- 10. Daemon connection ---
 if [[ -f "$DAEMON_LOG" ]]; then
-  if grep -q "Connected" "$DAEMON_LOG" 2>/dev/null; then
+  if grep -qE "Connected|Auto-retry connected" "$DAEMON_LOG" 2>/dev/null; then
     pass "Daemon reports connected to dext"
-  elif grep -q "not yet available" "$DAEMON_LOG" 2>/dev/null; then
+  elif grep -qE "not yet available|not found.*not installed|not approved" "$DAEMON_LOG" 2>/dev/null; then
     fail "Daemon reports dext not yet available"
   else
     warn "Daemon log exists but no connection status found"

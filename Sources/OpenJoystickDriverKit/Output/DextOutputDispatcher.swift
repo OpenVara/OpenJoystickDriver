@@ -1,21 +1,15 @@
 import Foundation
 import IOKit
+import IOKit.hid
 
-/// ``OutputDispatcher`` that sends HID reports to the DriverKit virtual gamepad
-/// extension via an IOKit user-client connection (`IOConnectCallStructMethod`).
+/// Sends HID reports to the DriverKit virtual gamepad via `IOHIDDeviceSetReport`.
 ///
-/// This is the preferred output path on macOS 13+. The daemon holds a
-/// `com.apple.developer.driverkit.userclient-access` entitlement that authorises
-/// it to open a user-client on the `com.openjoystickdriver.VirtualHIDDevice`
-/// DriverKit extension.
+/// The daemon finds the virtual device by VID/PID through IOHIDManager,
+/// then sends 13-byte output reports. The dext's `setReport` override
+/// relays them as input reports via `handleReport`.
 ///
-/// If ``connect()`` returns `false` (extension not installed / not yet approved),
-/// ``dispatch(events:from:)`` will auto-retry on every call until the dext loads.
-///
-/// Report layout is 13 bytes as defined by ``GamepadHIDDescriptor``.
-///
-/// - Note: Marked `@unchecked Sendable` because `io_connect_t` is a plain
-///   `mach_port_t` integer. Mutable report state is protected by `stateLock`.
+/// If ``connect()`` returns `false`, ``dispatch(events:from:)`` auto-retries
+/// on every call until the dext loads.
 public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   // MARK: - OutputDispatcher
@@ -37,10 +31,12 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   private var profileCache: [String: ProfileCacheEntry] = [:]
   private let profileCacheTTL: TimeInterval = 1.0
 
-  // MARK: - IOKit connection
+  // MARK: - HID device connection
 
-  private static let dextBundleID = "com.openjoystickdriver.VirtualHIDDevice"
-  private var connection: io_connect_t = IO_OBJECT_NULL
+  private static let virtualVID: Int = 0x1234
+  private static let virtualPID: Int = 0x0001
+  private var hidDevice: IOHIDDevice?
+  private var hidManager: IOHIDManager?
   private let connectionLock = NSLock()
 
   // MARK: - Report state
@@ -60,88 +56,78 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   /// Creates a new DextOutputDispatcher.
   public init(profileStore: ProfileStore = ProfileStore()) { self.profileStore = profileStore }
 
-  deinit { closeConnection() }
+  deinit { closeDevice() }
 
   // MARK: - Connection management
 
-  /// Opens an IOKit user-client connection to the DriverKit extension.
-  ///
-  /// - Returns: `true` when the extension is found and the connection succeeds.
-  ///   When `false`, ``dispatch(events:from:)`` will auto-retry on each call.
   @discardableResult public func connect() -> Bool {
-    let conn = makeConnection()
-    connectionLock.withLock { connection = conn }
-    let ok = conn != IO_OBJECT_NULL
-    if ok {
-      print("[DextOutputDispatcher] Connected to \(Self.dextBundleID)")
-    } else {
-      print("[DextOutputDispatcher] Extension not found — not installed or not approved")
+    guard let (device, mgr) = findDevice() else {
+      print("[DextOutputDispatcher] Virtual gamepad not found — not installed or not approved")
+      return false
     }
-    return ok
-  }
-
-  private func closeConnection() {
-    let old = connectionLock.withLock { () -> io_connect_t in
-      let c = connection
-      connection = IO_OBJECT_NULL
-      return c
+    connectionLock.withLock {
+      hidDevice = device
+      hidManager = mgr
     }
-    if old != IO_OBJECT_NULL { IOServiceClose(old) }
-  }
-
-  /// Searches for the OJD DriverKit extension in IORegistry and opens a
-  /// user-client connection.
-  private func makeConnection() -> io_connect_t {
-    var iterator: io_iterator_t = 0
-    let ret = IOServiceGetMatchingServices(
-      kIOMainPortDefault,
-      IOServiceMatching("IOUserService"),
-      &iterator
+    print(
+      "[DextOutputDispatcher] Connected to virtual gamepad (VID:\(Self.virtualVID) PID:\(Self.virtualPID))"
     )
-    guard ret == kIOReturnSuccess else { return IO_OBJECT_NULL }
-    defer { IOObjectRelease(iterator) }
+    return true
+  }
 
-    var service = IOIteratorNext(iterator)
-    while service != IO_OBJECT_NULL {
-      defer {
-        IOObjectRelease(service)
-        service = IOIteratorNext(iterator)
-      }
-      // Filter by bundle identifier to find our specific extension.
-      guard
-        let propRef = IORegistryEntryCreateCFProperty(
-          service,
-          "CFBundleIdentifier" as CFString,
-          kCFAllocatorDefault,
-          0
-        ), let bundleID = propRef.takeRetainedValue() as? String, bundleID == Self.dextBundleID
-      else { continue }
-
-      var conn: io_connect_t = 0
-      let openRet = IOServiceOpen(service, mach_task_self_, 0, &conn)
-      if openRet == kIOReturnSuccess { return conn }
+  private func closeDevice() {
+    let (oldDevice, oldMgr) = connectionLock.withLock { () -> (IOHIDDevice?, IOHIDManager?) in
+      let d = hidDevice
+      let m = hidManager
+      hidDevice = nil
+      hidManager = nil
+      return (d, m)
     }
-    return IO_OBJECT_NULL
+    if let device = oldDevice { IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeNone)) }
+    if let mgr = oldMgr { IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone)) }
+  }
+
+  private func findDevice() -> (IOHIDDevice, IOHIDManager)? {
+    let matching: [String: Any] = [
+      kIOHIDVendorIDKey as String: Self.virtualVID, kIOHIDProductIDKey as String: Self.virtualPID,
+    ]
+    let mgr = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+    IOHIDManagerSetDeviceMatching(mgr, matching as CFDictionary)
+    IOHIDManagerOpen(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+
+    guard let devices = IOHIDManagerCopyDevices(mgr) as? Set<IOHIDDevice>,
+      let device = devices.first
+    else {
+      IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+      return nil
+    }
+
+    let ret = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
+    guard ret == kIOReturnSuccess else {
+      IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+      return nil
+    }
+    return (device, mgr)
   }
 
   // MARK: - OutputDispatcher
 
-  /// Applies controller events and sends an updated HID report to the dext.
   public func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) async {
     guard !suppressOutput else { return }
 
-    let conn = connectionLock.withLock { connection }
+    var device = connectionLock.withLock { hidDevice }
 
-    // Auto-retry: dext may have loaded after the dispatcher was created.
-    var activeConn = conn
-    if activeConn == IO_OBJECT_NULL {
-      activeConn = makeConnection()
-      if activeConn != IO_OBJECT_NULL {
-        print("[DextOutputDispatcher] Auto-retry connected to \(Self.dextBundleID)")
+    if device == nil {
+      if let (newDevice, mgr) = findDevice() {
+        device = newDevice
+        print("[DextOutputDispatcher] Auto-retry connected to virtual gamepad")
+        connectionLock.withLock {
+          hidDevice = newDevice
+          hidManager = mgr
+        }
       }
-      connectionLock.withLock { connection = activeConn }
     }
-    guard activeConn != IO_OBJECT_NULL else { return }
+    guard let device else { return }
 
     let profile = await cachedProfile(for: identifier)
 
@@ -150,23 +136,27 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       return buildReport()
     }
 
-    let result = report.withUnsafeMutableBytes { ptr -> kern_return_t in
-      IOConnectCallStructMethod(
-        activeConn,
-        0,  // UserClientSelector.sendReport
-        ptr.baseAddress,
-        ptr.count,
-        nil,
-        nil
+    let result = report.withUnsafeMutableBytes { ptr -> IOReturn in
+      guard let base = ptr.baseAddress else { return kIOReturnBadArgument }
+      return IOHIDDeviceSetReport(
+        device,
+        kIOHIDReportTypeOutput,
+        0,
+        base.assumingMemoryBound(to: UInt8.self),
+        ptr.count
       )
     }
 
-    if result == kIOReturnNotAttached || result == kIOReturnNoDevice {
-      // Extension was unloaded — clear the connection so we retry next dispatch.
+    // kIOReturnNotOpen (0xe00002cd): device handle went stale during sysext replacement.
+    // The dext process cycles through device instances on crash/rematch; reconnecting
+    // picks up the latest instance.
+    if result == kIOReturnNotAttached || result == kIOReturnNoDevice
+      || result == IOReturn(bitPattern: 0xe000_02cd)
+    {
       debugPrint("[DextOutputDispatcher] Connection lost (\(result)); will reconnect")
-      closeConnection()
+      closeDevice()
     } else if result != kIOReturnSuccess {
-      debugPrint("[DextOutputDispatcher] sendReport error: \(result)")
+      debugPrint("[DextOutputDispatcher] setReport error: \(String(result, radix: 16))")
     }
   }
 
@@ -280,7 +270,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 // MARK: - Float clamping
 
 extension Float {
-  private func clamped(to range: ClosedRange<Float>) -> Float {
+  fileprivate func clamped(to range: ClosedRange<Float>) -> Float {
     Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
   }
 }
@@ -288,7 +278,7 @@ extension Float {
 // MARK: - Int16 little-endian byte pair
 
 extension Int16 {
-  private var littleEndianBytes: (UInt8, UInt8) {
+  fileprivate var littleEndianBytes: (UInt8, UInt8) {
     let le = littleEndian
     return (UInt8(le & 0xFF), UInt8((le >> 8) & 0xFF))
   }

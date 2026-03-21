@@ -65,6 +65,12 @@ public final class HIDDeviceStream: @unchecked Sendable {
   private func handleDeviceAdded(_ device: IOHIDDevice) {
     let vid = deviceProperty(device, kIOHIDVendorIDKey)
     let pid = deviceProperty(device, kIOHIDProductIDKey)
+
+    // Skip our own virtual gamepad to prevent a feedback loop.
+    if UInt16(truncatingIfNeeded: vid) == 0x1234 && UInt16(truncatingIfNeeded: pid) == 0x0001 {
+      return
+    }
+
     let serial = IOHIDDeviceGetProperty(device, kIOHIDSerialNumberKey as CFString) as? String
     let loc = deviceProperty(device, kIOHIDLocationIDKey)
     let productName = IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) as? String

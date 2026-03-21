@@ -170,6 +170,7 @@ verify_profile_cert() {
     | awk '{print $2}' | tr '[:upper:]' '[:lower:]')
 
   if [[ -z "$profile_sha1" || -z "$keychain_sha1" ]]; then
+    echo "WARNING: Could not extract SHA1 for profile cert verification (profile_sha1=${profile_sha1:-empty}, keychain_sha1=${keychain_sha1:-empty})"
     return 0  # can't verify, don't block
   fi
 
@@ -194,6 +195,7 @@ verify_profile_cert() {
 
 # Sign binary with configured identity.
 # Usage: ojd_sign <binary> [--entitlements <path>]
+# NOTE: --entitlements must be the first extra arg pair (before any other flags).
 # When OJD_ENV=release, adds hardened runtime (required for notarization).
 ojd_sign() {
   local binary="$1"

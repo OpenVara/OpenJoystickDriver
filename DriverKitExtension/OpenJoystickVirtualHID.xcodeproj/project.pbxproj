@@ -9,8 +9,6 @@
 /* Begin PBXBuildFile section */
 		0D001BB12AAAAAAA00000001 /* OpenJoystickVirtualHIDDevice.iig in Sources */ = {isa = PBXBuildFile; fileRef = 0D001BB22AAAAAAA00000001 /* OpenJoystickVirtualHIDDevice.iig */; };
 		0D001BB32AAAAAAA00000001 /* OpenJoystickVirtualHIDDevice.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0D001BB42AAAAAAA00000001 /* OpenJoystickVirtualHIDDevice.cpp */; };
-		0D001BB52AAAAAAA00000001 /* OpenJoystickUserClient.iig in Sources */ = {isa = PBXBuildFile; fileRef = 0D001BB62AAAAAAA00000001 /* OpenJoystickUserClient.iig */; };
-		0D001BB72AAAAAAA00000001 /* OpenJoystickUserClient.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0D001BB82AAAAAAA00000001 /* OpenJoystickUserClient.cpp */; };
 		0D001CC12AAAAAAA00000001 /* HIDDriverKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0D001CC22AAAAAAA00000001 /* HIDDriverKit.framework */; };
 /* End PBXBuildFile section */
 
@@ -18,8 +16,6 @@
 		0D001AA12AAAAAAA00000001 /* OpenJoystickVirtualHID.dext */ = {isa = PBXFileReference; explicitFileType = "wrapper.driver-extension"; includeInIndex = 0; path = OpenJoystickVirtualHID.dext; sourceTree = BUILT_PRODUCTS_DIR; };
 		0D001BB22AAAAAAA00000001 /* OpenJoystickVirtualHIDDevice.iig */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.iig; path = OpenJoystickVirtualHIDDevice.iig; sourceTree = "<group>"; };
 		0D001BB42AAAAAAA00000001 /* OpenJoystickVirtualHIDDevice.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = OpenJoystickVirtualHIDDevice.cpp; sourceTree = "<group>"; };
-		0D001BB62AAAAAAA00000001 /* OpenJoystickUserClient.iig */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.iig; path = OpenJoystickUserClient.iig; sourceTree = "<group>"; };
-		0D001BB82AAAAAAA00000001 /* OpenJoystickUserClient.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = OpenJoystickUserClient.cpp; sourceTree = "<group>"; };
 		0D001AAF2AAAAAAA00000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0D001AB02AAAAAAA00000001 /* OpenJoystickVirtualHID.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenJoystickVirtualHID.entitlements; sourceTree = "<group>"; };
 		0D001CC22AAAAAAA00000001 /* HIDDriverKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HIDDriverKit.framework; path = System/DriverKit/System/Library/Frameworks/HIDDriverKit.framework; sourceTree = SDKROOT; };
@@ -60,8 +56,6 @@
 			children = (
 				0D001BB22AAAAAAA00000001 /* OpenJoystickVirtualHIDDevice.iig */,
 				0D001BB42AAAAAAA00000001 /* OpenJoystickVirtualHIDDevice.cpp */,
-				0D001BB62AAAAAAA00000001 /* OpenJoystickUserClient.iig */,
-				0D001BB82AAAAAAA00000001 /* OpenJoystickUserClient.cpp */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -119,8 +113,6 @@
 			files = (
 				0D001BB12AAAAAAA00000001 /* OpenJoystickVirtualHIDDevice.iig in Sources */,
 				0D001BB32AAAAAAA00000001 /* OpenJoystickVirtualHIDDevice.cpp in Sources */,
-				0D001BB52AAAAAAA00000001 /* OpenJoystickUserClient.iig in Sources */,
-				0D001BB72AAAAAAA00000001 /* OpenJoystickUserClient.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
