@@ -15,9 +15,64 @@
 #include <HIDDriverKit/IOUserHIDDevice.h>
 #include <os/log.h>
 
-#include "gamepad_hid_descriptor.h"
-
 struct OpenJoystickVirtualHIDDevice_IVars {};
+
+// clang-format off
+
+/// HID report descriptor — byte-for-byte copy of GamepadHIDDescriptor.descriptor.
+/// Keep both files in sync whenever the descriptor changes.
+static const uint8_t HID_REPORT_DESCRIPTOR[] = {
+    // Usage Page: Generic Desktop
+    0x05, 0x01,
+    // Usage: Gamepad
+    0x09, 0x05,
+    // Collection: Application
+    0xA1, 0x01,
+        // Collection: Physical
+        0xA1, 0x00,
+            // 15 digital buttons (Xbox One S BT order, Button page, usages 1–15) + 1-bit pad
+            // b0=A, b1=B, b2=X, b3=Y, b4=LB, b5=RB, b6=L3, b7=R3,
+            // b8=Menu, b9=View, b10=Guide, b11=DUp, b12=DDn, b13=DLt, b14=DRt
+            0x05, 0x09, 0x19, 0x01, 0x29, 0x0F, 0x15, 0x00,
+            0x25, 0x01, 0x75, 0x01, 0x95, 0x0F, 0x81, 0x02,
+            0x75, 0x01, 0x95, 0x01, 0x81, 0x03,
+            // All 6 axes on Generic Desktop — macOS sorts by (page, usage_id)
+            0x05, 0x01, // Usage Page: Generic Desktop
+            // Left stick: X(0x30), Y(0x31) — signed 16-bit
+            0x09, 0x30, 0x09, 0x31,
+            0x16, 0x01, 0x80, 0x26, 0xFF, 0x7F,
+            0x75, 0x10, 0x95, 0x02, 0x81, 0x02,
+            // Left trigger: Z(0x32) — unsigned 16-bit
+            0x09, 0x32,
+            0x15, 0x00, 0x26, 0xFF, 0x7F,
+            0x75, 0x10, 0x95, 0x01, 0x81, 0x02,
+            // Right stick: Rx(0x33), Ry(0x34) — signed 16-bit
+            0x09, 0x33, 0x09, 0x34,
+            0x16, 0x01, 0x80, 0x26, 0xFF, 0x7F,
+            0x75, 0x10, 0x95, 0x02, 0x81, 0x02,
+            // Right trigger: Rz(0x35) — unsigned 16-bit
+            0x09, 0x35,
+            0x15, 0x00, 0x26, 0xFF, 0x7F,
+            0x75, 0x10, 0x95, 0x01, 0x81, 0x02,
+            // Hat switch (D-pad, 4-bit, 1-based: 1–8, 0=neutral)
+            0x05, 0x01, 0x09, 0x39,
+            0x15, 0x01, 0x25, 0x08, 0x35, 0x00,
+            0x46, 0x3B, 0x01, 0x66, 0x14, 0x00,
+            0x75, 0x04, 0x95, 0x01, 0x81, 0x42,
+            // 4-bit pad to byte-align the hat nibble
+            0x75, 0x04, 0x95, 0x01, 0x81, 0x03,
+            // 15-byte output report (daemon → dext relay)
+            0x09, 0x01, 0x15, 0x00, 0x26, 0xFF, 0x00,
+            0x75, 0x08, 0x95, 0x0F, 0x91, 0x02,
+        // End Collection (Physical)
+        0xC0,
+    // End Collection (Application)
+    0xC0,
+};
+
+// clang-format on
+
+static constexpr uint32_t HID_REPORT_DESCRIPTOR_SIZE = sizeof(HID_REPORT_DESCRIPTOR);
 
 auto OpenJoystickVirtualHIDDevice::init() -> bool {
     if (!super::init())
@@ -110,9 +165,8 @@ auto OpenJoystickVirtualHIDDevice::newReportDescriptor() -> OSData* {
     os_log(
         OS_LOG_DEFAULT,
         "OpenJoystickVirtualHID: newReportDescriptor called, size=%u",
-        GAMEPAD_HID_REPORT_DESCRIPTOR_SIZE);
-    auto* data =
-        OSData::withBytes(GAMEPAD_HID_REPORT_DESCRIPTOR, GAMEPAD_HID_REPORT_DESCRIPTOR_SIZE);
+        HID_REPORT_DESCRIPTOR_SIZE);
+    auto* data = OSData::withBytes(HID_REPORT_DESCRIPTOR, HID_REPORT_DESCRIPTOR_SIZE);
     if (data == nullptr) {
         os_log(
             OS_LOG_DEFAULT,

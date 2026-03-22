@@ -96,13 +96,8 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
 
   func startDaemon() async {
     daemonError = nil
-    do {
-      let task = Task.detached { try DaemonManager.start() }
-      try await task.value
-    } catch {
-      daemonError = error.localizedDescription
-      return
-    }
+    let task = Task.detached { DaemonManager.start() }
+    await task.value
     try? await Task.sleep(for: .seconds(1))
     await poll()
   }
@@ -110,14 +105,8 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   func restartDaemon() async {
     daemonError = nil
     daemonRestarting = true
-    do {
-      let task = Task.detached { try DaemonManager.restart() }
-      try await task.value
-    } catch {
-      daemonError = error.localizedDescription
-      daemonRestarting = false
-      return
-    }
+    let task = Task.detached { DaemonManager.restart() }
+    await task.value
     client.disconnect()
     for _ in 0..<3 {
       try? await Task.sleep(for: .seconds(2))

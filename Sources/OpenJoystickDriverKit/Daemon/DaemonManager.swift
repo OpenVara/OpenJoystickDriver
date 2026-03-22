@@ -31,25 +31,25 @@ public enum DaemonManager: Sendable {
     }
     try plist.write(to: plistURL, atomically: true, encoding: .utf8)
     let uid = String(getuid())
-    try launchctl(["bootstrap", "gui/\(uid)", plistURL.path(percentEncoded: false)])
+    launchctl(["bootstrap", "gui/\(uid)", plistURL.path(percentEncoded: false)])
     print("[DaemonManager] Installed")
   }
 
   /// Starts daemon via launchctl kickstart.
   ///
   /// Use when LaunchAgent is installed but not running.
-  public static func start() throws {
+  public static func start() {
     let uid = String(getuid())
-    try launchctl(["kickstart", "gui/\(uid)/\(label)"])
+    launchctl(["kickstart", "-k", "gui/\(uid)/\(label)"])
     print("[DaemonManager] Started")
   }
 
   /// Kills and restarts daemon via launchctl kickstart -k.
   ///
   /// Use to apply permission grants without full reinstall.
-  public static func restart() throws {
+  public static func restart() {
     let uid = String(getuid())
-    try launchctl(["kickstart", "-k", "gui/\(uid)/\(label)"])
+    launchctl(["kickstart", "-k", "gui/\(uid)/\(label)"])
     print("[DaemonManager] Restarted")
   }
 
@@ -67,7 +67,7 @@ public enum DaemonManager: Sendable {
   /// Unloads daemon and removes LaunchAgent plist.
   public static func uninstall() throws {
     let uid = String(getuid())
-    try launchctl(["bootout", "gui/\(uid)/\(label)"])
+    launchctl(["bootout", "gui/\(uid)/\(label)"])
     if FileManager.default.fileExists(atPath: plistURL.path(percentEncoded: false)) {
       try FileManager.default.removeItem(at: plistURL)
     }
@@ -76,14 +76,14 @@ public enum DaemonManager: Sendable {
 
   // MARK: - Private
 
-  @discardableResult private static func launchctl(_ args: [String]) throws -> String {
+  @discardableResult private static func launchctl(_ args: [String]) -> String {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
     process.arguments = args
     let pipe = Pipe()
     process.standardOutput = pipe
     process.standardError = pipe
-    try process.run()
+    try? process.run()
     process.waitUntilExit()
     return String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
   }

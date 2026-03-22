@@ -89,7 +89,6 @@ xcodebuild \
     DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
     PROVISIONING_PROFILE_SPECIFIER="$DEXT_BUILD_PROFILE" \
     CODE_SIGN_STYLE=Manual \
-    HEADER_SEARCH_PATHS='$(inherited) $(SRCROOT)/../Shared/CGamepadDescriptor/include' \
     clean build
 
 if [[ ! -d "$DEXT_PRODUCT" ]]; then
