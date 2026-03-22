@@ -7,7 +7,10 @@ struct RestartDaemonCommand {
       print("Daemon is not installed. Run 'install' first.")
       exit(1)
     }
-    DaemonManager.restart()
+    do { try DaemonManager.restart() } catch {
+      print("Failed to restart daemon: \(error)")
+      exit(1)
+    }
     print("Daemon restarted.")
   }
 }

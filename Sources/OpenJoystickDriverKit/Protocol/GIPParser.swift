@@ -29,6 +29,13 @@ public enum GIPError: Error, Sendable {
 /// from entering idle.
 public final class GIPParser: InputParser, @unchecked Sendable {
 
+  // MARK: - Thread safety
+  //
+  // @unchecked Sendable safety:
+  // - All mutable state (prevButtons, sequencer, authHandler, handle)
+  //   is accessed exclusively from the owning DevicePipeline actor's
+  //   feedHIDData/feedUSBData methods — no concurrent access occurs
+
   private let outEndpoint: UInt8 = 0x02
 
   private var sequencer = GIPSequencer()
@@ -278,22 +285,6 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     guard let first = payload.first else { return [] }
     if (first & gipGuideButtonMask) != 0 { return [.buttonPressed(.guide)] }
     return [.buttonReleased(.guide)]
-  }
-
-  private func diffButtons(prev: UInt8, curr: UInt8, mapping: [(UInt8, Button)])
-    -> [ControllerEvent]
-  {
-    var events: [ControllerEvent] = []
-    for (bit, button) in mapping {
-      let wasPressed = (prev & bit) != 0
-      let isPressed = (curr & bit) != 0
-      if !wasPressed && isPressed {
-        events.append(.buttonPressed(button))
-      } else if wasPressed && !isPressed {
-        events.append(.buttonReleased(button))
-      }
-    }
-    return events
   }
 
   private func normalizeStick(_ raw: Int16) -> Float { Float(raw) / gipStickMax }

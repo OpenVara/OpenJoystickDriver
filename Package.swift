@@ -25,8 +25,14 @@ let package = Package(
     ),
 
     .target(
+      name: "CGamepadDescriptor",
+      path: "Shared/CGamepadDescriptor",
+      publicHeadersPath: "include"
+    ),
+
+    .target(
       name: "OpenJoystickDriverKit",
-      dependencies: ["SwiftUSB", "CLibUSB"],
+      dependencies: ["SwiftUSB", "CLibUSB", "CGamepadDescriptor"],
       path: "Sources/OpenJoystickDriverKit",
       resources: [.process("Resources/")]
     ),
@@ -43,9 +49,7 @@ let package = Package(
       dependencies: ["OpenJoystickDriverKit"],
       path: "Sources/OpenJoystickDriver",
       exclude: ["OpenJoystickDriver.entitlements.template", "App/Info.plist"],
-      linkerSettings: [
-        .linkedFramework("SystemExtensions"),
-      ]
+      linkerSettings: [.linkedFramework("SystemExtensions")]
     ),
 
     .testTarget(

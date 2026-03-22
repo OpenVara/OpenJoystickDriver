@@ -12,13 +12,22 @@ import IOKit.hid
 /// on every call until the dext loads.
 public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
+  // MARK: - Thread safety
+  //
+  // @unchecked Sendable safety:
+  // - `reportLock` guards all mutable report state (buttons, sticks, triggers, hat)
+  // - `cacheLock` guards `profileCache`
+  // - `connectionLock` guards `hidDevice` and `hidManager`
+  // - `suppressOutput` is only written from the main actor (XPC handler)
+  // - `profileStore` is an actor (internally synchronized)
+
   // MARK: - OutputDispatcher
 
   /// When true, report injection is suppressed (e.g. during developer packet capture).
   ///
   /// Invalidates the profile cache on change.
   public var suppressOutput = false {
-    didSet { if suppressOutput != oldValue { stateLock.withLock { profileCache.removeAll() } } }
+    didSet { if suppressOutput != oldValue { cacheLock.withLock { profileCache.removeAll() } } }
   }
 
   // MARK: - Profile cache
@@ -41,7 +50,8 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   // MARK: - Report state
 
-  private let stateLock = NSLock()
+  private let reportLock = NSLock()
+  private let cacheLock = NSLock()
   private var buttons: UInt32 = 0
   private var leftStickX: Int16 = 0
   private var leftStickY: Int16 = 0
@@ -102,7 +112,12 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     ]
     let mgr = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
     IOHIDManagerSetDeviceMatching(mgr, matching as CFDictionary)
-    IOHIDManagerOpen(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+    let openResult = IOHIDManagerOpen(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+    if openResult != kIOReturnSuccess {
+      print("[DextOutputDispatcher] IOHIDManagerOpen failed: \(String(openResult, radix: 16))")
+      IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+      return nil
+    }
 
     guard let devices = IOHIDManagerCopyDevices(mgr) as? Set<IOHIDDevice>,
       let device = devices.first
@@ -140,8 +155,10 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
     let profile = await cachedProfile(for: identifier)
 
-    var report = stateLock.withLock { () -> [UInt8] in
-      for event in events { applyEvent(event, deadzone: profile.stickDeadzone) }
+    var report = reportLock.withLock { () -> [UInt8] in
+      for event in events {
+        applyEvent(event, deadzone: profile.stickDeadzone, buttonMappings: profile.buttonMappings)
+      }
       return buildReport()
     }
 
@@ -174,22 +191,28 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   private func cachedProfile(for identifier: DeviceIdentifier) async -> Profile {
     let key = "\(identifier.vendorID):\(identifier.productID)"
     let now = Date()
-    if let entry = stateLock.withLock({ profileCache[key] }),
+    if let entry = cacheLock.withLock({ profileCache[key] }),
       now.timeIntervalSince(entry.fetchedAt) < profileCacheTTL
     {
       return entry.profile
     }
     let fresh = await profileStore.profile(for: identifier)
-    stateLock.withLock { profileCache[key] = ProfileCacheEntry(profile: fresh, fetchedAt: now) }
+    cacheLock.withLock { profileCache[key] = ProfileCacheEntry(profile: fresh, fetchedAt: now) }
     return fresh
   }
 
-  // MARK: - Event application (called inside stateLock.withLock)
+  // MARK: - Event application (called inside reportLock.withLock)
 
-  private func applyEvent(_ event: ControllerEvent, deadzone: Float) {
+  private func applyEvent(
+    _ event: ControllerEvent,
+    deadzone: Float,
+    buttonMappings: [String: UInt16]
+  ) {
     switch event {
-    case .buttonPressed(let btn): if let bit = buttonBit(for: btn) { buttons |= (1 << bit) }
-    case .buttonReleased(let btn): if let bit = buttonBit(for: btn) { buttons &= ~(1 << bit) }
+    case .buttonPressed(let btn):
+      if let bit = buttonBit(for: btn, mappings: buttonMappings) { buttons |= (1 << bit) }
+    case .buttonReleased(let btn):
+      if let bit = buttonBit(for: btn, mappings: buttonMappings) { buttons &= ~(1 << bit) }
     case .leftStickChanged(let x, let y):
       leftStickX = axisValue(x, deadzone: deadzone)
       leftStickY = axisValue(y, deadzone: deadzone)
@@ -206,7 +229,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     }
   }
 
-  // MARK: - Report construction (called inside stateLock.withLock)
+  // MARK: - Report construction (called inside reportLock.withLock)
 
   private func buildReport() -> [UInt8] {
     var r = [UInt8](repeating: 0, count: GamepadHIDDescriptor.reportSize)
@@ -236,7 +259,8 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   // MARK: - Button mapping (XInputHID order)
 
-  private func buttonBit(for button: Button) -> UInt32? {
+  private func buttonBit(for button: Button, mappings: [String: UInt16]) -> UInt32? {
+    if let mapped = mappings[button.rawValue] { return UInt32(mapped) }
     switch button {
     case .a, .cross: return 0
     case .b, .circle: return 1

@@ -68,9 +68,8 @@ public actor ProfileStore {
       } else {
         library.profiles.append(profile)
       }
-      if let libData = try? JSONEncoder().encode(library) {
-        try libData.write(to: libURL, options: .atomic)
-      }
+      let libData = try JSONEncoder().encode(library)
+      try libData.write(to: libURL, options: .atomic)
     }
   }
 
@@ -104,7 +103,7 @@ public actor ProfileStore {
   ///
   /// If no library file exists yet, the current single-file profile is
   /// migrated into a new library automatically.
-  public func allProfiles(for identifier: DeviceIdentifier) -> [Profile] {
+  public func allProfiles(for identifier: DeviceIdentifier) throws -> [Profile] {
     let libURL = libraryURL(for: identifier)
     if FileManager.default.fileExists(atPath: libURL.path),
       let data = try? Data(contentsOf: libURL),
@@ -115,9 +114,8 @@ public actor ProfileStore {
 
     let activeProfile = profile(for: identifier)
     let library = ProfileLibrary(profiles: [activeProfile], activeID: activeProfile.id)
-    if let data = try? JSONEncoder().encode(library) {
-      try? data.write(to: libURL, options: .atomic)
-    }
+    let data = try JSONEncoder().encode(library)
+    try data.write(to: libURL, options: .atomic)
     return library.profiles
   }
 
@@ -185,9 +183,8 @@ public actor ProfileStore {
     library.activeID = first.id
     let key = cacheKey(for: identifier)
     cache[key] = first
-    if let activeData = try? JSONEncoder().encode(first) {
-      try activeData.write(to: profileURL(for: identifier), options: .atomic)
-    }
+    let activeData = try JSONEncoder().encode(first)
+    try activeData.write(to: profileURL(for: identifier), options: .atomic)
   }
 
   private func profileURL(for identifier: DeviceIdentifier) -> URL {

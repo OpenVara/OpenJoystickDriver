@@ -85,8 +85,13 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       let inputState = await pm.inputMonitoringState
       let devices = await dm.connectedDeviceDescriptions()
       let payload = XPCStatusPayload(inputMonitoring: "\(inputState)", connectedDevices: devices)
-      let data = (try? JSONEncoder().encode(payload)) ?? Data()
-      callback.call(data)
+      do {
+        let data = try JSONEncoder().encode(payload)
+        callback.call(data)
+      } catch {
+        print("[XPCService] getStatus encode error: \(error)")
+        callback.call(Data())
+      }
     }
   }
 
@@ -96,8 +101,13 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     let ps = profileStore
     Task {
       let profiles = await ps.listProfiles()
-      let data = (try? JSONEncoder().encode(profiles)) ?? Data()
-      callback.call(data)
+      do {
+        let data = try JSONEncoder().encode(profiles)
+        callback.call(data)
+      } catch {
+        print("[XPCService] listProfiles encode error: \(error)")
+        callback.call(Data())
+      }
     }
   }
 
@@ -108,8 +118,13 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     Task {
       let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
       let profile = await ps.profile(for: identifier)
-      let data = (try? JSONEncoder().encode(profile)) ?? Data()
-      callback.call(data)
+      do {
+        let data = try JSONEncoder().encode(profile)
+        callback.call(data)
+      } catch {
+        print("[XPCService] getProfile encode error: \(error)")
+        callback.call(Data())
+      }
     }
   }
 
@@ -154,9 +169,14 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     let ps = profileStore
     Task {
       let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
-      let profiles = await ps.allProfiles(for: identifier)
-      let data = (try? JSONEncoder().encode(profiles)) ?? Data()
-      callback.call(data)
+      do {
+        let profiles = try await ps.allProfiles(for: identifier)
+        let data = try JSONEncoder().encode(profiles)
+        callback.call(data)
+      } catch {
+        print("[XPCService] allProfiles error: \(error)")
+        callback.call(Data())
+      }
     }
   }
 
@@ -254,7 +274,13 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     Task {
       let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
       let log = await dm.packetLog(for: identifier)
-      callback.call((try? JSONEncoder().encode(log)) ?? Data())
+      do {
+        let data = try JSONEncoder().encode(log)
+        callback.call(data)
+      } catch {
+        print("[XPCService] getPacketLog encode error: \(error)")
+        callback.call(Data())
+      }
     }
   }
 

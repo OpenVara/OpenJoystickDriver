@@ -7,7 +7,10 @@ struct StartDaemonCommand {
       print("Daemon is not installed. Run 'install' first.")
       exit(1)
     }
-    DaemonManager.start()
+    do { try DaemonManager.start() } catch {
+      print("Failed to start daemon: \(error)")
+      exit(1)
+    }
     print("Daemon started.")
   }
 }
