@@ -20,52 +20,6 @@ public let xpcServiceName = "com.openjoystickdriver.xpc"
   /// and connected device descriptions.
   func getStatus(reply: @escaping (Data) -> Void)
 
-  /// Lists active profiles for all devices.
-  /// Replies with a JSON-encoded array of ``Profile``.
-  func listProfiles(reply: @escaping (Data) -> Void)
-
-  /// Gets the active profile for one device.
-  /// Replies with a JSON-encoded ``Profile``, or empty data if none exists.
-  func getProfile(vendorID: Int, productID: Int, reply: @escaping (Data) -> Void)
-
-  /// Saves a profile to disk. Replies with true on success, false on failure.
-  func saveProfile(profileData: Data, reply: @escaping (Bool) -> Void)
-
-  /// Deletes the saved profile for a device and reverts to defaults.
-  /// Replies with true on success.
-  func resetProfile(vendorID: Int, productID: Int, reply: @escaping (Bool) -> Void)
-
-  /// Gets every profile in the library for a device (active and inactive).
-  /// Replies with a JSON-encoded array of ``Profile``.
-  func allProfiles(vendorID: Int, productID: Int, reply: @escaping (Data) -> Void)
-
-  /// Adds a new profile to the device library.
-  /// Replies with the JSON-encoded saved ``Profile`` on success, or nil on failure.
-  func addProfile(
-    profileData: Data,
-    vendorID: Int,
-    productID: Int,
-    reply: @escaping (Data?) -> Void
-  )
-
-  /// Removes a profile from the library by its UUID string.
-  /// Replies with true on success. Fails if deleting the last remaining profile.
-  func deleteProfile(
-    profileId: String,
-    vendorID: Int,
-    productID: Int,
-    reply: @escaping (Bool) -> Void
-  )
-
-  /// Makes a profile the active one for its device.
-  /// Replies with true on success, false if the profile was not found.
-  func setActiveProfile(
-    profileId: String,
-    vendorID: Int,
-    productID: Int,
-    reply: @escaping (Bool) -> Void
-  )
-
   /// Gets the latest input state (buttons, sticks, triggers) for a device.
   /// Replies with JSON-encoded ``DeviceInputState``, or nil if no input has been received yet.
   @objc func getDeviceInputState(vendorID: Int, productID: Int, reply: @escaping (Data?) -> Void)

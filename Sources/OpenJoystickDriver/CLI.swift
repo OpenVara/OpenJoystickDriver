@@ -10,7 +10,6 @@ struct CLI {
     case "list": ListCommand().run()
     case "status": StatusCommand().run()
     case "diagnose": DiagnoseCommand().run()
-    case "profile": ProfileCommand(args: Array(args.dropFirst())).run()
     case "start": StartDaemonCommand().run()
     case "restart": RestartDaemonCommand().run()
     case "install": InstallCommand().run()
@@ -40,8 +39,6 @@ struct CLI {
         list       List connected game controllers
         status     Show permission and device status
         diagnose   Hardware diagnostics
-        profile    Manage controller profiles \
-      (list|show|set|reset)
         install    Install daemon as LaunchAgent \
       (auto-starts on login)
         uninstall  Remove daemon LaunchAgent

@@ -8,6 +8,15 @@ import IOKit.hid
 /// events. IOKit delivers callbacks on the main run loop, and this class
 /// forwards them into the stream for safe async consumption.
 public final class HIDDeviceStream: @unchecked Sendable {
+
+  // MARK: - Thread safety
+  //
+  // @unchecked Sendable safety:
+  // - All IOKit callbacks are scheduled on the main run loop
+  // - `continuation` is written only from `deviceEvents()` and `cleanup()`,
+  //   both called from the main thread
+  // - `deviceEvents()` terminates any existing stream before creating a new one
+
   private let manager: IOHIDManager
   private var continuation: AsyncStream<HIDDeviceEvent>.Continuation?
 
@@ -33,7 +42,8 @@ public final class HIDDeviceStream: @unchecked Sendable {
   /// Only one stream can be active at a time. The stream ends when its
   /// consuming task is cancelled.
   public func deviceEvents() -> AsyncStream<HIDDeviceEvent> {
-    AsyncStream { continuation in
+    if continuation != nil { cleanup() }
+    return AsyncStream { continuation in
       self.continuation = continuation
       continuation.onTermination = { [weak self] _ in self?.cleanup() }
       self.registerCallbacks()

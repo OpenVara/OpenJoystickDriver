@@ -12,24 +12,17 @@ import IOKit.hid
 /// on every call until the dext loads.
 public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
+  // MARK: - Thread safety
+  //
+  // @unchecked Sendable safety:
+  // - `reportLock` guards all mutable report state (buttons, sticks, triggers, hat)
+  // - `connectionLock` guards `hidDevice` and `hidManager`
+  // - `suppressOutput` is only written from the main actor (XPC handler)
+
   // MARK: - OutputDispatcher
 
   /// When true, report injection is suppressed (e.g. during developer packet capture).
-  ///
-  /// Invalidates the profile cache on change.
-  public var suppressOutput = false {
-    didSet { if suppressOutput != oldValue { stateLock.withLock { profileCache.removeAll() } } }
-  }
-
-  // MARK: - Profile cache
-
-  private let profileStore: ProfileStore
-  private struct ProfileCacheEntry {
-    var profile: Profile
-    var fetchedAt: Date
-  }
-  private var profileCache: [String: ProfileCacheEntry] = [:]
-  private let profileCacheTTL: TimeInterval = 1.0
+  public var suppressOutput = false
 
   // MARK: - HID device connection
 
@@ -41,7 +34,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   // MARK: - Report state
 
-  private let stateLock = NSLock()
+  private let reportLock = NSLock()
   private var buttons: UInt32 = 0
   private var leftStickX: Int16 = 0
   private var leftStickY: Int16 = 0
@@ -57,12 +50,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   ///
   /// - Parameters:
   ///   - profile: Virtual device identity used for HID device matching.
-  ///   - profileStore: User profile store for deadzone/sensitivity settings.
-  public init(profile: VirtualDeviceProfile = .default, profileStore: ProfileStore = ProfileStore())
-  {
-    self.profile = profile
-    self.profileStore = profileStore
-  }
+  public init(profile: VirtualDeviceProfile = .default) { self.profile = profile }
 
   deinit { closeDevice() }
 
@@ -102,7 +90,10 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     ]
     let mgr = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
     IOHIDManagerSetDeviceMatching(mgr, matching as CFDictionary)
-    IOHIDManagerOpen(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+    let openResult = IOHIDManagerOpen(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+    if openResult != kIOReturnSuccess {
+      print("[DextOutputDispatcher] IOHIDManagerOpen warning: \(String(openResult, radix: 16))")
+    }
 
     guard let devices = IOHIDManagerCopyDevices(mgr) as? Set<IOHIDDevice>,
       let device = devices.first
@@ -138,10 +129,8 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     }
     guard let device else { return }
 
-    let profile = await cachedProfile(for: identifier)
-
-    var report = stateLock.withLock { () -> [UInt8] in
-      for event in events { applyEvent(event, deadzone: profile.stickDeadzone) }
+    var report = reportLock.withLock { () -> [UInt8] in
+      for event in events { applyEvent(event, deadzone: 0.15) }
       return buildReport()
     }
 
@@ -169,22 +158,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     }
   }
 
-  // MARK: - Profile cache
-
-  private func cachedProfile(for identifier: DeviceIdentifier) async -> Profile {
-    let key = "\(identifier.vendorID):\(identifier.productID)"
-    let now = Date()
-    if let entry = stateLock.withLock({ profileCache[key] }),
-      now.timeIntervalSince(entry.fetchedAt) < profileCacheTTL
-    {
-      return entry.profile
-    }
-    let fresh = await profileStore.profile(for: identifier)
-    stateLock.withLock { profileCache[key] = ProfileCacheEntry(profile: fresh, fetchedAt: now) }
-    return fresh
-  }
-
-  // MARK: - Event application (called inside stateLock.withLock)
+  // MARK: - Event application (called inside reportLock.withLock)
 
   private func applyEvent(_ event: ControllerEvent, deadzone: Float) {
     switch event {
@@ -206,7 +180,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     }
   }
 
-  // MARK: - Report construction (called inside stateLock.withLock)
+  // MARK: - Report construction (called inside reportLock.withLock)
 
   private func buildReport() -> [UInt8] {
     var r = [UInt8](repeating: 0, count: GamepadHIDDescriptor.reportSize)

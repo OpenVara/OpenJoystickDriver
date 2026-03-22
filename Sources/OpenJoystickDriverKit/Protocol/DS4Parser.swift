@@ -158,22 +158,6 @@ public final class DS4Parser: InputParser, @unchecked Sendable {
     return (events, system)
   }
 
-  private func diffButtons(prev: UInt8, curr: UInt8, mapping: [(UInt8, Button)])
-    -> [ControllerEvent]
-  {
-    var events: [ControllerEvent] = []
-    for (bit, button) in mapping {
-      let wasPressed = (prev & bit) != 0
-      let isPressed = (curr & bit) != 0
-      if !wasPressed && isPressed {
-        events.append(.buttonPressed(button))
-      } else if wasPressed && !isPressed {
-        events.append(.buttonReleased(button))
-      }
-    }
-    return events
-  }
-
   private func normalizeHID(_ raw: UInt8) -> Float { (Float(raw) - ds4AxisCenter) / ds4AxisCenter }
 
   private func mapHat(_ hat: UInt8) -> DpadDirection {

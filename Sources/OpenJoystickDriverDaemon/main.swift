@@ -5,12 +5,11 @@ import OpenJoystickDriverKit
 setbuf(stdout, nil)
 
 let permissionManager = PermissionManager()
-let profileStore = ProfileStore()
 
 // Always use the DriverKit virtual HID extension. If the dext isn't available yet
 // (e.g. pending reboot after first approval), dispatch() will auto-retry on each
 // input event until the connection succeeds.
-let dispatcher = DextOutputDispatcher(profileStore: profileStore)
+let dispatcher = DextOutputDispatcher()
 if dispatcher.connect() {
   print("[Daemon] Connected to DriverKit virtual HID extension")
 } else {
@@ -21,7 +20,6 @@ let manager = DeviceManager(dispatcher: dispatcher)
 let xpcService = XPCService(
   deviceManager: manager,
   permissionManager: permissionManager,
-  profileStore: profileStore,
   dispatcher: dispatcher
 )
 

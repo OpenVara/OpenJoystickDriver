@@ -28,13 +28,4 @@ import Testing
     #expect(abs(decoded.leftTrigger - 0.75) < 0.001)
   }
 
-  @Test func triggerMappingInProfile() {
-    let id = DeviceIdentifier(vendorID: 100, productID: 200)
-    var profile = Profile.makeDefault(for: id)
-    #expect(profile.buttonMappings["leftTrigger"] == nil)
-    profile.buttonMappings["leftTrigger"] = 56
-    #expect(profile.buttonMappings["leftTrigger"] == 56)
-    profile.buttonMappings.removeValue(forKey: "leftTrigger")
-    #expect(profile.buttonMappings["leftTrigger"] == nil)
-  }
 }

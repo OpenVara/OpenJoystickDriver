@@ -19,20 +19,17 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
 {
   private let deviceManager: DeviceManager
   private let permissionManager: PermissionManager
-  private let profileStore: ProfileStore
   private let dispatcher: any OutputDispatcher
   private var listener: NSXPCListener?
 
-  /// Creates an XPCService backed by the given device manager, permission manager, profile store, and output dispatcher.
+  /// Creates an XPCService backed by the given device manager, permission manager, and output dispatcher.
   public init(
     deviceManager: DeviceManager,
     permissionManager: PermissionManager,
-    profileStore: ProfileStore,
     dispatcher: any OutputDispatcher
   ) {
     self.deviceManager = deviceManager
     self.permissionManager = permissionManager
-    self.profileStore = profileStore
     self.dispatcher = dispatcher
   }
 
@@ -85,153 +82,12 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       let inputState = await pm.inputMonitoringState
       let devices = await dm.connectedDeviceDescriptions()
       let payload = XPCStatusPayload(inputMonitoring: "\(inputState)", connectedDevices: devices)
-      let data = (try? JSONEncoder().encode(payload)) ?? Data()
-      callback.call(data)
-    }
-  }
-
-  /// Returns all stored profiles as encoded JSON data.
-  public func listProfiles(reply: @escaping (Data) -> Void) {
-    let callback = SendableReply(call: reply)
-    let ps = profileStore
-    Task {
-      let profiles = await ps.listProfiles()
-      let data = (try? JSONEncoder().encode(profiles)) ?? Data()
-      callback.call(data)
-    }
-  }
-
-  /// Returns the active profile for the specified device as encoded JSON data.
-  public func getProfile(vendorID: Int, productID: Int, reply: @escaping (Data) -> Void) {
-    let callback = SendableReply(call: reply)
-    let ps = profileStore
-    Task {
-      let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
-      let profile = await ps.profile(for: identifier)
-      let data = (try? JSONEncoder().encode(profile)) ?? Data()
-      callback.call(data)
-    }
-  }
-
-  /// Decodes and persists the given profile data, returning whether the save succeeded.
-  public func saveProfile(profileData: Data, reply: @escaping (Bool) -> Void) {
-    let callback = SendableReply(call: reply)
-    let ps = profileStore
-    Task {
-      guard let profile = try? JSONDecoder().decode(Profile.self, from: profileData) else {
-        callback.call(false)
-        return
-      }
       do {
-        try await ps.save(profile)
-        callback.call(true)
+        let data = try JSONEncoder().encode(payload)
+        callback.call(data)
       } catch {
-        print("[XPCService] saveProfile error: \(error)")
-        callback.call(false)
-      }
-    }
-  }
-
-  /// Resets the profile for the specified device to its default state.
-  public func resetProfile(vendorID: Int, productID: Int, reply: @escaping (Bool) -> Void) {
-    let callback = SendableReply(call: reply)
-    let ps = profileStore
-    Task {
-      let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
-      do {
-        try await ps.reset(for: identifier)
-        callback.call(true)
-      } catch {
-        print("[XPCService] resetProfile error: \(error)")
-        callback.call(false)
-      }
-    }
-  }
-
-  /// Returns all profiles for the specified device as encoded JSON data.
-  public func allProfiles(vendorID: Int, productID: Int, reply: @escaping (Data) -> Void) {
-    let callback = SendableReply(call: reply)
-    let ps = profileStore
-    Task {
-      let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
-      let profiles = await ps.allProfiles(for: identifier)
-      let data = (try? JSONEncoder().encode(profiles)) ?? Data()
-      callback.call(data)
-    }
-  }
-
-  /// Decodes the given profile data, assigns it to the specified device, and returns the saved profile as JSON.
-  public func addProfile(
-    profileData: Data,
-    vendorID: Int,
-    productID: Int,
-    reply: @escaping (Data?) -> Void
-  ) {
-    let callback = SendableReply(call: reply)
-    let ps = profileStore
-    Task {
-      guard var profile = try? JSONDecoder().decode(Profile.self, from: profileData) else {
-        callback.call(nil)
-        return
-      }
-      profile.vendorID = UInt16(vendorID)
-      profile.productID = UInt16(productID)
-      do {
-        try await ps.addProfile(profile)
-        callback.call(try? JSONEncoder().encode(profile))
-      } catch {
-        print("[XPCService] addProfile error: \(error)")
-        callback.call(nil)
-      }
-    }
-  }
-
-  /// Deletes the profile with the given ID from the specified device's profile list.
-  public func deleteProfile(
-    profileId: String,
-    vendorID: Int,
-    productID: Int,
-    reply: @escaping (Bool) -> Void
-  ) {
-    let callback = SendableReply(call: reply)
-    let ps = profileStore
-    Task {
-      guard let uuid = UUID(uuidString: profileId) else {
-        callback.call(false)
-        return
-      }
-      let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
-      do {
-        try await ps.deleteProfile(id: uuid, for: identifier)
-        callback.call(true)
-      } catch {
-        print("[XPCService] deleteProfile error: \(error)")
-        callback.call(false)
-      }
-    }
-  }
-
-  /// Sets the active profile for the specified device to the profile matching the given ID.
-  public func setActiveProfile(
-    profileId: String,
-    vendorID: Int,
-    productID: Int,
-    reply: @escaping (Bool) -> Void
-  ) {
-    let callback = SendableReply(call: reply)
-    let ps = profileStore
-    Task {
-      guard let uuid = UUID(uuidString: profileId) else {
-        callback.call(false)
-        return
-      }
-      let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
-      do {
-        try await ps.setActiveProfile(id: uuid, for: identifier)
-        callback.call(true)
-      } catch {
-        print("[XPCService] setActiveProfile error: \(error)")
-        callback.call(false)
+        print("[XPCService] getStatus encode error: \(error)")
+        callback.call(Data())
       }
     }
   }
@@ -254,7 +110,13 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     Task {
       let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
       let log = await dm.packetLog(for: identifier)
-      callback.call((try? JSONEncoder().encode(log)) ?? Data())
+      do {
+        let data = try JSONEncoder().encode(log)
+        callback.call(data)
+      } catch {
+        print("[XPCService] getPacketLog encode error: \(error)")
+        callback.call(Data())
+      }
     }
   }
 

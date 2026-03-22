@@ -6,8 +6,7 @@ struct RunCommand {
     print("[OpenJoystickDriver] Starting driver...")
     print("[OpenJoystickDriver] Press Ctrl+C to stop.")
 
-    let profileStore = ProfileStore()
-    let dispatcher = DextOutputDispatcher(profileStore: profileStore)
+    let dispatcher = DextOutputDispatcher()
     let manager = DeviceManager(dispatcher: dispatcher)
 
     manager.setupGracefulShutdown(label: "OpenJoystickDriver")

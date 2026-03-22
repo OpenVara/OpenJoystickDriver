@@ -4,21 +4,15 @@ import SwiftUI
 struct DeviceDetailView: View {
   let device: DeviceViewModel
   @EnvironmentObject var model: AppModel
-  @State private var selectedTab = 0
+  @State private var selectedTab = 1
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       headerSection
       Divider()
-      if selectedTab == 0 {
-        MappingEditorView(device: device)
-      } else if selectedTab == 2 {
-        DeveloperTabView(device: device)
-      } else {
-        infoTab
-      }
+      if selectedTab == 2 { DeveloperTabView(device: device) } else { infoTab }
     }.onChange(of: model.developerMode) { newValue in
-      if !newValue && selectedTab == 2 { selectedTab = 0 }
+      if !newValue && selectedTab == 2 { selectedTab = 1 }
     }
   }
 
@@ -43,10 +37,7 @@ struct DeviceDetailView: View {
   }
 
   private var detailTabs: [(label: String, icon: String, tag: Int)] {
-    var tabs = [
-      (label: "Mapping", icon: "slider.horizontal.3", tag: 0),
-      (label: "Info", icon: "info.circle", tag: 1),
-    ]
+    var tabs = [(label: "Info", icon: "info.circle", tag: 1)]
     if model.developerMode { tabs.append((label: "Developer", icon: "hammer", tag: 2)) }
     return tabs
   }

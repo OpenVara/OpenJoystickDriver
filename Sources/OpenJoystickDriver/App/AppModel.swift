@@ -37,7 +37,6 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   @Published var daemonError: String?
   @Published var devices: [DeviceViewModel] = []
   @Published var inputMonitoring = "unknown"
-  @Published var profiles: [Profile] = []
   @Published var extensionManager = SystemExtensionManager()
   var developerMode: Bool
 
@@ -96,8 +95,13 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
 
   func startDaemon() async {
     daemonError = nil
-    let task = Task.detached { DaemonManager.start() }
-    await task.value
+    do {
+      let task = Task.detached { try DaemonManager.start() }
+      try await task.value
+    } catch {
+      daemonError = error.localizedDescription
+      return
+    }
     try? await Task.sleep(for: .seconds(1))
     await poll()
   }
@@ -105,8 +109,14 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   func restartDaemon() async {
     daemonError = nil
     daemonRestarting = true
-    let task = Task.detached { DaemonManager.restart() }
-    await task.value
+    do {
+      let task = Task.detached { try DaemonManager.restart() }
+      try await task.value
+    } catch {
+      daemonError = error.localizedDescription
+      daemonRestarting = false
+      return
+    }
     client.disconnect()
     for _ in 0..<3 {
       try? await Task.sleep(for: .seconds(2))
@@ -127,41 +137,6 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       return
     }
     refreshDaemonStatus()
-  }
-
-  func saveProfile(_ profile: Profile) async throws {
-    try await client.saveProfile(profile)
-    await refreshProfiles()
-  }
-
-  func resetProfile(vendorID: UInt16, productID: UInt16) async throws {
-    try await client.resetProfile(vendorID: vendorID, productID: productID)
-    await refreshProfiles()
-  }
-
-  func refreshProfiles() async {
-    do { profiles = try await client.listProfiles() } catch {
-      print("[AppModel] refreshProfiles error: \(error)")
-    }
-  }
-
-  func allProfiles(vendorID: UInt16, productID: UInt16) async throws -> [Profile] {
-    try await client.allProfiles(vendorID: vendorID, productID: productID)
-  }
-
-  func addProfile(name: String, basedOn profile: Profile) async throws -> Profile {
-    var copy = profile
-    copy.id = UUID()
-    copy.name = name
-    return try await client.addProfile(copy)
-  }
-
-  func deleteProfile(id: UUID, vendorID: UInt16, productID: UInt16) async throws {
-    try await client.deleteProfile(id: id, vendorID: vendorID, productID: productID)
-  }
-
-  func setActiveProfile(id: UUID, vendorID: UInt16, productID: UInt16) async throws {
-    try await client.setActiveProfile(id: id, vendorID: vendorID, productID: productID)
   }
 
   func deviceInputState(vendorID: UInt16, productID: UInt16) async -> DeviceInputState? {
@@ -189,8 +164,6 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       // so UI shows something useful rather than stale "unknown".
       inputMonitoring = "\(await permissionManager.checkAccess())"
     }
-
-    await refreshProfiles()
   }
 
   private func startPolling() {
