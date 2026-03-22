@@ -30,16 +30,17 @@ import Testing
     #expect(seq.next(for: 5) == 0)
   }
 
-  @Test func parseMainInputAllZero() throws {
+  @Test func parseMainInputAllZeroEmitsNoStickEvents() throws {
     let parser = GIPParser()
     var packet = Data([0x20, 32, 0, 14])
     packet += Data(repeating: 0, count: 14)
     let events = try parser.parse(data: packet)
-    let hasLeftStick = events.contains {
+    let hasStick = events.contains {
       if case .leftStickChanged = $0 { return true }
+      if case .rightStickChanged = $0 { return true }
       return false
     }
-    #expect(hasLeftStick)
+    #expect(!hasStick)
   }
 
   @Test func parseMainInputAButton() throws {
