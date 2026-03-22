@@ -3,69 +3,6 @@
 	"version": "1.0.0",
 	"devices": [
 		{
-			"vendor_id": 1118,
-			"product_id": 654,
-			"name": "Xbox 360 Controller",
-			"short_name": "X360",
-			"parser": "XB360",
-			"usb_class": 255,
-			"virtual_profile": "xboxOneS"
-		},
-		{
-			"vendor_id": 1118,
-			"product_id": 655,
-			"name": "Xbox 360 Controller v2",
-			"short_name": "X360v2",
-			"parser": "XB360",
-			"usb_class": 255,
-			"virtual_profile": "xboxOneS"
-		},
-		{
-			"vendor_id": 1118,
-			"product_id": 721,
-			"name": "Xbox One Controller",
-			"short_name": "XOne",
-			"parser": "GIP",
-			"usb_class": 255,
-			"virtual_profile": "xboxOneS"
-		},
-		{
-			"vendor_id": 1118,
-			"product_id": 733,
-			"name": "Xbox One Controller v2",
-			"short_name": "XOnev2",
-			"parser": "GIP",
-			"usb_class": 255,
-			"virtual_profile": "xboxOneS"
-		},
-		{
-			"vendor_id": 1118,
-			"product_id": 739,
-			"name": "Xbox One Elite Controller",
-			"short_name": "XElite",
-			"parser": "GIP",
-			"usb_class": 255,
-			"virtual_profile": "xboxOneS"
-		},
-		{
-			"vendor_id": 1118,
-			"product_id": 746,
-			"name": "Xbox One S Controller (USB)",
-			"short_name": "XOneS",
-			"parser": "GIP",
-			"usb_class": 255,
-			"virtual_profile": "xboxOneS"
-		},
-		{
-			"vendor_id": 1118,
-			"product_id": 767,
-			"name": "Xbox One Elite Controller v2",
-			"short_name": "XEliv2",
-			"parser": "GIP",
-			"usb_class": 255,
-			"virtual_profile": "xboxOneS"
-		},
-		{
 			"vendor_id": 13623,
 			"product_id": 4112,
 			"name": "GameSir-G7 SE Controller for Xbox",

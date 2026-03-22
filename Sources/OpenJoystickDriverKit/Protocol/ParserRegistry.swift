@@ -18,7 +18,6 @@ public final class ParserRegistry: Sendable {
     switch catalog.parserName(for: identifier) {
     case "GIP": return GIPParser()
     case "DS4": return DS4Parser()
-    case "XB360": return XB360Parser()
     default: return GenericHIDParser(identifier: identifier)
     }
   }
