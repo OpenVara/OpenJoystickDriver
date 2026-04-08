@@ -44,26 +44,26 @@ def decode_profile(path: str) -> bytes:
     return p.stdout if (p.returncode == 0 and p.stdout) else b""
 
 def sha1_of_der(der: bytes) -> str:
-    out = subprocess.run(
+    p = subprocess.run(
         ["openssl", "x509", "-inform", "DER", "-noout", "-fingerprint", "-sha1"],
         input=der,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
-        text=True,
         check=True,
-    ).stdout.strip()
+    )
+    out = p.stdout.decode("utf-8", "replace").strip()
     # "sha1 Fingerprint=AA:BB:..."
     return out.split("=", 1)[1].replace(":", "").lower()
 
 def serial_of_der(der: bytes) -> str:
-    out = subprocess.run(
+    p = subprocess.run(
         ["openssl", "x509", "-inform", "DER", "-noout", "-serial"],
         input=der,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
-        text=True,
         check=True,
-    ).stdout.strip()
+    )
+    out = p.stdout.decode("utf-8", "replace").strip()
     return out.split("=", 1)[1]
 
 def subject_rfc2253_of_der(der: bytes) -> str:
@@ -144,4 +144,3 @@ for path in profiles:
     print(f"  embedded_cert_ou: {ou}")
     print(f"  embedded_cert_cn_suffix: {cn_suffix}")
 PY
-
