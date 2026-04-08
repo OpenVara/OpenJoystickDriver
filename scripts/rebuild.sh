@@ -127,46 +127,13 @@ fi
 
 echo ""
 echo "=== Step 9: Restart daemon ==="
-
-DAEMON_PLIST=~/Library/LaunchAgents/com.openjoystickdriver.daemon.plist
-DAEMON_BIN_PATH="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon"
-DAEMON_LABEL="com.openjoystickdriver.daemon"
-
-mkdir -p ~/Library/LaunchAgents
-cat > "$DAEMON_PLIST" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>${DAEMON_LABEL}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${DAEMON_BIN_PATH}</string>
-  </array>
-  <key>MachServices</key>
-  <dict>
-    <key>com.openjoystickdriver.xpc</key>
-    <true/>
-  </dict>
-  <key>KeepAlive</key>
-  <true/>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>StandardErrorPath</key>
-  <string>/tmp/${DAEMON_LABEL}.err</string>
-  <key>StandardOutPath</key>
-  <string>/tmp/${DAEMON_LABEL}.out</string>
-</dict>
-</plist>
-EOF
-echo "  Wrote $DAEMON_PLIST"
-
-launchctl bootstrap "gui/$(id -u)" "$DAEMON_PLIST" 2>/dev/null || true
-launchctl kickstart -k "gui/$(id -u)/$DAEMON_LABEL" 2>/dev/null \
-  && echo "  ✓ Daemon restarted" \
-  || echo "  ⚠ Daemon kickstart failed"
+APP_BIN="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver"
+if "$APP_BIN" --headless restart; then
+  echo "  ✓ Daemon restarted"
+else
+  echo "  ✗ Daemon restart failed"
+  echo "    Fix: run: $APP_BIN --headless install"
+fi
 sleep 3
 
 echo ""

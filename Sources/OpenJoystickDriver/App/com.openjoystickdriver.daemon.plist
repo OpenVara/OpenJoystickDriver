@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.openjoystickdriver.daemon</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon</string>
+  </array>
+
+  <!-- Required so NSXPCListener(machServiceName:) is allowed to bind this name. -->
+  <key>MachServices</key>
+  <dict>
+    <key>com.openjoystickdriver.xpc</key>
+    <true/>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Avoid "inefficient" kill loops if the daemon exits quickly during development. -->
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/com.openjoystickdriver.daemon.out</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/com.openjoystickdriver.daemon.err</string>
+</dict>
+</plist>
+

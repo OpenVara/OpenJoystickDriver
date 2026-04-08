@@ -101,10 +101,12 @@ If those Team IDs differ:
 
 For the entitlement `com.apple.developer.hid.virtual.device`:
 
-- **DriverKit dext profile** must have it:
-  `OpenJoystickDriver_VirtualHIDDevice.provisionprofile` (bundle id suffix `com.openjoystickdriver.VirtualHIDDevice`)
-- If you enable the app’s **SDL Compatibility (User-Space Virtual Device)** mode, the **daemon profile** must also have it:
-  `OpenJoystickDriverDaemon.provisionprofile` (dev) and `OpenJoystickDriverDaemon_DevID.provisionprofile` (release)
+- It must be present on the **Identifier that creates the user-space virtual device (IOHIDUserDevice)**.
+  In this repo that can be:
+  - **Daemon** (normal path): `OpenJoystickDriverDaemon.provisionprofile` (dev) and `OpenJoystickDriverDaemon_DevID.provisionprofile` (release)
+  - **GUI app** (embedded fallback path): `OpenJoystickDriver.provisionprofile` (dev) and `OpenJoystickDriver_DevID.provisionprofile` (release)
+
+The DriverKit `.dext` does **not** use IOHIDUserDevice and does not need `com.apple.developer.hid.virtual.device`.
 
 ### If Keychain shows the “wrong” Team ID in the certificate name
 
@@ -123,6 +125,19 @@ This repo has a helper that reads your Keychain + installed profiles and writes 
 ```
 
 ## Common tasks
+
+### Daemon install / restart (no launchctl)
+
+Daemon lifecycle is managed via macOS ServiceManagement (`SMAppService`) from inside the app bundle.
+Do not use `launchctl bootstrap` manually.
+
+Commands (run the app-bundled binary):
+
+```bash
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless install
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless restart
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless uninstall
+```
 
 ### Dev build (signed) + app bundle
 

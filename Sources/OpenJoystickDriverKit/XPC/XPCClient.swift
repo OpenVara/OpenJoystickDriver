@@ -164,6 +164,20 @@ public final class XPCClient: @unchecked Sendable {
     return payload
   }
 
+  /// Sets which identity/protocol to emulate in Compatibility mode (user-space IOHIDUserDevice).
+  ///
+  /// Values: "generic", "xboxOne", "xbox360".
+  public func setCompatibilityIdentity(_ raw: String) async throws {
+    let _: Bool = try await xpcCall { service, reply in
+      service.setCompatibilityIdentity(raw, reply: reply)
+    }
+  }
+
+  /// Gets which identity/protocol is configured for Compatibility mode.
+  public func getCompatibilityIdentity() async throws -> String {
+    try await xpcCall { service, reply in service.getCompatibilityIdentity(reply: reply) }
+  }
+
   /// Sets the daemon output routing mode.
   ///
   /// Values: "primaryOnly", "secondaryOnly", or "both".
@@ -189,6 +203,10 @@ public final class XPCClient: @unchecked Sendable {
       throw XPCError.invalidResponse
     }
     return payload
+  }
+
+  public func resetSettings() async throws -> Bool {
+    try await xpcCall { service, reply in service.resetSettings(reply: reply) }
   }
 
   // MARK: - Private

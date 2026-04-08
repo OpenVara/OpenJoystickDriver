@@ -3,6 +3,7 @@ import IOKit
 import IOKit.hid
 import IOKit.hidsystem
 import Security
+import Darwin
 
 /// Sends HID input reports via a user-space IOHIDUserDevice.
 ///
@@ -32,28 +33,24 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
   // MARK: - HID user device
 
   private let profile: VirtualDeviceProfile
+  private let format: any VirtualGamepadReportFormat
   private var userDevice: IOHIDUserDevice?
   private let deviceLock = NSLock()
 
   // MARK: - Report state
 
   private let reportLock = NSLock()
-  private var buttons: UInt32 = 0
-  private var leftStickX: Int16 = 0
-  private var leftStickY: Int16 = 0
-  private var rightStickX: Int16 = 0
-  private var rightStickY: Int16 = 0
-  private var leftTrigger: Int16 = 0
-  private var rightTrigger: Int16 = 0
-  private var hat: GamepadHIDDescriptor.Hat = .neutral
+  private var state = VirtualGamepadState()
 
   /// Last creation error (human-readable), for UI display.
   public private(set) var status: String = "off"
 
   public init(
-    profile: VirtualDeviceProfile = .default
+    profile: VirtualDeviceProfile = .default,
+    format: any VirtualGamepadReportFormat = OJDGenericGamepadFormat()
   ) throws {
     self.profile = profile
+    self.format = format
     try createDevice()
   }
 
@@ -65,7 +62,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
   }
 
   private func createDevice() throws {
-    let descriptor = Data(GamepadHIDDescriptor.descriptor)
+    let descriptor = Data(format.descriptor)
 
     // IMPORTANT: Keep the properties dictionary minimal. Some HID keys that are valid on
     // real devices are rejected for IOHIDUserDevice creation on newer macOS builds.
@@ -77,7 +74,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       )
     }
 
-    var properties: [String: Any] = [
+    let baseProperties: [String: Any] = [
       kIOHIDReportDescriptorKey as String: descriptor,
       kIOHIDVendorIDKey as String: NSNumber(value: profile.vendorID),
       kIOHIDProductIDKey as String: NSNumber(value: profile.productID),
@@ -85,19 +82,56 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       kIOHIDManufacturerKey as String: profile.manufacturer,
       kIOHIDSerialNumberKey as String: UserSpaceVirtualDeviceConstants.serialNumber,
       kIOHIDTransportKey as String: "USB",
+      kIOHIDMaxInputReportSizeKey as String: NSNumber(
+        value: (format.inputReportID == nil) ? format.inputReportPayloadSize : (format.inputReportPayloadSize + 1)
+      ),
     ]
-    properties[kIOHIDLocationIDKey as String] = NSNumber(
-      value: UserSpaceVirtualDeviceConstants.locationID
-    )
 
-    var dev = tryCreate(properties)
-    if dev == nil {
-      // Some macOS builds reject certain HID keys for IOHIDUserDevice creation.
-      // LocationID is optional; fall back to 0 and expose a precise status string.
+    let usageProps: [String: Any] = [
+      kIOHIDPrimaryUsagePageKey as String: NSNumber(value: Int(kHIDPage_GenericDesktop)),
+      kIOHIDPrimaryUsageKey as String: NSNumber(value: Int(kHIDUsage_GD_GamePad)),
+      kIOHIDDeviceUsagePairsKey as String: [[
+        kIOHIDDeviceUsagePageKey as String: NSNumber(value: Int(kHIDPage_GenericDesktop)),
+        kIOHIDDeviceUsageKey as String: NSNumber(value: Int(kHIDUsage_GD_GamePad)),
+      ]],
+    ]
+
+    let noPairsUsageProps: [String: Any] = [
+      kIOHIDPrimaryUsagePageKey as String: NSNumber(value: Int(kHIDPage_GenericDesktop)),
+      kIOHIDPrimaryUsageKey as String: NSNumber(value: Int(kHIDUsage_GD_GamePad)),
+    ]
+
+    let attemptVariants: [(label: String, props: [String: Any])] = [
+      ("usage+pairs", baseProperties.merging(usageProps) { a, _ in a }),
+      ("usage(no-pairs)", baseProperties.merging(noPairsUsageProps) { a, _ in a }),
+      ("no-usage", baseProperties),
+    ]
+    // Some macOS builds reject certain LocationID values for IOHIDUserDevice creation.
+    // Try a stable-but-small LocationID first, then fall back to the namespaced constant.
+    let candidateLocationIDs: [UInt32] = [
+      0x1000_0002,  // stable, non-zero; avoids LocationID=0/1 ambiguity in some consumers
+      UserSpaceVirtualDeviceConstants.locationID,
+    ]
+
+    var dev: IOHIDUserDevice?
+    attemptLoop: for variant in attemptVariants {
+      var properties = variant.props
+
+      for loc in candidateLocationIDs {
+        properties[kIOHIDLocationIDKey as String] = NSNumber(value: Int64(loc))
+        dev = tryCreate(properties)
+        if dev != nil {
+          if status == "off" { status = "on (\(variant.label))" }
+          break attemptLoop
+        }
+      }
+
+      // LocationID is optional; try without it.
       properties.removeValue(forKey: kIOHIDLocationIDKey as String)
       dev = tryCreate(properties)
       if dev != nil {
-        status = "warning: created without LocationID (some apps may ignore this device)"
+        status = "warning: created without LocationID (\(variant.label))"
+        break attemptLoop
       }
     }
 
@@ -111,7 +145,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       throw CreationError.createFailed
     }
     deviceLock.withLock { userDevice = dev }
-    if !status.hasPrefix("warning:") { status = "on" }
+    if status == "off" { status = "on" }
   }
 
   private static func hasEntitlement(_ entitlement: String) -> Bool {
@@ -129,16 +163,16 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     guard !suppressOutput else { return }
     guard let dev = deviceLock.withLock({ userDevice }) else { return }
 
-    var report = reportLock.withLock { () -> [UInt8] in
+    let report = reportLock.withLock { () -> [UInt8] in
       for event in events { applyEvent(event, deadzone: 0.15) }
-      return buildReport()
+      return format.buildInputReport(from: state)
     }
 
-    let result = report.withUnsafeMutableBytes { ptr -> IOReturn in
+    let result = report.withUnsafeBytes { ptr -> IOReturn in
       guard let base = ptr.baseAddress else { return kIOReturnBadArgument }
       return IOHIDUserDeviceHandleReportWithTimeStamp(
         dev,
-        0,
+        mach_absolute_time(),
         base.assumingMemoryBound(to: UInt8.self),
         ptr.count
       )
@@ -155,49 +189,25 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
 
   private func applyEvent(_ event: ControllerEvent, deadzone: Float) {
     switch event {
-    case .buttonPressed(let btn): if let bit = buttonBit(for: btn) { buttons |= (1 << bit) }
-    case .buttonReleased(let btn): if let bit = buttonBit(for: btn) { buttons &= ~(1 << bit) }
+    case .buttonPressed(let btn):
+      if let bit = buttonBit(for: btn) { state.buttons |= (1 << bit) }
+    case .buttonReleased(let btn):
+      if let bit = buttonBit(for: btn) { state.buttons &= ~(1 << bit) }
     case .leftStickChanged(let x, let y):
-      leftStickX = axisValue(x, deadzone: deadzone)
-      leftStickY = axisValue(y, deadzone: deadzone)
+      state.leftStickX = axisValue(x, deadzone: deadzone)
+      state.leftStickY = axisValue(y, deadzone: deadzone)
     case .rightStickChanged(let x, let y):
-      rightStickX = axisValue(x, deadzone: deadzone)
-      rightStickY = axisValue(y, deadzone: deadzone)
-    case .leftTriggerChanged(let v): leftTrigger = Int16(v.clamped(to: 0...1) * 32_767)
-    case .rightTriggerChanged(let v): rightTrigger = Int16(v.clamped(to: 0...1) * 32_767)
+      state.rightStickX = axisValue(x, deadzone: deadzone)
+      state.rightStickY = axisValue(y, deadzone: deadzone)
+    case .leftTriggerChanged(let v):
+      state.leftTrigger = Int16(v.clamped(to: 0...1) * 32_767)
+    case .rightTriggerChanged(let v):
+      state.rightTrigger = Int16(v.clamped(to: 0...1) * 32_767)
     case .dpadChanged(let dir):
-      hat = hatValue(for: dir)
+      state.hat = hatValue(for: dir)
       let dpadMask: UInt32 = 0xF << 11
-      buttons = (buttons & ~dpadMask) | GamepadHIDDescriptor.dpadButtonBits(for: hat)
+      state.buttons = (state.buttons & ~dpadMask) | GamepadHIDDescriptor.dpadButtonBits(for: state.hat)
     }
-  }
-
-  // MARK: - Report construction (called inside reportLock.withLock)
-
-  private func buildReport() -> [UInt8] {
-    var r = [UInt8](repeating: 0, count: GamepadHIDDescriptor.reportSize)
-    r[0] = UInt8(buttons & 0xFF)
-    r[1] = UInt8((buttons >> 8) & 0xFF)
-    let lsxB = leftStickX.littleEndianBytes
-    r[2] = lsxB.0
-    r[3] = lsxB.1
-    let lsyB = leftStickY.littleEndianBytes
-    r[4] = lsyB.0
-    r[5] = lsyB.1
-    let ltB = leftTrigger.littleEndianBytes
-    r[6] = ltB.0
-    r[7] = ltB.1
-    let rsxB = rightStickX.littleEndianBytes
-    r[8] = rsxB.0
-    r[9] = rsxB.1
-    let rsyB = rightStickY.littleEndianBytes
-    r[10] = rsyB.0
-    r[11] = rsyB.1
-    let rtB = rightTrigger.littleEndianBytes
-    r[12] = rtB.0
-    r[13] = rtB.1
-    r[14] = hat.rawValue & 0x0F
-    return r
   }
 
   // MARK: - Button mapping (XInputHID order)

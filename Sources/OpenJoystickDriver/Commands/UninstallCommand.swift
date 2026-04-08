@@ -4,6 +4,8 @@ import OpenJoystickDriverKit
 /// Uninstalls daemon LaunchAgent for current user.
 struct UninstallCommand {
   func run() {
+    requireApplicationsBundleOrExit()
+    requireValidBundleSignatureOrExit(action: "Uninstall")
     do {
       try DaemonManager.uninstall()
       print("Daemon uninstalled.")

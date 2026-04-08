@@ -3,6 +3,8 @@ import OpenJoystickDriverKit
 
 struct RestartDaemonCommand {
   func run() {
+    requireApplicationsBundleOrExit()
+    requireValidBundleSignatureOrExit(action: "Restart")
     guard DaemonManager.isInstalled else {
       print("Daemon is not installed. Run 'install' first.")
       exit(1)

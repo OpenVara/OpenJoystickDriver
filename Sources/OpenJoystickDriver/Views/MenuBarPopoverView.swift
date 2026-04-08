@@ -25,6 +25,7 @@ struct MenuBarPopoverView: View {
     .onAppear {
       Task {
         await model.syncFromDaemonNow()
+        model.extensionManager.refreshInstallState()
       }
     }
     .confirmationDialog(
@@ -53,21 +54,28 @@ struct MenuBarPopoverView: View {
   }
 
   private var daemonRow: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    return VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 8) {
-        Text("Daemon").font(.subheadline)
+        Text("Driver").font(.subheadline)
         Spacer()
         Text(model.daemonConnected ? "running" : (model.daemonInstalled ? "installed" : "missing"))
           .font(.caption)
           .foregroundStyle(model.daemonConnected ? .green : .secondary)
       }
 
+      Text("Controllers: \(model.devices.count)").font(.caption2).foregroundStyle(.secondary)
+      Text("Input Monitoring: \(model.inputMonitoring)").font(.caption2).foregroundStyle(.secondary)
+
       if let h = model.daemonHealth, h.installed {
         let state = h.state ?? "unknown"
+        let pid = h.pid.map { "\($0)" } ?? "?"
+        let active = h.activeCount.map { "\($0)" } ?? "?"
         let runs = h.runs.map { "\($0)" } ?? "?"
         let reason = h.isInefficientKillLoop ? (h.immediateReason ?? h.blame) : nil
         HStack(spacing: 8) {
-          Text("launchd: \(state), runs \(runs)\(reason.map { ", \($0)" } ?? "")")
+          Text(
+            "launchd: state=\(state), pid=\(pid), active=\(active), runs=\(runs)\(reason.map { ", \($0)" } ?? "")"
+          )
             .font(.caption2)
             .foregroundStyle(h.isInefficientKillLoop ? .orange : .secondary)
             .lineLimit(2)
@@ -91,16 +99,15 @@ struct MenuBarPopoverView: View {
           .buttonStyle(.borderedProminent)
           .controlSize(.small)
         } else {
-          if !model.daemonConnected {
-            SwiftUI.Button("Start") {
-              Task {
-                await model.startDaemon()
-                await model.syncFromDaemonNow()
-              }
+          SwiftUI.Button("Start") {
+            Task {
+              await model.startDaemon()
+              await model.syncFromDaemonNow()
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
           }
+          .buttonStyle(.borderedProminent)
+          .controlSize(.small)
+          .disabled(model.daemonConnected)
           SwiftUI.Button("Restart") {
             Task {
               await model.restartDaemon()
@@ -154,6 +161,12 @@ struct MenuBarPopoverView: View {
           .font(.caption2)
         }
       }
+      if let w = model.extensionManager.installWarning, state.isInstalled {
+        Text(w)
+          .font(.caption2)
+          .foregroundStyle(.orange)
+          .fixedSize(horizontal: false, vertical: true)
+      }
       if let s = model.virtualDeviceDiagnostics?.driverKitOutputStats {
         let last = s.lastErrorHex ?? "none"
         Text("setReport: ok \(s.successes) / fail \(s.failures) (last \(last))")
@@ -183,6 +196,19 @@ struct MenuBarPopoverView: View {
       .pickerStyle(.segmented)
       .disabled(!model.daemonConnected)
 
+      let requestedLabel: String = {
+        switch model.virtualDeviceMode {
+        case VirtualDeviceMode.auto.rawValue: return "Auto"
+        case VirtualDeviceMode.driverKit.rawValue: return "DriverKit"
+        case VirtualDeviceMode.compatUserSpace.rawValue: return "Compatibility"
+        case VirtualDeviceMode.both.rawValue: return "Both"
+        default: return model.virtualDeviceMode
+        }
+      }()
+      Text("Requested mode: \(requestedLabel)")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+
       let activeLabel: String = {
         switch model.outputMode {
         case CompositeOutputDispatcher.Mode.primaryOnly.rawValue: return "DriverKit"
@@ -193,16 +219,30 @@ struct MenuBarPopoverView: View {
       }()
       Text("Active output: \(activeLabel)").font(.caption2).foregroundStyle(.secondary)
 
-      if model.outputMode != CompositeOutputDispatcher.Mode.primaryOnly.rawValue {
-        Text(model.userSpaceVirtualDeviceStatus)
-          .font(.caption2)
-          .foregroundStyle(
-            model.userSpaceVirtualDeviceStatus.hasPrefix("error:") ? .orange : .secondary
-          )
-      } else {
-        Text("Use Compatibility for apps that ignore DriverKit.").font(.caption2)
-          .foregroundStyle(.secondary)
+      let compatSelected = model.virtualDeviceMode == VirtualDeviceMode.compatUserSpace.rawValue
+      Picker(
+        "Compatibility identity",
+        selection: Binding(
+          get: { model.compatibilityIdentity },
+          set: { v in Task { await model.setCompatibilityIdentity(v) } }
+        )
+      ) {
+        Text("Generic (HID GamePad)").tag(CompatibilityIdentity.generic.rawValue)
+        Text("Xbox One (HID)").tag(CompatibilityIdentity.xboxOne.rawValue)
+        Text("Xbox 360 (experimental)").tag(CompatibilityIdentity.xbox360.rawValue)
       }
+      .pickerStyle(.menu)
+      .disabled(!model.daemonConnected || !compatSelected)
+
+      Text("Used only in Compatibility mode. If inputs stop working, set this back to Generic.")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+
+      Text("Compatibility backend: \(model.userSpaceVirtualDeviceStatus)")
+        .font(.caption2)
+        .foregroundStyle(
+          model.userSpaceVirtualDeviceStatus.hasPrefix("error:") ? .orange : .secondary
+        )
     }
   }
 
@@ -260,7 +300,6 @@ struct MenuBarPopoverView: View {
         }
       }
       .buttonStyle(.borderless)
-      .disabled(!model.daemonConnected)
 
       SwiftUI.Button("Show Log") {
         NSWorkspace.shared.selectFile("/tmp/com.openjoystickdriver.daemon.out", inFileViewerRootedAtPath: "")

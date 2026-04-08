@@ -35,6 +35,13 @@ done
 echo ""
 echo "=== NUKE: removing daemon from launchd ==="
 
+# Prefer SMAppService uninstall (modern path). This avoids relying on `launchctl bootstrap`
+# behavior and cleans up the registered agent cleanly.
+if [[ -x "$APP_PATH/Contents/MacOS/OpenJoystickDriver" ]]; then
+  "$APP_PATH/Contents/MacOS/OpenJoystickDriver" --headless uninstall \
+    && echo "  SMAppService uninstall succeeded" || true
+fi
+
 # Unload via every method launchd supports
 launchctl bootout "gui/$(id -u)/$DAEMON_LABEL" 2>/dev/null && echo "  bootout succeeded" || true
 launchctl remove "$DAEMON_LABEL" 2>/dev/null && echo "  remove succeeded" || true

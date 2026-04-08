@@ -15,6 +15,7 @@ struct CLI {
     case "selftest": SelfTestCommand().run(arguments: Array(args.dropFirst()))
     case "start": StartDaemonCommand().run()
     case "restart": RestartDaemonCommand().run()
+    case "reset-settings": ResetSettingsCommand().run()
     case "install": InstallCommand().run()
     case "uninstall": UninstallCommand().run()
     case "run": RunCommand().run()
@@ -45,11 +46,11 @@ struct CLI {
         userspace  Toggle user-space virtual gamepad (IOHIDUserDevice)
         output     Set output routing mode (DriverKit/user-space)
         selftest   Count input events on virtual devices
-        install    Install daemon as LaunchAgent \
-      (auto-starts on login)
-        uninstall  Remove daemon LaunchAgent
-        start      Start daemon LaunchAgent
-        restart    Restart daemon LaunchAgent
+        install    Register daemon LaunchAgent (SMAppService)
+        uninstall  Unregister daemon LaunchAgent
+        start      Start daemon (register if needed)
+        restart    Restart daemon (unregister+register)
+        reset-settings Reset daemon settings (mode/identity/output)
 
       Options:
         -h, --help     Show this help

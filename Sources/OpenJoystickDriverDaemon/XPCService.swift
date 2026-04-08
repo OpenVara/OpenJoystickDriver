@@ -23,14 +23,17 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
   private let permissionManager: PermissionManager
   private let dispatcher: CompositeOutputDispatcher
   private let dextDispatcher: DextOutputDispatcher
+  private let userSpaceLock = NSLock()
   private var userSpaceDispatcher: UserSpaceOutputDispatcher?
   private var userSpaceEnabled: Bool
   private var userSpaceStatus: String = "off"
+  private var compatibilityIdentity: CompatibilityIdentity
   private var virtualDeviceMode: VirtualDeviceMode
   /// Actual routing mode currently applied.
   private var effectiveOutputMode: CompositeOutputDispatcher.Mode
   private var listener: NSXPCListener?
   private static let userSpaceEnabledDefaultsKey = "UserSpaceVirtualDeviceEnabled"
+  private static let compatibilityIdentityDefaultsKey = "CompatibilityIdentity"
   private static let outputModeDefaultsKey = "OutputMode"  // legacy
   private static let virtualDeviceModeDefaultsKey = "VirtualDeviceMode"
 
@@ -46,6 +49,8 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     self.dispatcher = dispatcher
     self.dextDispatcher = dextDispatcher
     self.userSpaceEnabled = UserDefaults.standard.bool(forKey: Self.userSpaceEnabledDefaultsKey)
+    let savedCompat = UserDefaults.standard.string(forKey: Self.compatibilityIdentityDefaultsKey)
+    self.compatibilityIdentity = CompatibilityIdentity(rawValue: savedCompat ?? "") ?? .generic
     let savedVirtual = UserDefaults.standard.string(forKey: Self.virtualDeviceModeDefaultsKey)
     if let raw = savedVirtual, let mode = VirtualDeviceMode(rawValue: raw) {
       self.virtualDeviceMode = mode
@@ -58,7 +63,8 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       } else if userSpaceEnabled {
         self.virtualDeviceMode = .compatUserSpace
       } else {
-        self.virtualDeviceMode = .auto
+        // Default to Compatibility-first so SDL/IOKit apps work without requiring a reboot.
+        self.virtualDeviceMode = .compatUserSpace
       }
     }
     self.effectiveOutputMode = .primaryOnly
@@ -95,22 +101,32 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       dispatcher.setMode(.primaryOnly)
       UserDefaults.standard.set(CompositeOutputDispatcher.Mode.primaryOnly.rawValue, forKey: Self.outputModeDefaultsKey)
     case .compatUserSpace:
-      dextDispatcher.setEnabled(false)
+      // Compatibility is user-requested. Do not rewrite the requested mode on failures.
+      //
+      // If user-space creation fails, keep DriverKit enabled as a fallback but keep the
+      // requested mode as Compatibility and show an explicit error string.
       if setUserSpaceVirtualDeviceEnabledInternal(true) {
+        dextDispatcher.setEnabled(false)
         effectiveOutputMode = .secondaryOnly
         dispatcher.setMode(.secondaryOnly)
-        UserDefaults.standard.set(CompositeOutputDispatcher.Mode.secondaryOnly.rawValue, forKey: Self.outputModeDefaultsKey)
-      } else {
-        // Fail closed: stay DriverKit-only.
-        virtualDeviceMode = .driverKit
         UserDefaults.standard.set(
-          VirtualDeviceMode.driverKit.rawValue,
-          forKey: Self.virtualDeviceModeDefaultsKey
+          CompositeOutputDispatcher.Mode.secondaryOnly.rawValue,
+          forKey: Self.outputModeDefaultsKey
         )
+      } else {
         dextDispatcher.setEnabled(true)
         effectiveOutputMode = .primaryOnly
         dispatcher.setMode(.primaryOnly)
-        UserDefaults.standard.set(CompositeOutputDispatcher.Mode.primaryOnly.rawValue, forKey: Self.outputModeDefaultsKey)
+        UserDefaults.standard.set(
+          CompositeOutputDispatcher.Mode.primaryOnly.rawValue,
+          forKey: Self.outputModeDefaultsKey
+        )
+        if !userSpaceStatus.hasPrefix("error:") {
+          userSpaceStatus =
+            "error: Compatibility backend failed to start. Still using DriverKit output."
+        } else {
+          userSpaceStatus += " (still using DriverKit output)"
+        }
       }
     case .both:
       dextDispatcher.setEnabled(true)
@@ -119,15 +135,16 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         dispatcher.setMode(.both)
         UserDefaults.standard.set(CompositeOutputDispatcher.Mode.both.rawValue, forKey: Self.outputModeDefaultsKey)
       } else {
-        virtualDeviceMode = .driverKit
-        UserDefaults.standard.set(
-          VirtualDeviceMode.driverKit.rawValue,
-          forKey: Self.virtualDeviceModeDefaultsKey
-        )
         dextDispatcher.setEnabled(true)
         effectiveOutputMode = .primaryOnly
         dispatcher.setMode(.primaryOnly)
         UserDefaults.standard.set(CompositeOutputDispatcher.Mode.primaryOnly.rawValue, forKey: Self.outputModeDefaultsKey)
+        if !userSpaceStatus.hasPrefix("error:") {
+          userSpaceStatus =
+            "error: Compatibility backend failed to start. Still using DriverKit output."
+        } else {
+          userSpaceStatus += " (still using DriverKit output)"
+        }
       }
     }
   }
@@ -188,7 +205,8 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         userSpaceVirtualDeviceEnabled: userEnabled,
         userSpaceVirtualDeviceStatus: userStatus,
         virtualDeviceMode: virtualDeviceMode.rawValue,
-        effectiveOutputMode: effectiveOutputMode.rawValue
+        effectiveOutputMode: effectiveOutputMode.rawValue,
+        compatibilityIdentity: compatibilityIdentity.rawValue
       )
       do {
         let data = try JSONEncoder().encode(payload)
@@ -265,6 +283,45 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     reply(userSpaceStatus)
   }
 
+  public func setCompatibilityIdentity(_ raw: String, reply: @escaping (Bool) -> Void) {
+    guard let id = CompatibilityIdentity(rawValue: raw) else { reply(false); return }
+    // Transactional switch:
+    // - If user-space is enabled, do not tear down the current device until the new one is ready.
+    // - If creation fails, keep the existing device alive and do not change the persisted identity.
+    let ok = userSpaceLock.withLock { () -> Bool in
+      if userSpaceEnabled, let old = userSpaceDispatcher {
+        do {
+          let (newDispatcher, newStatus) = try buildUserSpaceDispatcher(identity: id)
+          dispatcher.setSecondary(newDispatcher)
+          userSpaceDispatcher = newDispatcher
+          userSpaceStatus = newStatus
+          compatibilityIdentity = id
+          UserDefaults.standard.set(id.rawValue, forKey: Self.compatibilityIdentityDefaultsKey)
+          old.close()
+          return true
+        } catch {
+          if !userSpaceStatus.hasPrefix("error:") {
+            userSpaceStatus =
+              "error: Failed to switch Compatibility identity (\(id.rawValue)). Kept previous Compatibility device running. \(error)"
+          } else {
+            userSpaceStatus += " (kept previous Compatibility device running)"
+          }
+          return false
+        }
+      }
+
+      // If user-space isn't currently enabled, just persist the choice. It will be applied on next enable.
+      compatibilityIdentity = id
+      UserDefaults.standard.set(id.rawValue, forKey: Self.compatibilityIdentityDefaultsKey)
+      return true
+    }
+    reply(ok)
+  }
+
+  public func getCompatibilityIdentity(reply: @escaping (String) -> Void) {
+    reply(compatibilityIdentity.rawValue)
+  }
+
   public func getVirtualDeviceDiagnostics(reply: @escaping (Data) -> Void) {
     let callback = SendableReply(call: reply)
     Task {
@@ -294,13 +351,9 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
   }
 
   public func getOutputMode(reply: @escaping (String) -> Void) {
-    // Legacy API: reflect current virtual mode.
-    switch virtualDeviceMode {
-    case .auto: reply(effectiveOutputMode.rawValue)
-    case .driverKit: reply(CompositeOutputDispatcher.Mode.primaryOnly.rawValue)
-    case .compatUserSpace: reply(CompositeOutputDispatcher.Mode.secondaryOnly.rawValue)
-    case .both: reply(CompositeOutputDispatcher.Mode.both.rawValue)
-    }
+    // Legacy API: return the *effective* output routing, not the requested mode.
+    // This prevents UI desync when Auto falls back to user-space.
+    reply(effectiveOutputMode.rawValue)
   }
 
   public func runVirtualDeviceSelfTest(seconds: Int, reply: @escaping (Data) -> Void) {
@@ -317,7 +370,63 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
+  public func resetSettings(reply: @escaping (Bool) -> Void) {
+    // Clear persisted keys so the daemon comes up in a known-good baseline.
+    UserDefaults.standard.removeObject(forKey: Self.userSpaceEnabledDefaultsKey)
+    UserDefaults.standard.removeObject(forKey: Self.compatibilityIdentityDefaultsKey)
+    UserDefaults.standard.removeObject(forKey: Self.outputModeDefaultsKey)
+    UserDefaults.standard.removeObject(forKey: Self.virtualDeviceModeDefaultsKey)
+
+    userSpaceLock.withLock {
+      dispatcher.setSecondary(nil)
+      userSpaceDispatcher?.close()
+      userSpaceDispatcher = nil
+      userSpaceEnabled = false
+      userSpaceStatus = "off"
+    }
+
+    compatibilityIdentity = .generic
+    virtualDeviceMode = .compatUserSpace
+    effectiveOutputMode = .primaryOnly
+    applyMode(.compatUserSpace)
+    reply(true)
+  }
+
   // MARK: - Private
+
+  private func buildUserSpaceDispatcher(identity: CompatibilityIdentity) throws -> (UserSpaceOutputDispatcher, String) {
+    enum CompatError: Swift.Error, CustomStringConvertible, Sendable {
+      case unsupported(String)
+      case physicalDescriptorNotFound(vendorID: Int, productID: Int)
+      var description: String {
+        switch self {
+        case .unsupported(let msg):
+          return msg
+        case .physicalDescriptorNotFound(let vid, let pid):
+          return
+            "No physical controller found to copy its HID descriptor (VID:0x\(String(vid, radix: 16)) PID:0x\(String(pid, radix: 16))). Plug it in once, then retry."
+        }
+      }
+    }
+
+    let profile: VirtualDeviceProfile
+    let format: any VirtualGamepadReportFormat
+    switch identity {
+    case .generic:
+      profile = .openJoystickDriver
+      format = OJDGenericGamepadFormat()
+    case .xboxOne:
+      profile = .xboxOneS
+      format = try HIDDescriptorReportFormat(descriptor: XboxOneBluetoothHIDDescriptor.descriptor)
+    case .xbox360:
+      throw CompatError.unsupported(
+        "Xbox 360 (experimental) is not supported yet (no built-in HID descriptor available). Use Generic or Xbox One (HID)."
+      )
+    }
+
+    let ud = try UserSpaceOutputDispatcher(profile: profile, format: format)
+    return (ud, ud.status)
+  }
 
   private func setUserSpaceVirtualDeviceEnabledInternal(_ enabled: Bool) -> Bool {
     if enabled == userSpaceEnabled {
@@ -333,29 +442,35 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
 
     if enabled {
       do {
-        let ud = try UserSpaceOutputDispatcher()
-        userSpaceDispatcher = ud
-        dispatcher.setSecondary(ud)
-        userSpaceEnabled = true
-        userSpaceStatus = ud.status
+        let (ud, s) = try buildUserSpaceDispatcher(identity: compatibilityIdentity)
+        userSpaceLock.withLock {
+          userSpaceDispatcher = ud
+          dispatcher.setSecondary(ud)
+          userSpaceEnabled = true
+          userSpaceStatus = s
+        }
         UserDefaults.standard.set(true, forKey: Self.userSpaceEnabledDefaultsKey)
         print("[XPCService] Enabled user-space virtual gamepad")
         return true
       } catch {
-        dispatcher.setSecondary(nil)
-        userSpaceDispatcher = nil
-        userSpaceEnabled = false
-        userSpaceStatus = "error: \(error)"
+        userSpaceLock.withLock {
+          dispatcher.setSecondary(nil)
+          userSpaceDispatcher = nil
+          userSpaceEnabled = false
+          userSpaceStatus = "error: \(error)"
+        }
         UserDefaults.standard.set(false, forKey: Self.userSpaceEnabledDefaultsKey)
         print("[XPCService] Failed to enable user-space virtual gamepad: \(error)")
         return false
       }
     } else {
-      dispatcher.setSecondary(nil)
-      userSpaceDispatcher?.close()
-      userSpaceDispatcher = nil
-      userSpaceEnabled = false
-      userSpaceStatus = "off"
+      userSpaceLock.withLock {
+        dispatcher.setSecondary(nil)
+        userSpaceDispatcher?.close()
+        userSpaceDispatcher = nil
+        userSpaceEnabled = false
+        userSpaceStatus = "off"
+      }
       UserDefaults.standard.set(false, forKey: Self.userSpaceEnabledDefaultsKey)
       print("[XPCService] Disabled user-space virtual gamepad")
       return true
@@ -398,19 +513,50 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
 
     func record(device: IOHIDDevice, kind: EventKind) {
-      let ioUserClass = IOHIDDeviceGetProperty(device, "IOUserClass" as CFString) as? String
-      let serial = IOHIDDeviceGetProperty(device, kIOHIDSerialNumberKey as CFString) as? String
-      let location = IOHIDDeviceGetProperty(device, kIOHIDLocationIDKey as CFString) as? Int ?? 0
+      // IMPORTANT:
+      // IOHIDDevice properties can be incomplete during system-extension replacement/upgrade.
+      // Prefer IORegistry properties via IOHIDDeviceGetService for reliable identification.
+      func strProp(_ key: String) -> String? {
+        let service = IOHIDDeviceGetService(device)
+        if service != 0 {
+          return IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? String
+        }
+        return IOHIDDeviceGetProperty(device, key as CFString) as? String
+      }
+      func intProp(_ key: String) -> Int {
+        let service = IOHIDDeviceGetService(device)
+        if service != 0 {
+          return IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? Int ?? 0
+        }
+        return IOHIDDeviceGetProperty(device, key as CFString) as? Int ?? 0
+      }
 
-      let isDriverKit =
-        (ioUserClass == "OpenJoystickVirtualHIDDevice")
-        || (serial == VirtualDeviceIdentityConstants.driverKitSerialNumber)
-        || (location == Int(VirtualDeviceIdentityConstants.driverKitLocationID))
+      let ioUserClass = strProp("IOUserClass")
+      let serial = strProp(kIOHIDSerialNumberKey as String) ?? strProp("SerialNumber")
+      let location = intProp(kIOHIDLocationIDKey as String)
+      let vid = intProp(kIOHIDVendorIDKey as String)
+      let pid = intProp(kIOHIDProductIDKey as String)
+      let product = strProp(kIOHIDProductKey as String)
+      let manufacturer = strProp(kIOHIDManufacturerKey as String)
 
       let isUserSpace =
-        (ioUserClass == "IOHIDUserDevice")
-        || (serial == UserSpaceVirtualDeviceConstants.serialNumber)
+        (serial == UserSpaceVirtualDeviceConstants.serialNumber)
         || (location == Int(VirtualDeviceIdentityConstants.userSpaceLocationID))
+        || (ioUserClass == "IOHIDUserDevice")
+
+      let looksLikeOJDVirtual =
+        (vid == VirtualDeviceProfile.default.vendorID)
+        && (pid == VirtualDeviceProfile.default.productID)
+        && (product == VirtualDeviceProfile.default.productName)
+        && (manufacturer == VirtualDeviceProfile.default.manufacturer)
+
+      let isDriverKit =
+        (serial == VirtualDeviceIdentityConstants.driverKitSerialNumber)
+        || (location == Int(VirtualDeviceIdentityConstants.driverKitLocationID))
+        || (ioUserClass == "OpenJoystickVirtualHIDDevice")
+        || (!isUserSpace && looksLikeOJDVirtual)
 
       lock.withLock {
         if isDriverKit {
@@ -515,8 +661,30 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
           .takeRetainedValue() as? String
       }
 
+      func intProp(_ key: String) -> Int {
+        IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?
+          .takeRetainedValue() as? Int ?? 0
+      }
+
+      let serial = strProp(kIOHIDSerialNumberKey as String) ?? strProp("SerialNumber")
       let ioUserClass = strProp("IOUserClass")
-      if ioUserClass != "OpenJoystickVirtualHIDDevice" { continue }
+      let product = strProp(kIOHIDProductKey as String)
+      let manufacturer = strProp(kIOHIDManufacturerKey as String)
+      let vid = intProp(kIOHIDVendorIDKey as String)
+      let pid = intProp(kIOHIDProductIDKey as String)
+
+      let looksLikeOJDVirtual =
+        (vid == VirtualDeviceProfile.default.vendorID)
+        && (pid == VirtualDeviceProfile.default.productID)
+        && (product == VirtualDeviceProfile.default.productName)
+        && (manufacturer == VirtualDeviceProfile.default.manufacturer)
+
+      let isDriverKit =
+        (serial == VirtualDeviceIdentityConstants.driverKitSerialNumber)
+        || (ioUserClass == "OpenJoystickVirtualHIDDevice")
+        || looksLikeOJDVirtual
+
+      if !isDriverKit { continue }
 
       guard
         let debug = IORegistryEntryCreateCFProperty(

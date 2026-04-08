@@ -174,8 +174,13 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       let ioUserClass = strProp(device, "IOUserClass")
       let serial = strProp(device, kIOHIDSerialNumberKey as String)
       let location = intProp(device, kIOHIDLocationIDKey as String)
+      let product = strProp(device, kIOHIDProductKey as String)
+      let manufacturer = strProp(device, kIOHIDManufacturerKey as String)
 
       if serial == UserSpaceVirtualDeviceConstants.serialNumber {
+        return Int.min / 2
+      }
+      if ioUserClass == "IOHIDUserDevice" {
         return Int.min / 2
       }
 
@@ -184,6 +189,17 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       if serial == VirtualDeviceIdentityConstants.driverKitSerialNumber { s += 100_000 }
       if location == Int(VirtualDeviceIdentityConstants.driverKitLocationID) { s += 10_000 }
 
+      // Fallback: some macOS builds do not expose IOUserClass / serial on IOHIDDevice.
+      // Because we use a non-real OJD VID/PID, this is still safe.
+      let vid = intProp(device, kIOHIDVendorIDKey as String)
+      let pid = intProp(device, kIOHIDProductIDKey as String)
+      let looksLikeOJDVirtual =
+        (vid == profile.vendorID)
+        && (pid == profile.productID)
+        && (product == profile.productName)
+        && (manufacturer == profile.manufacturer)
+      if looksLikeOJDVirtual { s += 5_000 }
+
       // If we don't have any strong indicator that this is our dext device,
       // do not treat it as a candidate. Otherwise we risk opening a real controller
       // and blasting it with output reports.
@@ -191,8 +207,6 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
       if (strProp(device, kIOHIDTransportKey as String) ?? "") == "USB" { s += 100 }
       // Tie-breaker only: prefer devices matching our current profile identity.
-      let vid = intProp(device, kIOHIDVendorIDKey as String)
-      let pid = intProp(device, kIOHIDProductIDKey as String)
       if vid == profile.vendorID && pid == profile.productID { s += 10 }
       return s
     }

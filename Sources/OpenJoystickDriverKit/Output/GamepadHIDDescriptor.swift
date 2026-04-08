@@ -125,7 +125,7 @@ public enum GamepadHIDDescriptor {
 
   /// Raw hat-switch nibble values (stored in the low 4 bits of byte 14).
   /// 1-based directions, 0 = neutral (null state).
-  public enum Hat: UInt8 {
+  public enum Hat: UInt8, Sendable {
     /// Null / neutral — no direction pressed. Value below Logical Minimum,
     /// which the HID system interprets as the null state.
     case neutral = 0

@@ -69,7 +69,9 @@ public struct USBError: Error, Sendable {
   }
 
   private static func isExpectedError(_ code: Int32) -> Bool {
-    code == errorTimeout || code == errorNotFound || code == errorNoDevice
+    // These are common in normal operation and should not spam logs. Callers that
+    // care should log at their own cadence with context.
+    code == errorTimeout || code == errorNotFound || code == errorNoDevice || code == errorIO
   }
 
   private static func humanReadableMessage(for code: Int32) -> String {

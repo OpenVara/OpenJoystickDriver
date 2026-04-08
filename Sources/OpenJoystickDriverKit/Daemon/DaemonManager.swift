@@ -1,86 +1,126 @@
 import Foundation
+import ServiceManagement
 
 /// Manages daemon LaunchAgent lifecycle.
 ///
-/// Provides install and uninstall operations via launchctl operating on `~/Library/LaunchAgents`.
+/// Uses ServiceManagement (`SMAppService`) so installs/restarts do not rely on
+/// `launchctl bootstrap` (which can fail with "Input/output error" in some shells).
 public enum DaemonManager: Sendable {
-  /// Mach service label - also used as plist filename stem.
+  /// Launchd job label.
   public static let label = "com.openjoystickdriver.daemon"
 
-  /// URL of user's LaunchAgent plist on disk.
-  public static var plistURL: URL {
-    FileManager.default.homeDirectoryForCurrentUser.appending(
-      path: "Library/LaunchAgents/\(label).plist"
-    )
+  /// Name of the LaunchAgent plist embedded in OpenJoystickDriver.app.
+  ///
+  /// Must exist at:
+  ///   `OpenJoystickDriver.app/Contents/Library/LaunchAgents/<plistName>`
+  public static let agentPlistName = "\(label).plist"
+
+  private static var appService: SMAppService {
+    SMAppService.agent(plistName: agentPlistName)
   }
 
-  /// Whether LaunchAgent plist is present on disk.
+  /// Whether the daemon LaunchAgent is registered for the current user.
   public static var isInstalled: Bool {
-    FileManager.default.fileExists(atPath: plistURL.path(percentEncoded: false))
-  }
-
-  /// Writes LaunchAgent plist and bootstraps daemon into the current user GUI session.
-  ///
-  /// - Parameter daemonExecutable: Full path to daemon binary.
-  /// - Throws: A file system error if writing the plist or creating the directory fails.
-  public static func install(daemonExecutable: URL) throws {
-    let plist = makePlist(daemonPath: daemonExecutable.path(percentEncoded: false))
-    let agentsDir = plistURL.deletingLastPathComponent()
-    if !FileManager.default.fileExists(atPath: agentsDir.path(percentEncoded: false)) {
-      try FileManager.default.createDirectory(at: agentsDir, withIntermediateDirectories: true)
+    switch appService.status {
+    case .notRegistered: return false
+    default: return true
     }
-    try plist.write(to: plistURL, atomically: true, encoding: .utf8)
-    let uid = String(getuid())
-    // If an older job is already loaded, boot it out first to keep install idempotent.
-    _ = try? launchctl(["bootout", "gui/\(uid)/\(label)"])
-    try launchctl(["bootstrap", "gui/\(uid)", plistURL.path(percentEncoded: false)])
-    _ = try? launchctl(["kickstart", "-k", "gui/\(uid)/\(label)"])
-    print("[DaemonManager] Installed")
   }
 
-  /// Starts daemon via launchctl kickstart.
+  /// Registers the daemon LaunchAgent.
   ///
-  /// Use when LaunchAgent is installed but not running.
-  public static func start() throws {
-    let uid = String(getuid())
-    try launchctl(["kickstart", "gui/\(uid)/\(label)"])
-    print("[DaemonManager] Started")
+  /// - Important: The LaunchAgent plist must be embedded in the app bundle.
+  public static func install() throws {
+    do {
+      try appService.register()
+      print("[DaemonManager] Installed (SMAppService)")
+    } catch {
+      throw wrap(error, hint: installHint())
+    }
   }
 
-  /// Kills and restarts daemon via launchctl kickstart -k.
-  ///
-  /// Use to apply permission grants without full reinstall.
-  public static func restart() throws {
-    let uid = String(getuid())
-    try launchctl(["kickstart", "-k", "gui/\(uid)/\(label)"])
-    print("[DaemonManager] Restarted")
-  }
-
-  /// Returns daemon executable path from installed LaunchAgent plist.
-  ///
-  /// Returns nil if plist is absent or unparseable.
-  public static var installedDaemonPath: String? {
-    guard let data = try? Data(contentsOf: plistURL),
-      let plist = try? PropertyListSerialization.propertyList(from: data, format: nil)
-        as? [String: Any], let args = plist["ProgramArguments"] as? [String]
-    else { return nil }
-    return args.first
-  }
-
-  /// Unloads daemon and removes LaunchAgent plist.
+  /// Unregisters the daemon LaunchAgent.
   public static func uninstall() throws {
-    let uid = String(getuid())
-    _ = try? launchctl(["bootout", "gui/\(uid)/\(label)"])
-    if FileManager.default.fileExists(atPath: plistURL.path(percentEncoded: false)) {
-      try FileManager.default.removeItem(at: plistURL)
+    do {
+      try appService.unregister()
+      print("[DaemonManager] Uninstalled (SMAppService)")
+    } catch {
+      throw wrap(error, hint: uninstallHint())
     }
-    print("[DaemonManager] Uninstalled")
   }
 
-  // MARK: - Diagnostics
+  /// Starts the daemon (idempotent).
+  ///
+  /// ServiceManagement does not have a separate "start" primitive; registering
+  /// an agent with `RunAtLoad` starts it.
+  public static func start() throws { try install() }
 
-  public struct DaemonHealth: Sendable, Equatable {
+  /// Restarts the daemon (best-effort).
+  public static func restart() throws {
+    do {
+      // Unregister+register is the most reliable cross-shell restart path.
+      try? appService.unregister()
+      try appService.register()
+      print("[DaemonManager] Restarted (SMAppService)")
+    } catch {
+      throw wrap(error, hint: restartHint())
+    }
+  }
+
+  /// Best-effort snapshot of launchd state for the daemon job.
+  ///
+  /// This is used to explain "couldn't communicate with a helper application"
+  /// XPC errors, which commonly occur when launchd kills/restarts the job.
+  public static func health() -> DaemonHealth {
+    guard isInstalled else { return DaemonHealth(installed: false) }
+    let uid = String(getuid())
+    let target = "gui/\(uid)/\(label)"
+
+    var printOut = ""
+    var printErr: String?
+    do {
+      printOut = try launchctl(["print", target])
+    } catch {
+      printErr = error.localizedDescription
+    }
+
+    let blameOut =
+      (try? launchctl(["blame", target]))?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    var health = DaemonHealth(
+      installed: true,
+      state: printErr == nil ? nil : "NOT_LOADED",
+      blame: blameOut,
+      rawPrint: (printErr == nil) ? printOut : "launchctl print failed:\n\(printErr!)"
+    )
+
+    if printErr != nil {
+      return health
+    }
+
+    for rawLine in printOut.split(separator: "\n", omittingEmptySubsequences: false) {
+      let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+      if line.hasPrefix("active count = ") {
+        health.activeCount = Int(line.dropFirst("active count = ".count))
+      } else if line.hasPrefix("state = ") {
+        health.state = String(line.dropFirst("state = ".count))
+      } else if line.hasPrefix("pid = ") {
+        health.pid = Int(line.dropFirst("pid = ".count))
+      } else if line.hasPrefix("runs = ") {
+        health.runs = Int(line.dropFirst("runs = ".count))
+      } else if line.hasPrefix("immediate reason = ") {
+        health.immediateReason = String(line.dropFirst("immediate reason = ".count))
+      } else if line.hasPrefix("last terminating signal = ") {
+        health.lastTerminatingSignal = String(line.dropFirst("last terminating signal = ".count))
+      }
+    }
+
+    return health
+  }
+
+  public struct DaemonHealth: Sendable {
     public var installed: Bool
+    public var activeCount: Int?
     public var state: String?
     public var pid: Int?
     public var runs: Int?
@@ -91,6 +131,7 @@ public enum DaemonManager: Sendable {
 
     public init(
       installed: Bool,
+      activeCount: Int? = nil,
       state: String? = nil,
       pid: Int? = nil,
       runs: Int? = nil,
@@ -100,6 +141,7 @@ public enum DaemonManager: Sendable {
       rawPrint: String? = nil
     ) {
       self.installed = installed
+      self.activeCount = activeCount
       self.state = state
       self.pid = pid
       self.runs = runs
@@ -119,38 +161,56 @@ public enum DaemonManager: Sendable {
     }
   }
 
-  /// Best-effort snapshot of launchd state for the daemon job.
-  ///
-  /// This is used to explain "couldn't communicate with a helper application"
-  /// XPC errors, which commonly occur when launchd kills/restarts the job.
-  public static func health() -> DaemonHealth {
-    guard isInstalled else { return DaemonHealth(installed: false) }
-    let uid = String(getuid())
-    let target = "gui/\(uid)/\(label)"
+  // MARK: - Private
 
-    let printOut = (try? launchctl(["print", target])) ?? ""
-    let blameOut = (try? launchctl(["blame", target]))?.trimmingCharacters(in: .whitespacesAndNewlines)
-    var health = DaemonHealth(installed: true, blame: blameOut, rawPrint: printOut)
-
-    for rawLine in printOut.split(separator: "\n", omittingEmptySubsequences: false) {
-      let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-      if line.hasPrefix("state = ") {
-        health.state = String(line.dropFirst("state = ".count))
-      } else if line.hasPrefix("pid = ") {
-        health.pid = Int(line.dropFirst("pid = ".count))
-      } else if line.hasPrefix("runs = ") {
-        health.runs = Int(line.dropFirst("runs = ".count))
-      } else if line.hasPrefix("immediate reason = ") {
-        health.immediateReason = String(line.dropFirst("immediate reason = ".count))
-      } else if line.hasPrefix("last terminating signal = ") {
-        health.lastTerminatingSignal = String(line.dropFirst("last terminating signal = ".count))
-      }
-    }
-
-    return health
+  private static func wrap(_ error: Error, hint: String) -> NSError {
+    NSError(
+      domain: "OpenJoystickDriver.DaemonManager",
+      code: 1,
+      userInfo: [NSLocalizedDescriptionKey: "\(error.localizedDescription)\n\n\(hint)"]
+    )
   }
 
-  // MARK: - Private
+  private static func installHint() -> String {
+    """
+    Fix checklist:
+      1) Run the /Applications copy: `/Applications/OpenJoystickDriver.app` (not `.build/...`).
+      2) Ensure the app bundle contains: `Contents/Library/LaunchAgents/\(agentPlistName)`.
+      3) If you previously installed via launchctl scripts, uninstall first: `OpenJoystickDriver --headless uninstall`.
+    """
+  }
+
+  private static func uninstallHint() -> String {
+    """
+    Fix checklist:
+      1) Make sure you're running the /Applications copy of the app.
+      2) Check daemon log: `tail -n 80 /tmp/\(label).out` and `/tmp/\(label).err`.
+    """
+  }
+
+  private static func restartHint() -> String {
+    """
+    Fix checklist:
+      1) Try uninstall+install: `OpenJoystickDriver --headless uninstall` then `OpenJoystickDriver --headless install`.
+      2) Check daemon log: `tail -n 80 /tmp/\(label).out` and `/tmp/\(label).err`.
+      3) Check launchd health: `launchctl print gui/$(id -u)/\(label) | head -n 80`
+    """
+  }
+
+  private struct LaunchctlError: LocalizedError, Sendable {
+    let args: [String]
+    let status: Int32
+    let output: String
+
+    var errorDescription: String? {
+      let cmd = (["launchctl"] + args).joined(separator: " ")
+      let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmed.isEmpty {
+        return "\(cmd) failed (exit status \(status))."
+      }
+      return "\(cmd) failed (exit status \(status)):\n\(trimmed)"
+    }
+  }
 
   @discardableResult private static func launchctl(_ args: [String]) throws -> String {
     let process = Process()
@@ -161,48 +221,11 @@ public enum DaemonManager: Sendable {
     process.standardError = pipe
     try process.run()
     process.waitUntilExit()
-    return String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-  }
-
-  private static func makePlist(daemonPath: String) -> String {
-    // MachServices must be declared so launchd allows NSXPCListener to register
-    // service. Without this entry, launchd kills process with SIGKILL
-    // exactly when NSXPCListener.resume() is called.
-    let escapedLabel = xmlEscape(label)
-    let escapedPath = xmlEscape(daemonPath)
-    let escapedService = xmlEscape(xpcServiceName)
-    return """
-      <?xml version="1.0" encoding="UTF-8"?>
-      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-          "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-      <plist version="1.0">
-      <dict>
-        <key>Label</key>
-        <string>\(escapedLabel)</string>
-        <key>ProgramArguments</key>
-        <array>
-          <string>\(escapedPath)</string>
-        </array>
-        <key>MachServices</key>
-        <dict>
-          <key>\(escapedService)</key>
-          <true/>
-        </dict>
-        <key>KeepAlive</key>
-        <true/>
-        <key>RunAtLoad</key>
-        <true/>
-        <key>StandardErrorPath</key>
-        <string>/tmp/\(escapedLabel).err</string>
-        <key>StandardOutPath</key>
-        <string>/tmp/\(escapedLabel).out</string>
-      </dict>
-      </plist>
-      """
-  }
-
-  private static func xmlEscape(_ string: String) -> String {
-    string.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
-      .replacingOccurrences(of: ">", with: "&gt;")
+    let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    if process.terminationStatus != 0 {
+      throw LaunchctlError(args: args, status: process.terminationStatus, output: out)
+    }
+    return out
   }
 }
+

@@ -14,6 +14,12 @@
     <key>com.apple.developer.system-extension.install</key>
     <true/>
 
+    <!-- Required for IOHIDUserDevice (user-space virtual gamepad / Compatibility mode).
+         Note: if the app falls back to the embedded backend (no LaunchAgent / no XPC),
+         the menubar app itself creates the IOHIDUserDevice and therefore needs this. -->
+    <key>com.apple.developer.hid.virtual.device</key>
+    <true/>
+
     <!-- Required by AMFI on macOS 26+ to validate the embedded provisioning
          profile. Must match the profile's application-identifier. -->
     <key>com.apple.application-identifier</key>

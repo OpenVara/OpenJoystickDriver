@@ -80,14 +80,40 @@ def must_exist(path: str, label: str):
         raise SystemExit(f"ERROR: {label} not found: {path}")
 
 def decode_profile(path: str) -> dict:
-    # Prefer openssl: works even when `security cms -D` fails on some systems.
+    # Prefer Apple tooling when it works, but keep an OpenSSL fallback because
+    # `security cms -D` can fail on some machines for `.provisionprofile`.
     p = subprocess.run(
-        ["openssl","smime","-inform","der","-verify","-noverify","-in",path],
+        ["security","cms","-D","-i",path],
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
-        check=True,
+        text=False,
     )
-    return plistlib.loads(p.stdout)
+    raw = p.stdout if (p.returncode == 0 and p.stdout) else b""
+    if not raw:
+        p = subprocess.run(
+            ["openssl","smime","-inform","der","-verify","-noverify","-in",path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=False,
+        )
+        raw = p.stdout if (p.returncode == 0 and p.stdout) else b""
+    if not raw:
+        raise SystemExit(
+            "ERROR: Could not decode provisioning profile.\n"
+            f"  profile: {path}\n"
+            "Fix: reinstall/regenerate the profile and re-run `./scripts/install-profiles.sh`.\n"
+            "Debug (safe): `./scripts/profile-audit.sh \"$HOME/Library/MobileDevice/Provisioning Profiles\"/*.provisionprofile`"
+        )
+    if b\"<?xml\" in raw:
+        raw = raw[raw.index(b\"<?xml\") :]
+    try:
+        return plistlib.loads(raw)
+    except Exception:
+        raise SystemExit(
+            "ERROR: Provisioning profile decoded, but plist parsing failed.\n"
+            f"  profile: {path}\n"
+            "Fix: regenerate the profile in the Developer portal and reinstall it."
+        )
 
 def sha1_fingerprint(der_bytes: bytes) -> str:
     p = subprocess.run(
@@ -151,28 +177,48 @@ must_exist(daemon_dev_profile, "Daemon dev provisioning profile")
 must_exist(daemon_devid_profile, "Daemon DevID provisioning profile")
 must_exist(dext_profile, "DriverKit dext provisioning profile")
 
-if not profile_has_entitlement(dext_profile, "com.apple.developer.hid.virtual.device"):
-    raise SystemExit(
-        "ERROR: Dext profile is missing com.apple.developer.hid.virtual.device\n"
-        f"  profile: {dext_profile}\n"
-        "Regenerate the VirtualHIDDevice provisioning profile after entitlement approval and re-install it."
+def warn_missing_entitlement(profile_path: str, entitlement: str, label: str, why: str):
+    if profile_has_entitlement(profile_path, entitlement):
+        return
+    print(
+        "WARN: Missing entitlement in provisioning profile (feature will be disabled):\n"
+        f"  entitlement: {entitlement}\n"
+        f"  profile: {profile_path}\n"
+        f"  affects: {label}\n"
+        f"  why: {why}\n",
+        file=sys.stderr,
     )
 
-if not profile_has_entitlement(daemon_dev_profile, "com.apple.developer.hid.virtual.device"):
-    raise SystemExit(
-        "ERROR: Daemon dev profile is missing com.apple.developer.hid.virtual.device\n"
-        f"  profile: {daemon_dev_profile}\n"
-        "This entitlement is required for the app's SDL Compatibility (User-Space Virtual Device) mode.\n"
-        "Regenerate the OpenJoystickDriverDaemon provisioning profile after entitlement approval and re-install it."
-    )
-
-if not profile_has_entitlement(daemon_devid_profile, "com.apple.developer.hid.virtual.device"):
-    raise SystemExit(
-        "ERROR: Daemon DevID profile is missing com.apple.developer.hid.virtual.device\n"
-        f"  profile: {daemon_devid_profile}\n"
-        "This entitlement is required for the app's SDL Compatibility (User-Space Virtual Device) mode.\n"
-        "Regenerate the OpenJoystickDriverDaemon_DevID provisioning profile after entitlement approval and re-install it."
-    )
+# NOTE:
+# `com.apple.developer.hid.virtual.device` is required ONLY by the process that creates the
+# IOHIDUserDevice (user-space virtual gamepad). In this repo that can be:
+# - the LaunchAgent daemon (normal path), and/or
+# - the GUI app itself when it falls back to the embedded backend.
+hid_entitlement = "com.apple.developer.hid.virtual.device"
+warn_missing_entitlement(
+    daemon_dev_profile,
+    hid_entitlement,
+    "Daemon dev profile",
+    "Compatibility mode (IOHIDUserDevice) will fail if the daemon lacks this entitlement.",
+)
+warn_missing_entitlement(
+    daemon_devid_profile,
+    hid_entitlement,
+    "Daemon DevID profile",
+    "Compatibility mode (IOHIDUserDevice) will fail in release if the daemon lacks this entitlement.",
+)
+warn_missing_entitlement(
+    gui_dev_profile,
+    hid_entitlement,
+    "GUI dev profile",
+    "If the app falls back to the embedded backend, Compatibility mode needs this entitlement in the GUI profile.",
+)
+warn_missing_entitlement(
+    gui_devid_profile,
+    hid_entitlement,
+    "GUI DevID profile",
+    "If the app falls back to the embedded backend, Compatibility mode needs this entitlement in the GUI profile.",
+)
 
 dev_team = team_id_from_profile(gui_dev_profile)
 rel_team = team_id_from_profile(gui_devid_profile)

@@ -26,6 +26,16 @@ public struct VirtualDeviceProfile: Sendable {
     manufacturer: "Microsoft"
   )
 
+  /// Xbox 360 Controller (Wired) — experimental on macOS.
+  ///
+  /// Note: many macOS stacks do not treat 045E:028E as a standard HID gamepad.
+  public static let xbox360Wired = VirtualDeviceProfile(
+    vendorID: 0x045E,
+    productID: 0x028E,
+    productName: "Xbox 360 Controller",
+    manufacturer: "Microsoft"
+  )
+
   /// Default profile used when no protocol-specific profile is configured.
   /// Uses the OpenJoystickDriver virtual identity (generic HID GamePad).
   ///

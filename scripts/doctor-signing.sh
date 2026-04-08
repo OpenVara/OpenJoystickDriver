@@ -153,11 +153,12 @@ check_profiles() {
 
   local GUI_DEV="$prof_dir/OpenJoystickDriver.provisionprofile"
   local GUI_DEVID="$prof_dir/OpenJoystickDriver_DevID.provisionprofile"
+  local DAEMON_DEV="$prof_dir/OpenJoystickDriverDaemon.provisionprofile"
   local DAEMON_DEVID="$prof_dir/OpenJoystickDriverDaemon_DevID.provisionprofile"
   local DEXT="$prof_dir/OpenJoystickDriver_VirtualHIDDevice.provisionprofile"
 
   local any_missing=0
-  for p in "$GUI_DEV" "$GUI_DEVID" "$DAEMON_DEVID" "$DEXT"; do
+  for p in "$GUI_DEV" "$GUI_DEVID" "$DAEMON_DEV" "$DAEMON_DEVID" "$DEXT"; do
     if [[ ! -f "$p" ]]; then
       say "ERROR: missing: $p"
       any_missing=1
@@ -167,18 +168,31 @@ check_profiles() {
 
   say "  GUI dev:    $(profile_name "$GUI_DEV")"
   say "  GUI DevID:  $(profile_name "$GUI_DEVID")"
+  say "  Daemon dev: $(profile_name "$DAEMON_DEV")"
   say "  Daemon DevID: $(profile_name "$DAEMON_DEVID")"
   say "  Dext:       $(profile_name "$DEXT")"
 
-  local dext_has_hid
-  dext_has_hid="$(profile_has_entitlement "$DEXT" "com.apple.developer.hid.virtual.device")"
-  if [[ "$dext_has_hid" != "true" ]]; then
+  # `com.apple.developer.hid.virtual.device` is required by the process that creates IOHIDUserDevice:
+  # - daemon (normal path), and/or
+  # - GUI app (embedded fallback path).
+  local ent="com.apple.developer.hid.virtual.device"
+  local gui_dev_has gui_devid_has daemon_dev_has daemon_devid_has
+  gui_dev_has="$(profile_has_entitlement "$GUI_DEV" "$ent")"
+  gui_devid_has="$(profile_has_entitlement "$GUI_DEVID" "$ent")"
+  daemon_dev_has="$(profile_has_entitlement "$DAEMON_DEV" "$ent")"
+  daemon_devid_has="$(profile_has_entitlement "$DAEMON_DEVID" "$ent")"
+  say "  hid.virtual.device (GUI dev):     $gui_dev_has"
+  say "  hid.virtual.device (GUI DevID):   $gui_devid_has"
+  say "  hid.virtual.device (Daemon dev):  $daemon_dev_has"
+  say "  hid.virtual.device (Daemon DevID): $daemon_devid_has"
+  if [[ "$daemon_dev_has" != "true" || "$daemon_devid_has" != "true" || "$gui_dev_has" != "true" ]]; then
     say ""
-    say "ERROR: Dext profile is missing entitlement: com.apple.developer.hid.virtual.device"
-    say "Fix: regenerate the DriverKit provisioning profile after entitlement approval."
-    return 1
+    say "WARN: Compatibility mode (user-space virtual gamepad) may not work."
+    say "Fix: enable entitlement 'com.apple.developer.hid.virtual.device' on:"
+    say "  - Identifier com.openjoystickdriver.daemon (daemon)"
+    say "  - Identifier com.openjoystickdriver (GUI app) if using embedded fallback"
+    say "Then regenerate + re-install the relevant provisioning profiles."
   fi
-  say "  Dext hid.virtual.device: true"
 
   # Compare embedded cert SHA1s to identities in Keychain (by SHA1).
   local want_apple want_devid

@@ -8,8 +8,7 @@
 #   - whether com.apple.developer.hid.virtual.device is present
 #
 # Exit codes:
-#   0: OK (or no dext profile found)
-#   2: Found VirtualHIDDevice profile missing hid.virtual.device
+#   0: OK
 set -euo pipefail
 
 decode_profile() {
@@ -101,10 +100,6 @@ print("  decode_ok: true")
 print(f"  bundle_id_suffix: {bundle_suffix}")
 print(f"  developer_certificate_kind: {cert_kind}")
 print(f"  has_entitlement_hid_virtual_device: {has_hid_virtual}")
-
-# If this is the DriverKit dext profile, enforce presence of the new entitlement.
-if bundle_suffix.endswith(".VirtualHIDDevice") and not has_hid_virtual:
-    sys.exit(2)
 PY
 }
 

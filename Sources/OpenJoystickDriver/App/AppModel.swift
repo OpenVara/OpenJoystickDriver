@@ -24,7 +24,6 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     self.connection = description.connection
     self.serialNumber = description.serialNumber
   }
-
 }
 
 /// Central observable model for GUI.
@@ -39,12 +38,15 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   @Published var devices: [DeviceViewModel] = []
   @Published var inputMonitoring = "unknown"
   @Published var extensionManager = SystemExtensionManager()
+
   @Published var userSpaceVirtualDeviceEnabled = false
   @Published var userSpaceVirtualDeviceStatus = "unknown"
-  @Published var virtualDeviceMode: String = VirtualDeviceMode.auto.rawValue
-  @Published var outputMode: String = "primaryOnly"
+  @Published var virtualDeviceMode: String = VirtualDeviceMode.compatUserSpace.rawValue
+  @Published var outputMode: String = CompositeOutputDispatcher.Mode.primaryOnly.rawValue
+  @Published var compatibilityIdentity: String = CompatibilityIdentity.generic.rawValue
   @Published var virtualDeviceDiagnostics: XPCVirtualDeviceDiagnosticsPayload?
   @Published var virtualDeviceSelfTest: XPCVirtualDeviceSelfTestPayload?
+
   var developerMode: Bool
 
   private let client = XPCClient()
@@ -54,12 +56,12 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   init(developerMode: Bool = false) { self.developerMode = developerMode }
 
   func start() async {
-    client.connect()
     refreshDaemonStatus()
     await refreshDaemonHealth()
+    if daemonInstalled { client.connect() }
     await poll()
-    await refreshOutputMode()
     await refreshVirtualDeviceDiagnostics()
+    extensionManager.refreshInstallState()
     startPolling()
   }
 
@@ -72,126 +74,110 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
 
   /// One-shot refresh used after lifecycle actions (install/start/restart/uninstall).
   ///
-  /// This avoids relying on the 2s poll interval to correct UI state after
-  /// daemon restarts or XPC disconnects.
+  /// This avoids relying on the 2s poll interval to correct UI state.
   func syncFromDaemonNow() async {
     refreshDaemonStatus()
     await refreshDaemonHealth()
-    if !client.isConnected { client.connect() }
     await poll()
-    await refreshOutputMode()
     await refreshVirtualDeviceDiagnostics()
   }
 
-  /// Path to daemon binary as recorded in installed LaunchAgent plist.
-  ///
-  /// Falls back to expected path relative to this app's executable.
-  var daemonExecutablePath: String? {
-    if let installed = DaemonManager.installedDaemonPath { return installed }
-    guard let macosDir = Bundle.main.executableURL?.deletingLastPathComponent() else { return nil }
-    // Prefer daemon inside its own bundle (required for provisioning profile on macOS 26+)
-    let daemonSubpath = "OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon"
-    let bundled = macosDir.appendingPathComponent(daemonSubpath)
-    if FileManager.default.fileExists(atPath: bundled.path(percentEncoded: false)) {
-      return bundled.path(percentEncoded: false)
-    }
-    return macosDir.appendingPathComponent("OpenJoystickDriverDaemon").path(percentEncoded: false)
-  }
+  // MARK: - Daemon lifecycle
 
   func installDaemon() async {
     daemonError = nil
-    guard let execURL = Bundle.main.executableURL else {
-      daemonError = "Cannot locate app executable."
-      return
-    }
-    let macosDir = execURL.deletingLastPathComponent()
-    let daemonSubpath = "OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon"
-    let bundledDaemon = macosDir.appendingPathComponent(daemonSubpath)
-    let legacyDaemon = macosDir.appendingPathComponent("OpenJoystickDriverDaemon")
-    let bundledPath = bundledDaemon.path(percentEncoded: false)
-    let daemonURL =
-      FileManager.default.fileExists(atPath: bundledPath) ? bundledDaemon : legacyDaemon
+    guard ensureRunningFromApplications() else { return }
+    guard ensureBundleSignatureValid(for: "Install") else { return }
     do {
-      let task = Task.detached { try DaemonManager.install(daemonExecutable: daemonURL) }
+      let task = Task.detached { try DaemonManager.install() }
       try await task.value
     } catch {
       daemonError = error.localizedDescription
       return
     }
-    refreshDaemonStatus()
-    await refreshDaemonHealth()
+    try? await Task.sleep(for: .seconds(0.5))
+    client.disconnect()
+    client.connect()
+    await syncFromDaemonNow()
   }
 
   func startDaemon() async {
     daemonError = nil
+    guard ensureRunningFromApplications() else { return }
+    guard ensureBundleSignatureValid(for: "Start") else { return }
     do {
       let task = Task.detached { try DaemonManager.start() }
       try await task.value
     } catch {
-      daemonError = formatDaemonError(error)
+      daemonError = error.localizedDescription
       return
     }
-    try? await Task.sleep(for: .seconds(1))
-    await poll()
-    await refreshDaemonHealth()
+    try? await Task.sleep(for: .seconds(0.5))
+    client.disconnect()
+    client.connect()
+    await syncFromDaemonNow()
   }
 
   func restartDaemon() async {
     daemonError = nil
     daemonRestarting = true
+    guard ensureRunningFromApplications() else {
+      daemonRestarting = false
+      return
+    }
+    guard ensureBundleSignatureValid(for: "Restart") else {
+      daemonRestarting = false
+      return
+    }
     do {
       let task = Task.detached { try DaemonManager.restart() }
       try await task.value
     } catch {
-      daemonError = formatDaemonError(error)
+      daemonError = error.localizedDescription
       daemonRestarting = false
       return
     }
     client.disconnect()
-    for _ in 0..<3 {
-      try? await Task.sleep(for: .seconds(2))
-      await poll()
-      if daemonConnected { break }
-    }
-    if !daemonConnected { daemonError = "Daemon failed to restart. Try reinstalling." }
-    await refreshDaemonHealth()
+    try? await Task.sleep(for: .seconds(1))
+    client.connect()
+    await syncFromDaemonNow()
     daemonRestarting = false
   }
 
   func uninstallDaemon() async {
     daemonError = nil
+    guard ensureRunningFromApplications() else { return }
+    guard ensureBundleSignatureValid(for: "Uninstall") else { return }
     do {
       let task = Task.detached { try DaemonManager.uninstall() }
       try await task.value
     } catch {
-      daemonError = formatDaemonError(error)
+      daemonError = error.localizedDescription
       return
     }
-    refreshDaemonStatus()
-    await refreshDaemonHealth()
+    client.disconnect()
+    await syncFromDaemonNow()
   }
 
+  // MARK: - XPC-backed operations
+
   func deviceInputState(vendorID: UInt16, productID: UInt16) async -> DeviceInputState? {
-    try? await client.deviceInputState(vendorID: vendorID, productID: productID)
+    guard daemonConnected else { return nil }
+    return try? await client.deviceInputState(vendorID: vendorID, productID: productID)
   }
 
   func packetLog(vendorID: UInt16, productID: UInt16) async -> [PacketLogEntry] {
-    (try? await client.packetLog(vendorID: vendorID, productID: productID)) ?? []
+    guard daemonConnected else { return [] }
+    return (try? await client.packetLog(vendorID: vendorID, productID: productID)) ?? []
   }
 
-  func setSuppressOutput(_ suppress: Bool) async { try? await client.setSuppressOutput(suppress) }
-
-  func setUserSpaceVirtualDeviceEnabled(_ enabled: Bool) async {
-    do {
-      try await client.setUserSpaceVirtualDeviceEnabled(enabled)
-      await syncFromDaemonNow()
-    } catch {
-      await refreshDaemonHealth()
-      daemonError = formatDaemonError(error)
-    }
+  func setSuppressOutput(_ suppress: Bool) async {
+    guard daemonConnected else { return }
+    try? await client.setSuppressOutput(suppress)
   }
 
   func setVirtualDeviceMode(_ modeRaw: String) async {
+    guard daemonConnected else { return }
     do {
       try await client.setVirtualDeviceMode(modeRaw)
       await syncFromDaemonNow()
@@ -201,24 +187,30 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     }
   }
 
-  func refreshOutputMode() async {
+  func setCompatibilityIdentity(_ raw: String) async {
+    guard daemonConnected else { return }
     do {
-      outputMode = try await client.getOutputMode()
+      try await client.setCompatibilityIdentity(raw)
+      await syncFromDaemonNow()
     } catch {
-      // Daemon may be down; keep last known value.
+      await refreshDaemonHealth()
+      daemonError = formatDaemonError(error)
     }
   }
 
-  func setOutputMode(_ mode: String) async {
+  func setUserSpaceVirtualDeviceEnabled(_ enabled: Bool) async {
+    guard daemonConnected else { return }
     do {
-      try await client.setOutputMode(mode)
-      await refreshOutputMode()
+      try await client.setUserSpaceVirtualDeviceEnabled(enabled)
+      await syncFromDaemonNow()
     } catch {
+      await refreshDaemonHealth()
       daemonError = formatDaemonError(error)
     }
   }
 
   func runVirtualDeviceSelfTest(seconds: Int = 5) async {
+    guard daemonConnected else { return }
     do {
       virtualDeviceSelfTest = try await client.runVirtualDeviceSelfTest(seconds: seconds)
     } catch {
@@ -229,6 +221,10 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   }
 
   func refreshVirtualDeviceDiagnostics() async {
+    guard daemonConnected else {
+      virtualDeviceDiagnostics = nil
+      return
+    }
     do {
       virtualDeviceDiagnostics = try await client.getVirtualDeviceDiagnostics()
     } catch {
@@ -237,13 +233,16 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     }
   }
 
+  // MARK: - Private
+
   private func formatDaemonError(_ error: Error) -> String {
     let ns = error as NSError
-    // Common case: NSXPCConnection was invalidated because launchd killed/restarted the daemon.
     if ns.domain == NSCocoaErrorDomain && ns.code == 4099 {
       if let h = daemonHealth, h.isInefficientKillLoop {
         let runs = h.runs.map { "\($0)" } ?? "unknown"
-        return "Daemon was killed by launchd (reason: inefficient, runs=\(runs)). Restart or reinstall the daemon."
+        let active = h.activeCount.map { "\($0)" } ?? "unknown"
+        return
+          "Daemon was killed by launchd (reason: inefficient, active=\(active), runs=\(runs)). Restart or reinstall the daemon."
       }
       return "Lost connection to daemon (helper application). Restart the daemon."
     }
@@ -255,26 +254,103 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
 
   private func poll() async {
     refreshDaemonStatus()
+    await refreshDaemonHealth()
+
+    guard daemonInstalled else {
+      daemonConnected = false
+      devices = []
+      userSpaceVirtualDeviceEnabled = false
+      userSpaceVirtualDeviceStatus = "off"
+      virtualDeviceDiagnostics = nil
+      inputMonitoring = "\(await permissionManager.checkAccess())"
+      return
+    }
+
     if !client.isConnected { client.connect() }
     do {
       let status = try await client.getStatus()
       daemonConnected = true
+      daemonError = nil
       inputMonitoring = status.inputMonitoring
       devices = status.connectedDevices.map { DeviceViewModel(from: $0) }
       userSpaceVirtualDeviceEnabled = status.userSpaceVirtualDeviceEnabled ?? false
       userSpaceVirtualDeviceStatus = status.userSpaceVirtualDeviceStatus ?? "unknown"
-      virtualDeviceMode = status.virtualDeviceMode ?? VirtualDeviceMode.auto.rawValue
-      if let eff = status.effectiveOutputMode { outputMode = eff }
+      virtualDeviceMode = status.virtualDeviceMode ?? VirtualDeviceMode.compatUserSpace.rawValue
+      outputMode = status.effectiveOutputMode ?? CompositeOutputDispatcher.Mode.primaryOnly.rawValue
+      compatibilityIdentity = status.compatibilityIdentity ?? CompatibilityIdentity.generic.rawValue
     } catch {
       daemonConnected = false
       devices = []
       client.disconnect()
-      // Daemon unreachable - fall back to checking this process's own permissions
-      // so UI shows something useful rather than stale "unknown".
       inputMonitoring = "\(await permissionManager.checkAccess())"
-      // Keep last-known virtual device state. Resetting these makes the UI flip toggles
-      // during transient daemon restarts / XPC disconnects.
+
+      // If launchd says the job is loaded/running but XPC isn't responding, call that out.
+      if let h = daemonHealth, h.pid != nil {
+        daemonError =
+          "Couldn't communicate with the helper application. The daemon is running but the connection was lost. Restart the daemon."
+      } else {
+        daemonError = formatDaemonError(error)
+      }
     }
+  }
+
+  private func ensureRunningFromApplications() -> Bool {
+    let path = Bundle.main.bundlePath
+    if path.hasPrefix("/Applications/") { return true }
+    daemonError =
+      "Daemon install/restart requires running the app from /Applications. Current app bundle: \(path)"
+    return false
+  }
+
+  private func ensureBundleSignatureValid(for action: String) -> Bool {
+    // SMAppService refuses to register an agent if the app bundle has been modified
+    // after signing (e.g. copying the .dext into Contents/Library/SystemExtensions).
+    //
+    // When that happens, codesign reports:
+    //   "a sealed resource is missing or invalid" + "file added: ..."
+    let appPath = Bundle.main.bundlePath
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+    process.arguments = ["--verify", "--deep", "--strict", "--verbose=2", appPath]
+    let pipe = Pipe()
+    process.standardOutput = pipe
+    process.standardError = pipe
+    do {
+      try process.run()
+    } catch {
+      daemonError = "\(action) failed: could not run codesign verification (\(error.localizedDescription))."
+      return false
+    }
+    process.waitUntilExit()
+    let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    if process.terminationStatus == 0 { return true }
+
+    // Keep the UI message self-describing and fix-oriented.
+    if out.contains("a sealed resource is missing or invalid") {
+      daemonError =
+        """
+        \(action) failed: this app bundle's signature is INVALID (macOS thinks it was modified after signing).
+
+        Typical cause: the system extension (.dext) was copied into the app without re-signing.
+
+        Fix (no reboot):
+          1) Run: ./scripts/rebuild-fast.sh
+          2) Then re-try \(action)
+
+        Diagnostic command:
+          /usr/bin/codesign --verify --deep --strict --verbose=2 \(appPath)
+        """
+      return false
+    }
+
+    daemonError =
+      """
+      \(action) failed: app signature verification failed.
+
+      Diagnostic output:
+      \(out.trimmingCharacters(in: .whitespacesAndNewlines))
+      """
+    return false
   }
 
   private func startPolling() {

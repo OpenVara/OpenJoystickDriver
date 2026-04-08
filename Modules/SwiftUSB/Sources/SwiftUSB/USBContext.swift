@@ -40,6 +40,7 @@ public final class USBContext: @unchecked Sendable {
 
   private static let TIMEOUT = -7
   private static let eventLoopCadenceNs: UInt64 = 100_000_000  // 100ms
+  private static let eventLoopErrorLogIntervalNs: UInt64 = 10_000_000_000  // 10s
 
   /// Creates a libusb context and starts the internal event loop.
   /// Throws ``USBError`` when libusb cannot be initialized.
@@ -67,12 +68,17 @@ public final class USBContext: @unchecked Sendable {
     let runFlag = running
     eventQueue.async { [ctx, runFlag, done] in
       defer { done.signal() }
+      var lastErrorLogNs: UInt64 = 0
       while runFlag.value {
         let startNs = DispatchTime.now().uptimeNanoseconds
         var timeout = timeval(tv_sec: 0, tv_usec: 100_000)
         let result = libusb_handle_events_timeout(ctx.value, &timeout)
         if result < 0 && result != Self.TIMEOUT {
-          print("[SwiftUSB] Event handling error: \(String(cString: libusb_error_name(result)))")
+          let now = DispatchTime.now().uptimeNanoseconds
+          if now &- lastErrorLogNs >= Self.eventLoopErrorLogIntervalNs {
+            lastErrorLogNs = now
+            print("[SwiftUSB] Event handling error: \(String(cString: libusb_error_name(result)))")
+          }
         }
 
         // libusb_handle_events_timeout is expected to block up to the timeout, but in practice it

@@ -80,10 +80,10 @@ Accessibility permission is **not** needed — the driver injects gamepad input 
 Some SDL/IOKit apps ignore virtual devices with `Transport="Virtual"` (common for DriverKit virtual HID).
 If a game/emulator can *see* your controller but won’t react to inputs, enable:
 
-- `Permissions` → `Virtual HID Gamepad (DriverKit)` → `SDL Compatibility (User-Space Virtual Device)`
+- Open the OpenJoystickDriver menu bar item → `Mode` → `Compatibility`
 
-This creates a second virtual controller from the daemon with `Transport="USB"`. It does not require a reboot.
-When enabled, OpenJoystickDriver mirrors output to **both** virtual devices — if a game binds both controllers at once, you may see double input.
+This uses a user-space virtual controller (IOHIDUserDevice). It does not require a reboot.
+When enabled, OpenJoystickDriver routes output to the user-space device (and disables DriverKit output).
 
 > **Note for development builds:** Ad-hoc signed binaries get a new code identity on every `swift build`. macOS ties TCC grants to **the** binary's code identity, so permissions reset after each rebuild. After rebuilding, re-grant both permissions and use `--headless restart` or the **Restart Daemon** button in the app. The Permissions view detects this state and shows a prompt automatically.
 >
@@ -104,8 +104,13 @@ When enabled, OpenJoystickDriver mirrors output to **both** virtual devices — 
 
 Launch `OpenJoystickDriver` from `/usr/local/bin` or Spotlight. It runs as a menu bar app.
 
-- **Permissions** - grant Input Monitoring; install/approve the DriverKit extension; toggle user-space virtual device + output routing
-- **Diagnostics** - daemon lifecycle controls (install / start / restart / uninstall), log path, virtual device diagnostics + self-test
+- The menu bar popover shows:
+  - **Driver** status (and which backend is active)
+  - **DriverKit** install status + errors
+  - **Mode**: Auto / DriverKit / Compatibility
+  - **Self-test** and a log shortcut
+
+If the LaunchAgent daemon cannot be managed in your current session (some shells/terminal sessions can’t talk to `launchd` properly), OpenJoystickDriver automatically falls back to an **embedded backend** so the driver still works.
 
 ### CLI
 
@@ -166,7 +171,7 @@ clang tools/sdl3-gamepad-probe/main.c $(pkg-config --cflags --libs sdl3) -o /tmp
 ```
 
 If the probe prints no `axis`/`button` events while you press inputs, SDL isn’t receiving input from the virtual device (PCSX2 SDL input will also fail).
-Enable the user-space virtual device in the app (`Permissions` → `SDL Compatibility (User-Space Virtual Device)`) and try again.
+Enable Compatibility mode in the menu bar app (`Mode` → `Compatibility`) and try again.
 
 ### If you see `setReport error: -1ffffd15`
 

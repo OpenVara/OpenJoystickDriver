@@ -42,6 +42,95 @@ for profile_var in DAEMON_PROFILE GUI_PROFILE; do
     fi
 done
 
+# Fail fast if profiles cannot legally support the entitlements we are about to sign with.
+#
+# Without this, macOS may refuse to launch the app with:
+#   RBSRequestErrorDomain Code=5 + NSPOSIXErrorDomain Code=163 (job spawn failed)
+#
+# IMPORTANT: This check does not print sensitive identifiers; it only names the missing entitlement key.
+profile_has_entitlement() {
+  local profile="$1" key="$2"
+  python3 - "$profile" "$key" <<'PY'
+import os, sys, plistlib, subprocess
+profile, key = sys.argv[1], sys.argv[2]
+
+def decode(path: str) -> bytes:
+    # Prefer Apple tooling, but fall back to OpenSSL because `security cms -D` can fail on some machines.
+    p = subprocess.run(["security","cms","-D","-i",path], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    if p.returncode == 0 and p.stdout:
+        return p.stdout
+    p = subprocess.run(
+        ["openssl","smime","-inform","der","-verify","-noverify","-in",path],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    if p.returncode == 0 and p.stdout:
+        return p.stdout
+    return b""
+
+try:
+    raw = decode(profile)
+    if not raw:
+        print("decode_error")
+        raise SystemExit(0)
+    # OpenSSL output is usually a plist, but when it isn't, try to extract the XML payload.
+    if b"<?xml" not in raw:
+        print("decode_error")
+        raise SystemExit(0)
+    raw = raw[raw.index(b"<?xml") :]
+    obj = plistlib.loads(raw)
+except Exception:
+    print("decode_error")
+    raise SystemExit(0)
+
+ent = obj.get("Entitlements") or {}
+print("true" if key in ent else "false")
+PY
+}
+
+require_profile_entitlement() {
+  local profile="$1" key="$2" what="$3" fix="$4"
+  local ok
+  ok="$(profile_has_entitlement "$profile" "$key" || echo "false")"
+  if [[ "$ok" == "decode_error" ]]; then
+    echo ""
+    echo "ERROR: Could not decode provisioning profile to check entitlements."
+    echo "  profile: $profile"
+    echo ""
+    echo "Fix:"
+    echo "  1) Reinstall profiles: ./scripts/install-profiles.sh"
+    echo "  2) Audit profiles (safe output): ./scripts/profile-audit.sh \"$HOME/Library/MobileDevice/Provisioning Profiles\"/*.provisionprofile"
+    exit 1
+  fi
+  if [[ "$ok" != "true" ]]; then
+    echo ""
+    echo "ERROR: Provisioning profile is missing entitlement: $key"
+    echo "  profile: $profile"
+    echo "  affects: $what"
+    echo ""
+    echo "$fix"
+    exit 1
+  fi
+}
+
+require_profile_entitlement \
+  "$GUI_PROFILE" \
+  "com.apple.developer.system-extension.install" \
+  "GUI app (system extension install)" \
+  "Fix: regenerate the GUI provisioning profile for Identifier com.openjoystickdriver with the System Extension install capability, then reinstall profiles (./scripts/install-profiles.sh)."
+
+require_profile_entitlement \
+  "$GUI_PROFILE" \
+  "com.apple.developer.hid.virtual.device" \
+  "GUI app (Compatibility / embedded backend IOHIDUserDevice)" \
+  "Fix: regenerate the GUI provisioning profile for Identifier com.openjoystickdriver with entitlement com.apple.developer.hid.virtual.device, then reinstall profiles (./scripts/install-profiles.sh)."
+
+require_profile_entitlement \
+  "$DAEMON_PROFILE" \
+  "com.apple.developer.hid.virtual.device" \
+  "Daemon (Compatibility IOHIDUserDevice)" \
+  "Fix: enable entitlement com.apple.developer.hid.virtual.device on Identifier com.openjoystickdriver.daemon, regenerate the daemon provisioning profile, then reinstall profiles (./scripts/install-profiles.sh)."
+
 # For release builds routed through rebuild.sh, link against our static
 # universal libusb instead of Homebrew's dynamic dylib. This avoids a
 # Team ID mismatch SIGKILL under hardened runtime + library validation.
@@ -52,13 +141,15 @@ fi
 if [[ "$OJD_ENV" == "release" ]]; then
   echo "Building release binaries (universal)..."
   cd "$PROJECT_DIR"
-  swift build -c release --product OpenJoystickDriverDaemon --arch arm64 --arch x86_64
-  swift build -c release --product OpenJoystickDriver --arch arm64 --arch x86_64
+  swift build -c release --product OpenJoystickDriverDaemon --arch arm64 --arch x86_64 \
+    -Xswiftc -warnings-as-errors
+  swift build -c release --product OpenJoystickDriver --arch arm64 --arch x86_64 \
+    -Xswiftc -warnings-as-errors
 else
   echo "Building debug binaries..."
   cd "$PROJECT_DIR"
-  swift build --product OpenJoystickDriverDaemon
-  swift build --product OpenJoystickDriver
+  swift build --product OpenJoystickDriverDaemon -Xswiftc -warnings-as-errors
+  swift build --product OpenJoystickDriver -Xswiftc -warnings-as-errors
 fi
 
 mkdir -p "$PROJECT_DIR/.build"
@@ -82,6 +173,15 @@ mkdir -p "$GUI_RESOURCES"
 for bundle in "$BUILD_DIR"/OpenJoystickDriver_*.bundle; do
     [[ -d "$bundle" ]] && cp -R "$bundle" "$GUI_RESOURCES/"
 done
+
+# Embed LaunchAgent plist for SMAppService-based daemon management.
+#
+# This must exist at:
+#   OpenJoystickDriver.app/Contents/Library/LaunchAgents/com.openjoystickdriver.daemon.plist
+LAUNCHAGENTS_SRC="$PROJECT_DIR/Sources/OpenJoystickDriver/App/com.openjoystickdriver.daemon.plist"
+LAUNCHAGENTS_DST="$GUI_CONTENTS/Library/LaunchAgents"
+mkdir -p "$LAUNCHAGENTS_DST"
+cp "$LAUNCHAGENTS_SRC" "$LAUNCHAGENTS_DST/com.openjoystickdriver.daemon.plist"
 
 # Embed GUI provisioning profile in app bundle
 cp "$GUI_PROFILE" "$GUI_CONTENTS/embedded.provisionprofile"

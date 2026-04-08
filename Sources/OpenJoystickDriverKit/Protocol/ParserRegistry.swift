@@ -21,4 +21,11 @@ public final class ParserRegistry: Sendable {
     default: return GenericHIDParser(identifier: identifier)
     }
   }
+
+  /// Returns the suggested virtual device identity for compatibility mode.
+  ///
+  /// Used only when the user explicitly opts into spoofing IDs for picky consumers.
+  public func virtualProfile(for identifier: DeviceIdentifier) -> VirtualDeviceProfile {
+    catalog.virtualProfile(for: identifier)
+  }
 }

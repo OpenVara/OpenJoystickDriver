@@ -28,7 +28,10 @@ let package = Package(
       name: "OpenJoystickDriverKit",
       dependencies: ["SwiftUSB", "CLibUSB"],
       path: "Sources/OpenJoystickDriverKit",
-      resources: [.process("Resources/")]
+      resources: [.process("Resources/")],
+      linkerSettings: [
+        .linkedFramework("ServiceManagement")
+      ]
     ),
 
     .executableTarget(
@@ -42,10 +45,20 @@ let package = Package(
       name: "OpenJoystickDriver",
       dependencies: ["OpenJoystickDriverKit"],
       path: "Sources/OpenJoystickDriver",
-      exclude: ["OpenJoystickDriver.entitlements.template", "App/Info.plist"],
+      exclude: [
+        "OpenJoystickDriver.entitlements.template",
+        "App/Info.plist",
+        "App/com.openjoystickdriver.daemon.plist",
+      ],
       linkerSettings: [
         .linkedFramework("SystemExtensions"),
       ]
+    ),
+
+    .executableTarget(
+      name: "OpenJoystickDriverHIDTool",
+      dependencies: ["OpenJoystickDriverKit"],
+      path: "Sources/OpenJoystickDriverHIDTool"
     ),
 
     .testTarget(

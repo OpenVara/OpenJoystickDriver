@@ -5,6 +5,18 @@ import Foundation
 /// Both sides must use the same name to establish a connection.
 public let xpcServiceName = "com.openjoystickdriver.xpc"
 
+/// Which identity/protocol the user-space Compatibility virtual device should emulate.
+///
+/// IMPORTANT:
+/// - `generic` is a standard HID GamePad (most correct, most predictable).
+/// - `xboxOne` and `xbox360` are for picky apps that only auto-map known devices (often SDL-based).
+///   These modes must match descriptor + report bytes, not just VID/PID.
+public enum CompatibilityIdentity: String, Codable, CaseIterable, Sendable {
+  case generic
+  case xboxOne
+  case xbox360
+}
+
 /// Which virtual device output path the daemon should actively drive.
 ///
 /// - `auto`: prefer DriverKit, fall back to user-space only if DriverKit output is unstable.
@@ -73,6 +85,14 @@ public enum VirtualDeviceMode: String, Codable, CaseIterable, Sendable {
   /// Reply is JSON-encoded ``XPCVirtualDeviceDiagnosticsPayload``.
   @objc func getVirtualDeviceDiagnostics(reply: @escaping (Data) -> Void)
 
+  /// Sets which identity/protocol to emulate in Compatibility mode (user-space IOHIDUserDevice).
+  ///
+  /// Values: "generic", "xboxOne", "xbox360".
+  @objc func setCompatibilityIdentity(_ raw: String, reply: @escaping (Bool) -> Void)
+
+  /// Gets which identity/protocol is configured for Compatibility mode.
+  @objc func getCompatibilityIdentity(reply: @escaping (String) -> Void)
+
   /// Sets the daemon output routing mode.
   ///
   /// Values: "primaryOnly", "secondaryOnly", or "both".
@@ -87,6 +107,9 @@ public enum VirtualDeviceMode: String, Codable, CaseIterable, Sendable {
   ///
   /// Reply is JSON-encoded ``XPCVirtualDeviceSelfTestPayload``.
   @objc func runVirtualDeviceSelfTest(seconds: Int, reply: @escaping (Data) -> Void)
+
+  /// Resets daemon persisted settings (mode/output/compat identity) to defaults.
+  @objc func resetSettings(reply: @escaping (Bool) -> Void)
 }
 
 /// Redacted serial number state for a HID device.
@@ -264,6 +287,8 @@ public struct XPCStatusPayload: Codable, Sendable {
   ///
   /// This can differ from `virtualDeviceMode` when the daemon is in `auto` mode.
   public let effectiveOutputMode: String?
+  /// Compatibility mode identity/protocol selection ("generic", "xboxOne", "xbox360").
+  public let compatibilityIdentity: String?
 
   /// Creates a new XPCStatusPayload.
   public init(
@@ -272,7 +297,8 @@ public struct XPCStatusPayload: Codable, Sendable {
     userSpaceVirtualDeviceEnabled: Bool? = nil,
     userSpaceVirtualDeviceStatus: String? = nil,
     virtualDeviceMode: String? = nil,
-    effectiveOutputMode: String? = nil
+    effectiveOutputMode: String? = nil,
+    compatibilityIdentity: String? = nil
   ) {
     self.inputMonitoring = inputMonitoring
     self.connectedDevices = connectedDevices
@@ -280,5 +306,6 @@ public struct XPCStatusPayload: Codable, Sendable {
     self.userSpaceVirtualDeviceStatus = userSpaceVirtualDeviceStatus
     self.virtualDeviceMode = virtualDeviceMode
     self.effectiveOutputMode = effectiveOutputMode
+    self.compatibilityIdentity = compatibilityIdentity
   }
 }

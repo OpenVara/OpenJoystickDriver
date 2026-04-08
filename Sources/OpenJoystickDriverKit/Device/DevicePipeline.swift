@@ -4,7 +4,6 @@ import SwiftUSB
 private let gipInputEndpointAddress: UInt8 = 0x82
 private let gipReadPacketLength = 64
 private let gipReadTimeoutMs: UInt32 = 100
-private let pipelineErrorRecoveryDelay: UInt64 = 10_000_000
 private let usbOpenRetryDelays: [UInt64] = [1_000_000_000, 2_000_000_000, 4_000_000_000]
 /// Send keep-alive every 40 read cycles × 100 ms timeout ≈ 4 seconds.
 private let keepAliveCycleInterval: UInt = 40
@@ -13,6 +12,10 @@ private let keepAliveCycleInterval: UInt = 40
 /// If libusb returns timeouts immediately (instead of waiting for timeout),
 /// this prevents a hot loop that can trigger launchd "inefficient" kills.
 private let usbInputLoopCadenceNs: UInt64 = UInt64(gipReadTimeoutMs) * 1_000_000
+private let usbIOErrorReconnectThreshold = 10
+private let usbIOErrorBackoffBaseNs: UInt64 = 250_000_000  // 250ms
+private let usbIOErrorBackoffMaxNs: UInt64 = 2_000_000_000  // 2s
+private let usbIOErrorLogIntervalNs: UInt64 = 5_000_000_000  // 5s
 
 /// Manages full lifecycle of single connected controller.
 /// Each controller gets its own DevicePipeline actor - one
@@ -35,6 +38,8 @@ actor DevicePipeline {
   private var currentInputState: DeviceInputState
   private var packetLog: [PacketLogEntry] = []
   private let maxPacketLogEntries = 200
+  private var consecutiveUSBIOErrors: Int = 0
+  private var lastUSBIOErrorLogNs: UInt64 = 0
 
   init(
     identifier: DeviceIdentifier,
@@ -149,25 +154,40 @@ actor DevicePipeline {
       return
     }
 
-    guard
-      let handle = await openDeviceWithRetry(
-        context: context,
-        vendorID: vendorID,
-        productID: productID
-      )
-    else {
-      print("[DevicePipeline] Could not open USB device" + " \(identifier) after retries")
-      isActive = false
-      return
-    }
-    usbHandle = handle
+    var openAttempt: Int = 0
+    while isActive {
+      guard
+        let handle = await openDeviceWithRetry(
+          context: context,
+          vendorID: vendorID,
+          productID: productID
+        )
+      else {
+        print("[DevicePipeline] Could not open USB device" + " \(identifier) after retries")
+        isActive = false
+        return
+      }
+      usbHandle = handle
+      consecutiveUSBIOErrors = 0
 
-    guard await performUSBHandshake(handle: handle) else {
-      isActive = false
-      return
-    }
+      guard await performUSBHandshake(handle: handle) else {
+        // Try again while active, but slow down to avoid hot loops that launchd may kill
+        // as "inefficient".
+        openAttempt += 1
+        let delay = min(UInt64(4_000_000_000), UInt64(250_000_000) << min(openAttempt, 4))
+        try? await Task.sleep(nanoseconds: delay)
+        continue
+      }
 
-    await runUSBInputLoop(handle: handle)
+      await runUSBInputLoop(handle: handle)
+
+      if !isActive { return }
+
+      // Prevent immediate reopen loops.
+      openAttempt += 1
+      let delay = min(UInt64(4_000_000_000), UInt64(250_000_000) << min(openAttempt, 4))
+      try? await Task.sleep(nanoseconds: delay)
+    }
   }
 
   private func performUSBHandshake(handle: USBDeviceHandle) async -> Bool {
@@ -249,6 +269,7 @@ actor DevicePipeline {
       var shouldBreak = false
       do {
         let bytes = try readInterrupt(handle: handle, inEndpoint: inEndpoint)
+        consecutiveUSBIOErrors = 0
         appendToPacketLog(bytes: bytes, direction: "rx")
         let events = try parseEvents(from: bytes)
         if !events.isEmpty { await dispatcher.dispatch(events: events, from: identifier) }
@@ -258,9 +279,32 @@ actor DevicePipeline {
       } catch let error as USBError where error.isNoDevice {
         print("[DevicePipeline] Device disconnected:" + " \(identifier)")
         shouldBreak = true
+      } catch let error as USBError where error.isIOError {
+        consecutiveUSBIOErrors += 1
+
+        let now = DispatchTime.now().uptimeNanoseconds
+        if now &- lastUSBIOErrorLogNs >= usbIOErrorLogIntervalNs {
+          lastUSBIOErrorLogNs = now
+          print(
+            "[DevicePipeline] USB I/O error (will recover)" + " for \(identifier): \(error)"
+              + " (consecutive=\(consecutiveUSBIOErrors))"
+          )
+        }
+
+        // Back off aggressively to avoid triggering launchd "inefficient" kills.
+        let exp = min(max(0, consecutiveUSBIOErrors - 1), 4)
+        let backoff = min(usbIOErrorBackoffMaxNs, usbIOErrorBackoffBaseNs << exp)
+        try? await Task.sleep(nanoseconds: backoff)
+
+        if consecutiveUSBIOErrors >= usbIOErrorReconnectThreshold {
+          print("[DevicePipeline] Too many USB I/O errors — reconnecting:" + " \(identifier)")
+          shouldBreak = true
+        }
       } catch {
-        print("[DevicePipeline] Read error" + " for \(identifier):" + " \(error) - continuing")
-        try? await Task.sleep(nanoseconds: pipelineErrorRecoveryDelay)
+        // Unknown failures: slow down and let the outer loop reconnect.
+        print("[DevicePipeline] Read error" + " for \(identifier):" + " \(error) — reconnecting")
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        shouldBreak = true
       }
 
       if shouldBreak { break }
