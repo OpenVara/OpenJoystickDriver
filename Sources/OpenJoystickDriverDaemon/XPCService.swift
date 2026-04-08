@@ -101,6 +101,19 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       dispatcher.setMode(.primaryOnly)
       UserDefaults.standard.set(CompositeOutputDispatcher.Mode.primaryOnly.rawValue, forKey: Self.outputModeDefaultsKey)
     case .compatUserSpace:
+      // If DriverKit is active, do not allow Compatibility: SDL-based apps will see two controllers.
+      if dextDispatcher.isConnected() {
+        userSpaceStatus =
+          "error: Compatibility is disabled while DriverKit is active (would create duplicate controllers in SDL/PCSX2)."
+        dextDispatcher.setEnabled(true)
+        effectiveOutputMode = .primaryOnly
+        dispatcher.setMode(.primaryOnly)
+        UserDefaults.standard.set(
+          CompositeOutputDispatcher.Mode.primaryOnly.rawValue,
+          forKey: Self.outputModeDefaultsKey
+        )
+        return
+      }
       // Compatibility is user-requested. Do not rewrite the requested mode on failures.
       //
       // If user-space creation fails, keep DriverKit enabled as a fallback but keep the

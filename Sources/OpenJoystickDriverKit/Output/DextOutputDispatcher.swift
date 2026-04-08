@@ -31,6 +31,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   /// Identity of the virtual gamepad presented to the OS.
   private let profile: VirtualDeviceProfile
+  private let format: any VirtualGamepadReportFormat
   private var hidDevice: IOHIDDevice?
   private var hidManager: IOHIDManager?
   private let connectionLock = NSLock()
@@ -71,7 +72,13 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   ///
   /// - Parameters:
   ///   - profile: Virtual device identity used for HID device matching.
-  public init(profile: VirtualDeviceProfile = .default) { self.profile = profile }
+  public init(profile: VirtualDeviceProfile = .xboxOneS) {
+    self.profile = profile
+    // DriverKit is presented as an Xbox controller for SDL/PCSX2 auto-mapping.
+    // Use the same descriptor/report packing as Compatibility's "Xbox One (HID)".
+    self.format = (try? HIDDescriptorReportFormat(descriptor: XboxOneBluetoothHIDDescriptor.descriptor))
+      ?? OJDGenericGamepadFormat()
+  }
 
   deinit { closeDevice() }
 
@@ -87,6 +94,10 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       return changed && !isEnabled
     }
     if shouldClose { closeDevice() }
+  }
+
+  public func isConnected() -> Bool {
+    connectionLock.withLock { hidDevice != nil }
   }
 
   @discardableResult public func connect() -> Bool {
@@ -174,8 +185,6 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       let ioUserClass = strProp(device, "IOUserClass")
       let serial = strProp(device, kIOHIDSerialNumberKey as String)
       let location = intProp(device, kIOHIDLocationIDKey as String)
-      let product = strProp(device, kIOHIDProductKey as String)
-      let manufacturer = strProp(device, kIOHIDManufacturerKey as String)
 
       if serial == UserSpaceVirtualDeviceConstants.serialNumber {
         return Int.min / 2
@@ -189,25 +198,12 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       if serial == VirtualDeviceIdentityConstants.driverKitSerialNumber { s += 100_000 }
       if location == Int(VirtualDeviceIdentityConstants.driverKitLocationID) { s += 10_000 }
 
-      // Fallback: some macOS builds do not expose IOUserClass / serial on IOHIDDevice.
-      // Because we use a non-real OJD VID/PID, this is still safe.
-      let vid = intProp(device, kIOHIDVendorIDKey as String)
-      let pid = intProp(device, kIOHIDProductIDKey as String)
-      let looksLikeOJDVirtual =
-        (vid == profile.vendorID)
-        && (pid == profile.productID)
-        && (product == profile.productName)
-        && (manufacturer == profile.manufacturer)
-      if looksLikeOJDVirtual { s += 5_000 }
-
       // If we don't have any strong indicator that this is our dext device,
       // do not treat it as a candidate. Otherwise we risk opening a real controller
       // and blasting it with output reports.
       if s == 0 { return Int.min / 2 }
 
       if (strProp(device, kIOHIDTransportKey as String) ?? "") == "USB" { s += 100 }
-      // Tie-breaker only: prefer devices matching our current profile identity.
-      if vid == profile.vendorID && pid == profile.productID { s += 10 }
       return s
     }
 
@@ -261,12 +257,17 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       return buildReport()
     }
 
+    let reportID: CFIndex = {
+      if let rid = format.inputReportID, rid != 0 { return CFIndex(rid) }
+      return 0
+    }()
+
     let result = report.withUnsafeMutableBytes { ptr -> IOReturn in
       guard let base = ptr.baseAddress else { return kIOReturnBadArgument }
       return IOHIDDeviceSetReport(
         device,
         kIOHIDReportTypeOutput,
-        0,
+        reportID,
         base.assumingMemoryBound(to: UInt8.self),
         ptr.count
       )
@@ -373,29 +374,25 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   // MARK: - Report construction (called inside reportLock.withLock)
 
   private func buildReport() -> [UInt8] {
-    var r = [UInt8](repeating: 0, count: GamepadHIDDescriptor.reportSize)
-    r[0] = UInt8(buttons & 0xFF)
-    r[1] = UInt8((buttons >> 8) & 0xFF)
-    let lsxB = leftStickX.littleEndianBytes
-    r[2] = lsxB.0
-    r[3] = lsxB.1
-    let lsyB = leftStickY.littleEndianBytes
-    r[4] = lsyB.0
-    r[5] = lsyB.1
-    let ltB = leftTrigger.littleEndianBytes
-    r[6] = ltB.0
-    r[7] = ltB.1
-    let rsxB = rightStickX.littleEndianBytes
-    r[8] = rsxB.0
-    r[9] = rsxB.1
-    let rsyB = rightStickY.littleEndianBytes
-    r[10] = rsyB.0
-    r[11] = rsyB.1
-    let rtB = rightTrigger.littleEndianBytes
-    r[12] = rtB.0
-    r[13] = rtB.1
-    r[14] = hat.rawValue & 0x0F
-    return r
+    let state = VirtualGamepadState(
+      buttons: buttons,
+      leftStickX: leftStickX,
+      leftStickY: leftStickY,
+      rightStickX: rightStickX,
+      rightStickY: rightStickY,
+      leftTrigger: leftTrigger,
+      rightTrigger: rightTrigger,
+      hat: hat
+    )
+
+    // IOHIDDeviceSetReport does not take a report-id byte in the buffer; report IDs
+    // are encoded by the reportID argument. Our dext parses output report bytes and
+    // relays them as input with Report ID 1.
+    let full = format.buildInputReport(from: state)
+    if let rid = format.inputReportID, rid != 0, full.first == rid {
+      return Array(full.dropFirst())
+    }
+    return full
   }
 
   // MARK: - Button mapping (XInputHID order)

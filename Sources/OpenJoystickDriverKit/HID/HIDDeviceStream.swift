@@ -19,6 +19,8 @@ public final class HIDDeviceStream: @unchecked Sendable {
 
   private let manager: IOHIDManager
   private var continuation: AsyncStream<HIDDeviceEvent>.Continuation?
+  private let seizeLock = NSLock()
+  private var seizedByLocation: [UInt32: IOHIDDevice] = [:]
 
   /// VID/PID of the virtual gamepad, used to filter it from the input stream.
   private let virtualVID: UInt16
@@ -73,6 +75,12 @@ public final class HIDDeviceStream: @unchecked Sendable {
       CFRunLoopMode.defaultMode.rawValue
     )
     IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+    seizeLock.withLock {
+      for (_, dev) in seizedByLocation {
+        IOHIDDeviceClose(dev, IOOptionBits(kIOHIDOptionsTypeSeizeDevice))
+      }
+      seizedByLocation.removeAll()
+    }
     continuation?.finish()
     continuation = nil
   }
@@ -109,12 +117,21 @@ public final class HIDDeviceStream: @unchecked Sendable {
     }
 
     let loc = deviceProperty(device, kIOHIDLocationIDKey)
+    let locationID = UInt32(truncatingIfNeeded: loc)
+
+    // Try to take exclusive access so SDL/PCSX2 sees only the virtual controller (no duplicates).
+    // This is best-effort; if it fails we still function, but users may see SDL-0/SDL-1 conflicts.
+    let seizeKr = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeSeizeDevice))
+    if seizeKr == kIOReturnSuccess {
+      seizeLock.withLock { seizedByLocation[locationID] = device }
+    }
+
     continuation?.yield(
       .connected(
         vendorID: UInt16(truncatingIfNeeded: vid),
         productID: UInt16(truncatingIfNeeded: pid),
         serialNumber: serial,
-        locationID: UInt32(truncatingIfNeeded: loc),
+        locationID: locationID,
         productName: productName
       )
     )
@@ -125,11 +142,17 @@ public final class HIDDeviceStream: @unchecked Sendable {
     let vid = deviceProperty(device, kIOHIDVendorIDKey)
     let pid = deviceProperty(device, kIOHIDProductIDKey)
     let loc = deviceProperty(device, kIOHIDLocationIDKey)
+    let locationID = UInt32(truncatingIfNeeded: loc)
+    seizeLock.withLock {
+      if let dev = seizedByLocation.removeValue(forKey: locationID) {
+        IOHIDDeviceClose(dev, IOOptionBits(kIOHIDOptionsTypeSeizeDevice))
+      }
+    }
     continuation?.yield(
       .disconnected(
         vendorID: UInt16(truncatingIfNeeded: vid),
         productID: UInt16(truncatingIfNeeded: pid),
-        locationID: UInt32(truncatingIfNeeded: loc)
+        locationID: locationID
       )
     )
   }
