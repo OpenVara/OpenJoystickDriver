@@ -47,7 +47,8 @@ You should see at least:
 security find-identity -v -p codesigning
 ```
 
-The Team ID in the identity name (the `(...)` suffix) must match the Team ID in the provisioning profiles you installed.
+The Team ID in your provisioning profiles must match the Team ID encoded in your certificate **Subject OU**.
+Do not trust the `(...)` suffix in the Keychain display name as the Team ID.
 
 If Keychain Access shows “not trusted” but `security find-identity` says the identity is valid, you can usually ignore the UI.
 
@@ -82,8 +83,9 @@ Commands to see what you have (prints only Team IDs):
 
 ```bash
 # Team ID in your Apple Development .cer (from ~/Documents/Certificates)
-openssl x509 -inform DER -in "$HOME/Documents/Certificates/development.cer" -noout -subject \
-  | sed -nE 's/.*\\(([A-Z0-9]{10})\\).*/\\1/p'
+# NOTE: the Team ID is the certificate Subject OU (not the display-name (...) suffix).
+openssl x509 -inform DER -in "$HOME/Documents/Certificates/development.cer" -noout -subject -nameopt RFC2253 \
+  | sed -nE 's/.*OU=([^,]+).*/\\1/p'
 
 # Team ID inside the DriverKit provisioning profile
 openssl smime -inform der -verify -noverify \
@@ -112,7 +114,7 @@ The DriverKit `.dext` does **not** use IOHIDUserDevice and does not need `com.ap
 
 Apple certificates encode the team ID in the **Subject OU**. Some tooling/UI also shows an identifier in the
 certificate’s **CN** (the `(...)` part of the display name). If those disagree, use the provisioning profile’s
-`TeamIdentifier` as the source of truth and sign by **SHA1 identity** instead of the display name.
+`TeamIdentifier` (and the certificate Subject OU) as the source of truth and sign by **SHA1 identity** instead of the display name.
 
 This repo’s `./scripts/configure-signing.sh` writes `CODESIGN_IDENTITY` as a 40‑hex SHA1 for that reason.
 

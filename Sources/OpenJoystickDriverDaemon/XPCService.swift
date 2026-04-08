@@ -397,14 +397,10 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
   private func buildUserSpaceDispatcher(identity: CompatibilityIdentity) throws -> (UserSpaceOutputDispatcher, String) {
     enum CompatError: Swift.Error, CustomStringConvertible, Sendable {
       case unsupported(String)
-      case physicalDescriptorNotFound(vendorID: Int, productID: Int)
       var description: String {
         switch self {
         case .unsupported(let msg):
           return msg
-        case .physicalDescriptorNotFound(let vid, let pid):
-          return
-            "No physical controller found to copy its HID descriptor (VID:0x\(String(vid, radix: 16)) PID:0x\(String(pid, radix: 16))). Plug it in once, then retry."
         }
       }
     }
@@ -417,14 +413,11 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       format = OJDGenericGamepadFormat()
     case .xboxOne:
       profile = .xboxOneS
-      // PCSX2 (SDL3) on macOS relies on SDL's controller mapping database.
-      // For VID/PID 045e:02ea, the expected macOS mapping treats D-pad as buttons and
-      // assumes a "standard-ish" HID GamePad layout. The OJD generic report format
-      // already includes D-pad button bits (11–14) in addition to the hat, which
-      // improves compatibility with SDL mappings compared to the real Xbox BT descriptor.
-      //
-      // Keep the Xbox VID/PID + strings, but use the generic OJD descriptor + report bytes.
-      format = OJDGenericGamepadFormat()
+      // Full Xbox One HID identity for SDL/Steam/PCSX2:
+      // - VID/PID + strings match a real Xbox Wireless Controller
+      // - report descriptor matches the expected Xbox BT HID layout
+      // - input reports are packed according to that descriptor (Report ID 1)
+      format = try HIDDescriptorReportFormat(descriptor: XboxOneBluetoothHIDDescriptor.descriptor)
     case .xbox360:
       throw CompatError.unsupported(
         "Xbox 360 (experimental) is not supported yet (no built-in HID descriptor available). Use Generic or Xbox One (HID)."

@@ -170,25 +170,6 @@ echo "  Build profile:  $DEXT_BUILD_PROFILE"
 echo "  Final identity: $FINAL_IDENTITY_XCODE"
 echo "  Team: $DEVELOPMENT_TEAM"
 
-# If the Apple Development identity string ends with a team-like suffix "(XXXXXXXXXX)",
-# validate it matches DEVELOPMENT_TEAM. This catches the common failure mode where
-# the GUI/daemon profiles are for one team but the Apple Development certificate is
-# issued under a different team, causing xcodebuild to fail with:
-#   "No certificate for team '...' matching 'Apple Development: ... (...)' found"
-IDENTITY_SUFFIX_TEAM="$(echo "$DEXT_BUILD_IDENTITY_XCODE" | sed -n 's/.*(\([A-Z0-9]\{10\}\)).*/\1/p')"
-if [[ -n "$IDENTITY_SUFFIX_TEAM" && "$IDENTITY_SUFFIX_TEAM" != "$DEVELOPMENT_TEAM" ]]; then
-  echo ""
-  echo "ERROR: Apple Development certificate team mismatch."
-  echo "  DEVELOPMENT_TEAM: $DEVELOPMENT_TEAM"
-  echo "  Apple Development cert: (...$IDENTITY_SUFFIX_TEAM)"
-  echo ""
-  echo "Fix (no guessing):"
-  echo "  1) In Apple Developer portal, create/download an Apple Development certificate for team $DEVELOPMENT_TEAM."
-  echo "  2) Re-generate the DEXT provisioning profile selecting that certificate."
-  echo "  3) Re-run: ./scripts/install-profiles.sh and ./scripts/configure-signing.sh"
-  exit 1
-fi
-
 # ---------------------------------------------------------------------------
 # Preflight: profile team must match cert team
 # ---------------------------------------------------------------------------

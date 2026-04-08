@@ -249,34 +249,27 @@ def pick_identity_matching_profile(prefix: str, profile_path: str) -> str:
             "Tip: run ./scripts/doctor-signing.sh for a one-shot diagnosis.\n"
         )
     available_sha1s: list[str] = []
-    teams_seen: set[str] = set()
     for line in out.splitlines():
         # Format:  1) <sha1> "<identity>"
         m = re.search(r'^\s*\d+\)\s+([0-9A-Fa-f]{40})\s+\"(' + re.escape(prefix) + r':[^\"]+)\"', line)
         if not m:
             continue
         got = m.group(1).lower()
-        ident = m.group(2)
         available_sha1s.append(got)
-        team_m = re.search(r'\(([A-Z0-9]{10})\)\s*$', ident)
-        if team_m:
-            teams_seen.add(team_m.group(1))
         if got == want:
             # Use the SHA1 identity instead of the display name.
             # This avoids confusing cases where the certificate's Subject CN
             # (and thus the Keychain display name) contains a stale/incorrect
-            # team suffix, while the certificate OU and provisioning profile
+            # suffix, while the certificate Subject OU and provisioning profile
             # TeamIdentifier are correct.
             return got
     profile_team = team_id_from_profile(profile_path)
-    teams_str = ", ".join(sorted(teams_seen)) if teams_seen else "UNKNOWN"
     sha1_str = ", ".join(available_sha1s) if available_sha1s else "UNKNOWN"
     raise SystemExit(
         f"ERROR: No {prefix} identity matches the certificate embedded in provisioning profile.\n"
         f"  profile: {profile_path}\n"
         f"  profile_team: {profile_team}\n"
         f"  profile_embedded_cert_sha1: {want}\n"
-        f"  keychain_{prefix.replace(' ', '_').lower()}_teams: {teams_str}\n"
         f"  keychain_{prefix.replace(' ', '_').lower()}_sha1s: {sha1_str}\n"
         "Fix: regenerate the provisioning profile selecting the certificate you have locally, or create/import the matching certificate+private-key."
     )
