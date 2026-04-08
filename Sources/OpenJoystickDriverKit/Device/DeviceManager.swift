@@ -19,6 +19,11 @@ public actor DeviceManager {
   private let dispatcher: any OutputDispatcher
   private let permissionManager: PermissionManager
   private let hidManager: HIDManager
+  /// Single libusb context shared across the entire daemon process.
+  ///
+  /// Creating multiple libusb contexts spins up multiple event threads and can
+  /// trigger launchd "inefficient" kills for LaunchAgents.
+  private var usbContext: USBContext?
   private var pipelines: [DeviceIdentifier: DevicePipeline] = [:]
   private var deviceInfos: [DeviceIdentifier: DeviceInfo] = [:]
   private var detectionTasks: [Task<Void, Never>] = []
@@ -54,6 +59,8 @@ public actor DeviceManager {
       }
     case .granted: print("[DeviceManager] Input Monitoring granted")
     }
+
+    ensureUSBContext()
 
     let usbTask = Task { await self.runUSBDetection() }
     let hidTask = Task { await self.runHIDDetection() }
@@ -109,7 +116,8 @@ public actor DeviceManager {
 
   private func runUSBDetection() async {
     print("[DeviceManager] USB detection started" + " (class 0xFF)")
-    guard let context = try? USBContext() else {
+    ensureUSBContext()
+    guard let context = usbContext else {
       print("[DeviceManager] Failed to create USBContext")
       return
     }
@@ -183,6 +191,16 @@ public actor DeviceManager {
     }
   }
 
+  private func ensureUSBContext() {
+    if usbContext != nil { return }
+    do {
+      usbContext = try USBContext()
+    } catch {
+      usbContext = nil
+      print("[DeviceManager] Failed to create USBContext: \(error)")
+    }
+  }
+
   @discardableResult private func handleUSBDeviceAdded(_ device: USBDevice) -> DeviceIdentifier? {
     let locationID = UInt32((UInt32(device.bus) << 8) | UInt32(device.address))
     let serial = try? device.getSerialNumber()
@@ -206,7 +224,8 @@ public actor DeviceManager {
       identifier: identifier,
       transport: .usb(vendorID: device.idVendor, productID: device.idProduct),
       parser: parser,
-      dispatcher: dispatcher
+      dispatcher: dispatcher,
+      usbContext: usbContext
     )
     pipelines[identifier] = pipeline
     Task { await pipeline.start() }
@@ -258,7 +277,8 @@ public actor DeviceManager {
       identifier: identifier,
       transport: .hid(locationID: locationID),
       parser: parser,
-      dispatcher: dispatcher
+      dispatcher: dispatcher,
+      usbContext: nil
     )
     pipelines[identifier] = pipeline
     Task { await pipeline.start() }

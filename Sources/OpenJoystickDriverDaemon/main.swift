@@ -9,18 +9,22 @@ let permissionManager = PermissionManager()
 // Always use the DriverKit virtual HID extension. If the dext isn't available yet
 // (e.g. pending reboot after first approval), dispatch() will auto-retry on each
 // input event until the connection succeeds.
-let dispatcher = DextOutputDispatcher()
-if dispatcher.connect() {
+let dextDispatcher = DextOutputDispatcher()
+if dextDispatcher.connect() {
   print("[Daemon] Connected to DriverKit virtual HID extension")
 } else {
   print("[Daemon] DriverKit extension not yet available — will auto-retry on first device input")
 }
 
+// Optional secondary output is controlled by the GUI via XPC (user-space IOHIDUserDevice).
+let dispatcher = CompositeOutputDispatcher(primary: dextDispatcher)
+
 let manager = DeviceManager(dispatcher: dispatcher)
 let xpcService = XPCService(
   deviceManager: manager,
   permissionManager: permissionManager,
-  dispatcher: dispatcher
+  dispatcher: dispatcher,
+  dextDispatcher: dextDispatcher
 )
 
 manager.setupGracefulShutdown(label: "Daemon")

@@ -3,17 +3,12 @@ import IOKit.hid
 import OpenJoystickDriverKit
 import SwiftUI
 
-private enum WindowMetrics {
-  static let size = NSSize(width: 820, height: 520)
-  static let minSize = NSSize(width: 660, height: 440)
-}
-
 /// Application delegate: sets up menu bar icon and manages main window.
 ///
 /// App runs as accessory (no Dock icon) - it is persistent system utility.
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
   private var statusItem: NSStatusItem?
-  private var mainWindow: NSWindow?
+  private var popover: NSPopover?
   private(set) var model: AppModel
 
   init(developerMode: Bool = false) { self.model = AppModel(developerMode: developerMode) }
@@ -41,43 +36,34 @@ private enum WindowMetrics {
         systemSymbolName: "gamecontroller.fill",
         accessibilityDescription: "OpenJoystickDriver"
       )
+      button.target = self
+      button.action = #selector(togglePopover(_:))
     }
-    let menu = NSMenu()
-    let openItem = NSMenuItem(
-      title: "Open Dashboard",
-      action: #selector(openMainWindow),
-      keyEquivalent: ""
-    )
-    openItem.target = self
-    menu.addItem(openItem)
-    menu.addItem(.separator())
-    let quitItem = NSMenuItem(
-      title: "Quit OpenJoystickDriver",
-      action: #selector(NSApplication.terminate(_:)),
-      keyEquivalent: "q"
-    )
-    menu.addItem(quitItem)
-    item.menu = menu
     statusItem = item
   }
 
-  // MARK: - Main Window
+  // MARK: - Popover
 
-  @objc func openMainWindow() {
-    if let existing = mainWindow, existing.isVisible {
-      existing.makeKeyAndOrderFront(nil)
-      NSApp.activate(ignoringOtherApps: true)
-      return
+  @objc private func togglePopover(_ sender: Any?) {
+    guard let button = statusItem?.button else { return }
+
+    if popover == nil {
+      let pop = NSPopover()
+      pop.behavior = .transient
+      let contentView = MenuBarPopoverView().environmentObject(model)
+      let controller = NSHostingController(rootView: contentView)
+      pop.contentViewController = controller
+      pop.contentSize = NSSize(width: 420, height: 460)
+      popover = pop
     }
-    let contentView = ContentView().environmentObject(model)
-    let controller = NSHostingController(rootView: contentView)
-    let window = NSWindow(contentViewController: controller)
-    window.title = "OpenJoystickDriver"
-    window.setContentSize(WindowMetrics.size)
-    window.minSize = WindowMetrics.minSize
-    window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-    window.makeKeyAndOrderFront(nil)
-    NSApp.activate(ignoringOtherApps: true)
-    mainWindow = window
+
+    guard let popover else { return }
+    if popover.isShown {
+      popover.performClose(sender)
+    } else {
+      popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+      NSApp.activate(ignoringOtherApps: true)
+    }
   }
+
 }

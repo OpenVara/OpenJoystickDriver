@@ -12,6 +12,9 @@ import IOKit.hid
 /// on every call until the dext loads.
 public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
+  /// Posted when DriverKit injection is unstable (typically during sysext replacement/upgrade).
+  public static let dextUnstableNotification = Notification.Name("OpenJoystickDriver.DextUnstable")
+
   // MARK: - Thread safety
   //
   // @unchecked Sendable safety:
@@ -31,6 +34,24 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   private var hidDevice: IOHIDDevice?
   private var hidManager: IOHIDManager?
   private let connectionLock = NSLock()
+  private var enabled: Bool = true
+  private var nextAutoRetryConnectNs: UInt64 = 0
+  private var autoRetryBackoffNs: UInt64 = 250_000_000  // 250ms
+  private var lastConnectionLostLogNs: UInt64 = 0
+
+  // MARK: - Stability tracking
+
+  private let stabilityLock = NSLock()
+  private var failureTimestamps: [UInt64] = []
+  private var lastUnstablePost: UInt64 = 0
+
+  // MARK: - Output stats (for diagnostics)
+
+  private let statsLock = NSLock()
+  private var setReportAttempts: Int = 0
+  private var setReportSuccesses: Int = 0
+  private var setReportFailures: Int = 0
+  private var lastSetReportError: IOReturn?
 
   // MARK: - Report state
 
@@ -56,7 +77,20 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   // MARK: - Connection management
 
+  /// Enables or disables DriverKit output injection.
+  ///
+  /// When disabled, any open IOHID device handle is closed and future dispatch calls are no-ops.
+  public func setEnabled(_ isEnabled: Bool) {
+    let shouldClose = connectionLock.withLock { () -> Bool in
+      let changed = enabled != isEnabled
+      enabled = isEnabled
+      return changed && !isEnabled
+    }
+    if shouldClose { closeDevice() }
+  }
+
   @discardableResult public func connect() -> Bool {
+    guard connectionLock.withLock({ enabled }) else { return false }
     guard let (device, mgr) = findDevice() else {
       print("[DextOutputDispatcher] Virtual gamepad not found — not installed or not approved")
       return false
@@ -84,46 +118,125 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   }
 
   private func findDevice() -> (IOHIDDevice, IOHIDManager)? {
+    // Do NOT match by VID/PID.
+    //
+    // During development and during sysext replacement/upgrade, the installed dext may be an
+    // older build with a different VID/PID than the Swift layer expects. Also, our virtual
+    // identity is intentionally not tied to any real controller's VID/PID.
+    //
+    // Instead, find by "GamePad" usage and then identify the dext via IOUserClass / serial.
     let matching: [String: Any] = [
-      kIOHIDVendorIDKey as String: profile.vendorID,
-      kIOHIDProductIDKey as String: profile.productID,
+      kIOHIDDeviceUsagePageKey as String: kHIDPage_GenericDesktop,
+      kIOHIDDeviceUsageKey as String: kHIDUsage_GD_GamePad,
     ]
-    let mgr = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
-    IOHIDManagerSetDeviceMatching(mgr, matching as CFDictionary)
-    let openResult = IOHIDManagerOpen(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
-    if openResult != kIOReturnSuccess {
-      print("[DextOutputDispatcher] IOHIDManagerOpen warning: \(String(openResult, radix: 16))")
+    func openManager(_ matching: CFDictionary?) -> IOHIDManager {
+      let mgr = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+      IOHIDManagerSetDeviceMatching(mgr, matching)
+      let openResult = IOHIDManagerOpen(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+      if openResult != kIOReturnSuccess {
+        print("[DextOutputDispatcher] IOHIDManagerOpen warning: \(String(openResult, radix: 16))")
+      }
+      return mgr
     }
 
-    guard let devices = IOHIDManagerCopyDevices(mgr) as? Set<IOHIDDevice>,
-      let device = devices.first
-    else {
+    func copyDevices(_ mgr: IOHIDManager) -> Set<IOHIDDevice> {
+      (IOHIDManagerCopyDevices(mgr) as? Set<IOHIDDevice>) ?? []
+    }
+
+    // Pass 1: fast path (GamePad usage match).
+    var mgr = openManager(matching as CFDictionary)
+    var devices = copyDevices(mgr)
+
+    // Pass 2: broad match fallback. Some installed dext builds may not match under usage filtering
+    // during replacement/upgrade or when app/dext identities are temporarily out of sync.
+    if devices.isEmpty {
+      IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+      mgr = openManager(nil)
+      devices = copyDevices(mgr)
+    }
+
+    guard !devices.isEmpty else {
       IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
       return nil
     }
 
-    let ret = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
-    guard ret == kIOReturnSuccess else {
-      IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
-      return nil
+    func strProp(_ device: IOHIDDevice, _ key: String) -> String? {
+      IOHIDDeviceGetProperty(device, key as CFString) as? String
     }
-    return (device, mgr)
+
+    func intProp(_ device: IOHIDDevice, _ key: String) -> Int {
+      IOHIDDeviceGetProperty(device, key as CFString) as? Int ?? 0
+    }
+
+    func score(_ device: IOHIDDevice) -> Int {
+      // Prefer the DriverKit virtual device and avoid matching the user-space IOHIDUserDevice
+      // (they share VID/PID for compatibility).
+      let ioUserClass = strProp(device, "IOUserClass")
+      let serial = strProp(device, kIOHIDSerialNumberKey as String)
+      let location = intProp(device, kIOHIDLocationIDKey as String)
+
+      if serial == UserSpaceVirtualDeviceConstants.serialNumber {
+        return Int.min / 2
+      }
+
+      var s = 0
+      if ioUserClass == "OpenJoystickVirtualHIDDevice" { s += 1_000_000 }
+      if serial == VirtualDeviceIdentityConstants.driverKitSerialNumber { s += 100_000 }
+      if location == Int(VirtualDeviceIdentityConstants.driverKitLocationID) { s += 10_000 }
+
+      // If we don't have any strong indicator that this is our dext device,
+      // do not treat it as a candidate. Otherwise we risk opening a real controller
+      // and blasting it with output reports.
+      if s == 0 { return Int.min / 2 }
+
+      if (strProp(device, kIOHIDTransportKey as String) ?? "") == "USB" { s += 100 }
+      // Tie-breaker only: prefer devices matching our current profile identity.
+      let vid = intProp(device, kIOHIDVendorIDKey as String)
+      let pid = intProp(device, kIOHIDProductIDKey as String)
+      if vid == profile.vendorID && pid == profile.productID { s += 10 }
+      return s
+    }
+
+    let candidates = devices
+      .map { ($0, score($0)) }
+      .sorted { a, b in a.1 > b.1 }
+
+    for (device, s) in candidates {
+      if s <= Int.min / 4 { continue }  // filtered (likely our user-space device)
+      let ret = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
+      if ret == kIOReturnSuccess { return (device, mgr) }
+    }
+
+    IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+    return nil
   }
 
   // MARK: - OutputDispatcher
 
   public func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) async {
     guard !suppressOutput else { return }
+    guard connectionLock.withLock({ enabled }) else { return }
 
     var device = connectionLock.withLock { hidDevice }
 
     if device == nil {
-      if let (newDevice, mgr) = findDevice() {
-        device = newDevice
-        print("[DextOutputDispatcher] Auto-retry connected to virtual gamepad")
-        connectionLock.withLock {
-          hidDevice = newDevice
-          hidManager = mgr
+      let now = DispatchTime.now().uptimeNanoseconds
+      let shouldAttempt = connectionLock.withLock { now >= nextAutoRetryConnectNs }
+      if shouldAttempt {
+        if let (newDevice, mgr) = findDevice() {
+          device = newDevice
+          print("[DextOutputDispatcher] Auto-retry connected to virtual gamepad")
+          connectionLock.withLock {
+            hidDevice = newDevice
+            hidManager = mgr
+            nextAutoRetryConnectNs = 0
+            autoRetryBackoffNs = 250_000_000
+          }
+        } else {
+          connectionLock.withLock {
+            nextAutoRetryConnectNs = now &+ autoRetryBackoffNs
+            autoRetryBackoffNs = min(autoRetryBackoffNs &* 2, 5_000_000_000)  // cap at 5s
+          }
         }
       }
     }
@@ -145,16 +258,79 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       )
     }
 
+    statsLock.withLock {
+      setReportAttempts += 1
+      if result == kIOReturnSuccess {
+        setReportSuccesses += 1
+      } else {
+        setReportFailures += 1
+        lastSetReportError = result
+      }
+    }
+
+    // Aborted (0xe00002eb): IOKit can abort in-flight operations during sysext replacement/upgrade.
+    // Treat it the same as a stale handle and reconnect on the next dispatch.
+    let kIOReturnAbortedValue: IOReturn = IOReturn(bitPattern: 0xe000_02eb)
+
     // kIOReturnNotOpen (0xe00002cd): device handle went stale during sysext replacement.
     // The dext process cycles through device instances on crash/rematch; reconnecting
     // picks up the latest instance.
     if result == kIOReturnNotAttached || result == kIOReturnNoDevice
-      || result == IOReturn(bitPattern: 0xe000_02cd)
+      || result == IOReturn(bitPattern: 0xe000_02cd) || result == kIOReturnAbortedValue
     {
-      debugPrint("[DextOutputDispatcher] Connection lost (\(result)); will reconnect")
+      let now = DispatchTime.now().uptimeNanoseconds
+      let shouldLog = connectionLock.withLock { () -> Bool in
+        // Rate-limit to avoid log spam and "inefficient" kills.
+        if now &- lastConnectionLostLogNs < 10_000_000_000 { return false }
+        lastConnectionLostLogNs = now
+        return true
+      }
+      if shouldLog { print("[DextOutputDispatcher] Connection lost (\(result)); will reconnect") }
+      recordFailure(now: now)
       closeDevice()
+      connectionLock.withLock {
+        nextAutoRetryConnectNs = now &+ autoRetryBackoffNs
+      }
     } else if result != kIOReturnSuccess {
-      debugPrint("[DextOutputDispatcher] setReport error: \(String(result, radix: 16))")
+      // Keep this quiet; repeated failures are handled via stats + fallback mode.
+    }
+  }
+
+  public func outputStatsSnapshot() -> XPCDriverKitOutputStats {
+    statsLock.withLock {
+      let err = lastSetReportError.map { String(format: "0x%08x", UInt32(bitPattern: $0)) }
+      return XPCDriverKitOutputStats(
+        attempts: setReportAttempts,
+        successes: setReportSuccesses,
+        failures: setReportFailures,
+        lastErrorHex: err
+      )
+    }
+  }
+
+  private func recordFailure(now: UInt64) {
+    // Consider the dext unstable if we see lots of abort/not-open errors in a short window.
+    // This commonly happens while the OS is replacing the system extension.
+    let windowNs: UInt64 = 5_000_000_000  // 5s
+    let threshold = 20
+    let cooldownNs: UInt64 = 10_000_000_000  // 10s
+
+    stabilityLock.withLock {
+      failureTimestamps.append(now)
+
+      // Prune old events.
+      let cutoff = now &- windowNs
+      if failureTimestamps.count > 512 {
+        failureTimestamps.removeFirst(failureTimestamps.count - 512)
+      }
+      while let first = failureTimestamps.first, first < cutoff {
+        failureTimestamps.removeFirst()
+      }
+
+      if failureTimestamps.count >= threshold && (now &- lastUnstablePost) > cooldownNs {
+        lastUnstablePost = now
+        NotificationCenter.default.post(name: Self.dextUnstableNotification, object: nil)
+      }
     }
   }
 
@@ -255,22 +431,5 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     case .west: return .west
     case .northWest: return .northWest
     }
-  }
-}
-
-// MARK: - Float clamping
-
-extension Float {
-  fileprivate func clamped(to range: ClosedRange<Float>) -> Float {
-    Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
-  }
-}
-
-// MARK: - Int16 little-endian byte pair
-
-extension Int16 {
-  fileprivate var littleEndianBytes: (UInt8, UInt8) {
-    let le = littleEndian
-    return (UInt8(le & 0xFF), UInt8((le >> 8) & 0xFF))
   }
 }

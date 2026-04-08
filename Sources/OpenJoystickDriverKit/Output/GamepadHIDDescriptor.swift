@@ -1,11 +1,9 @@
 import Foundation
 
-/// Xbox One S-compatible HID gamepad report descriptor.
+/// Standard HID GamePad report descriptor used by OpenJoystickDriver virtual devices.
 ///
-/// Matches the real Xbox One S Bluetooth HID layout so that Chrome, Safari,
-/// SDL, and GCController apply correct device-specific mapping for VID/PID
-/// 0x045E:0x02EA. Button and axis ordering follows the SDL macOS mapping
-/// string for this VID/PID.
+/// This descriptor is intentionally generic (HID Usage Page: Generic Desktop, Usage: GamePad).
+/// Do not assume consumers will apply device-specific parsing based on VID/PID.
 ///
 /// Report layout (15 bytes total):
 ///   Bytes 0–1  : Button bitmask, buttons 1–15 + 1-bit pad (LSB = button 1)

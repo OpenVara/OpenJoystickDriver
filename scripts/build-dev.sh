@@ -19,6 +19,7 @@ source "$(dirname "$0")/lib.sh"
 if [[ "$IDENTITY" == "-" ]]; then
     echo "ERROR: macOS 26+ requires Apple Development signing for restricted entitlements."
     echo "Set CODESIGN_IDENTITY in scripts/.env.dev"
+    echo "Tip: run ./scripts/configure-signing.sh to auto-generate scripts/.env.dev"
     echo "Find your identity: security find-identity -v -p codesigning"
     exit 1
 fi
@@ -28,6 +29,15 @@ for profile_var in DAEMON_PROFILE GUI_PROFILE; do
     if [[ ! -f "$profile_path" ]]; then
         echo "ERROR: Provisioning profile not found: $profile_path"
         echo "Set ${profile_var/PROFILE/PROVISIONING_PROFILE} in scripts/.env.dev or install the profile."
+        if [[ "$profile_path" == "$HOME/Library/MobileDevice/Provisioning Profiles/"* ]] && [[ ! -d "$HOME/Library/MobileDevice/Provisioning Profiles" ]]; then
+            if [[ -d "$HOME/Documents/profiles" ]]; then
+                echo ""
+                echo "Note: $HOME/Library/MobileDevice/Provisioning Profiles/ does not exist yet."
+                echo "      Profiles currently found in: $HOME/Documents/profiles"
+                echo "      You can copy them into the expected directory or point the env var at the Documents path."
+                echo "      Audit profiles (no sensitive output): ./scripts/profile-audit.sh"
+            fi
+        fi
         exit 1
     fi
 done

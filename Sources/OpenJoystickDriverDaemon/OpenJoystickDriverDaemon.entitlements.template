@@ -14,5 +14,9 @@
     <!-- without running as root. Requires Developer ID signing.       -->
     <key>com.apple.security.device.usb</key>
     <true/>
+
+    <!-- Required for IOHIDUserDevice (user-space virtual gamepad / SDL compatibility mode). -->
+    <key>com.apple.developer.hid.virtual.device</key>
+    <true/>
 </dict>
 </plist>

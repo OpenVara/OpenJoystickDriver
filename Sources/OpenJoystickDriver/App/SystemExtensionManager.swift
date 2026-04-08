@@ -53,36 +53,37 @@ import SystemExtensions
   }
 
   @Published var installState: InstallState = .unknown
+  /// Human-readable, safe diagnostics for why system extension install failed.
+  ///
+  /// Intended to be shown in the UI so users can fix issues without Console.
+  @Published var lastInstallDetails: [String] = []
   private var pendingDeactivation = false
 
   // MARK: - Constants
 
   private let extensionBundleID = "com.openjoystickdriver.VirtualHIDDevice"
+  private let expectedDextRelativePath =
+    "Contents/Library/SystemExtensions/com.openjoystickdriver.VirtualHIDDevice.dext"
 
   // MARK: - Public API
 
   func installExtension() {
     installState = .installing
+    lastInstallDetails = []
 
-    // Diagnostics: log what the framework will see
-    let bundlePath = Bundle.main.bundlePath
-    let sysextDir = bundlePath + "/Contents/Library/SystemExtensions"
-    print("[SysExt] Bundle.main.bundlePath: \(bundlePath)")
-    print("[SysExt] Looking for dext ID: \(extensionBundleID)")
+    let preflight = preflightStatus()
+    lastInstallDetails = preflight.details
 
-    let fm = FileManager.default
-    if let items = try? fm.contentsOfDirectory(atPath: sysextDir) {
-      print("[SysExt] Contents of Library/SystemExtensions/: \(items)")
-      for item in items where item.hasSuffix(".dext") {
-        let dextPath = sysextDir + "/" + item
-        if let dextBundle = Bundle(path: dextPath) {
-          print("[SysExt]   \(item) bundleID=\(dextBundle.bundleIdentifier ?? "nil")")
-        } else {
-          print("[SysExt]   \(item) — could not create Bundle")
-        }
-      }
-    } else {
-      print("[SysExt] Library/SystemExtensions/ does not exist or is unreadable")
+    // If the system extension isn't inside *this* app bundle, activation will fail with
+    // OSSystemExtensionErrorExtensionNotFound (code=4). Fail early with an actionable message.
+    guard preflight.hasExpectedDext else {
+      installState = .failed(
+        """
+        Extension not found in this app (code=4).
+        Fix: reinstall/rebuild the app so it contains the .dext, then run the /Applications copy.
+        """
+      )
+      return
     }
 
     let request = OSSystemExtensionRequest.activationRequest(
@@ -130,10 +131,28 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
     let nsError = error as NSError
     print("[SysExt] FAILED — domain: \(nsError.domain), code: \(nsError.code)")
     print("[SysExt]   localizedDescription: \(nsError.localizedDescription)")
-    print("[SysExt]   userInfo: \(nsError.userInfo)")
 
-    let message = "\(error.localizedDescription) [code=\(nsError.code)]"
+    let message: String = {
+      if nsError.domain == OSSystemExtensionErrorDomain && nsError.code == 4 {
+        // 4 = OSSystemExtensionErrorExtensionNotFound
+        return """
+          Extension not found (code=4).
+          Fix:
+            1) Quit OpenJoystickDriver completely.
+            2) Re-open /Applications/OpenJoystickDriver.app.
+            3) Try Install again.
+
+          If it still fails but the .dext is present in Details, macOS is likely caching
+          an old copy — a reboot clears it.
+          """
+      }
+      return "\(error.localizedDescription) [code=\(nsError.code)]"
+    }()
     Task { @MainActor [weak self] in
+      if nsError.domain == OSSystemExtensionErrorDomain && nsError.code == 4 {
+        // Capture fresh preflight details for the UI.
+        self?.lastInstallDetails = self?.preflightStatus().details ?? self?.lastInstallDetails ?? []
+      }
       self?.pendingDeactivation = false
       self?.installState = .failed(message)
     }
@@ -158,5 +177,56 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
         + " v\(ext.bundleVersion) (\(ext.bundleShortVersion))"
     )
     return .replace
+  }
+}
+
+// MARK: - Preflight
+
+extension SystemExtensionManager {
+  private struct Preflight: Sendable {
+    var hasExpectedDext: Bool
+    var details: [String]
+  }
+
+  /// Collects safe, human-readable diagnostics for system extension activation.
+  private func preflightStatus() -> Preflight {
+    let bundlePath = Bundle.main.bundlePath
+    let sysextDir = bundlePath + "/Contents/Library/SystemExtensions"
+    let expectedDextPath = bundlePath + "/" + expectedDextRelativePath
+
+    var details: [String] = []
+    details.append("App bundle: \(bundlePath)")
+    details.append("Looking for extension id: \(extensionBundleID)")
+    details.append("SystemExtensions folder: \(sysextDir)")
+    details.append("Expected .dext path: \(expectedDextPath)")
+
+    let fm = FileManager.default
+    guard fm.fileExists(atPath: sysextDir) else {
+      details.append("Result: missing SystemExtensions folder")
+      return Preflight(hasExpectedDext: false, details: details)
+    }
+
+    guard let items = try? fm.contentsOfDirectory(atPath: sysextDir) else {
+      details.append("Result: SystemExtensions folder unreadable")
+      return Preflight(hasExpectedDext: false, details: details)
+    }
+
+    let dexts = items.filter { $0.hasSuffix(".dext") }
+    if dexts.isEmpty {
+      details.append("Result: no .dext bundles found")
+      return Preflight(hasExpectedDext: false, details: details)
+    }
+
+    details.append("Found .dext bundles:")
+    var hasExpected = false
+    for item in dexts.sorted() {
+      let dextPath = sysextDir + "/" + item
+      let bundleID = Bundle(path: dextPath)?.bundleIdentifier ?? "UNKNOWN"
+      details.append("  - \(item) (id: \(bundleID))")
+      if bundleID == extensionBundleID { hasExpected = true }
+    }
+
+    details.append("Result: " + (hasExpected ? "expected extension present" : "expected extension missing"))
+    return Preflight(hasExpectedDext: hasExpected, details: details)
   }
 }

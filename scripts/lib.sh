@@ -16,9 +16,20 @@ if [[ -f "$_ENV_FILE" ]]; then
 fi
 unset _ENV_FILE
 
+# Prefer full Xcode toolchain when installed, even if `xcode-select` still
+# points at Command Line Tools (avoids requiring sudo for local builds).
+XCODE_SELECT_PATH="$(xcode-select -p 2>/dev/null || true)"
+if [[ -z "${DEVELOPER_DIR:-}" ]] \
+  && [[ "$XCODE_SELECT_PATH" == "/Library/Developer/CommandLineTools" ]] \
+  && [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+  export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+  XCODE_SELECT_PATH="$DEVELOPER_DIR"
+fi
+
 # Workaround: xcrun --sdk hangs on macOS 26.3.1 (Xcode 26.3).
 # Export SDKROOT so swift build, xcodebuild, and clang skip the xcrun lookup.
-export SDKROOT="${SDKROOT:-$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk}"
+export SDKROOT="${SDKROOT:-$XCODE_SELECT_PATH/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk}"
+unset XCODE_SELECT_PATH
 
 IDENTITY="${CODESIGN_IDENTITY:--}"
 DAEMON_DEBUG="$PROJECT_DIR/.build/debug/OpenJoystickDriverDaemon"
@@ -148,6 +159,16 @@ fi
 # keychain identity. Fails with a clear message instead of letting AMFI
 # reject the app at launch with error 163.
 # Usage: verify_profile_cert <profile_path> <signing_identity>
+decode_provisioning_profile() {
+  local profile="$1"
+  # Prefer Apple tooling when it works, but fall back to OpenSSL because
+  # `security cms -D` can fail on some systems for `.provisionprofile`.
+  if security cms -D -i "$profile" 2>/dev/null; then
+    return 0
+  fi
+  openssl smime -inform der -verify -noverify -in "$profile" 2>/dev/null
+}
+
 verify_profile_cert() {
   local profile="$1" identity="$2"
   local profile_sha1 keychain_sha1
@@ -158,7 +179,7 @@ verify_profile_cert() {
 
   # Extract first DeveloperCertificate from profile to a temp file
   # (binary DER data contains null bytes — can't store in bash variables)
-  security cms -D -i "$profile" 2>/dev/null \
+  decode_provisioning_profile "$profile" \
     | plutil -extract DeveloperCertificates.0 raw -o - - \
     | base64 -d > "$tmpder" 2>/dev/null
 

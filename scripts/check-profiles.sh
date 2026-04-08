@@ -46,7 +46,7 @@ for label_and_path in "GUI|$GUI_PROFILE" "Daemon|$DAEMON_PROFILE"; do
     continue
   fi
   tmpder=$(mktemp)
-  security cms -D -i "$path" 2>/dev/null \
+  decode_provisioning_profile "$path" \
     | plutil -extract DeveloperCertificates.0 raw -o - - \
     | base64 -d > "$tmpder" 2>/dev/null
   psha1=$(openssl x509 -inform DER -in "$tmpder" -noout -fingerprint -sha1 2>/dev/null \
@@ -100,7 +100,7 @@ for entry in "${mismatched_profiles[@]}"; do
   if [[ -f "$path" ]]; then
     echo ""
     echo "    Capabilities to enable (copy these exactly):"
-    security cms -D -i "$path" 2>/dev/null \
+    decode_provisioning_profile "$path" \
       | plutil -extract Entitlements xml1 -o - - 2>/dev/null \
       | grep '<key>' | sed 's|.*<key>||;s|</key>||' \
       | while read -r ent; do
@@ -110,7 +110,7 @@ for entry in "${mismatched_profiles[@]}"; do
             continue ;;
         esac
         # Show the value alongside the key
-        val=$(security cms -D -i "$path" 2>/dev/null \
+        val=$(decode_provisioning_profile "$path" \
           | plutil -extract Entitlements xml1 -o - - 2>/dev/null \
           | plutil -extract "$ent" raw -o - - 2>/dev/null || echo "<true>")
         echo "      - $ent = $val"

@@ -1,11 +1,13 @@
 import AppKit
 import SwiftUI
+import OpenJoystickDriverKit
 
 struct DiagnosticsView: View {
   @EnvironmentObject var model: AppModel
   @State private var showTips = false
   @State private var daemonAction: String?
   @State private var showUninstallConfirm = false
+  @State private var refreshingVirtualDevices = false
 
   private let daemonLogPath = "/tmp/com.openjoystickdriver.daemon.out"
 
@@ -14,6 +16,7 @@ struct DiagnosticsView: View {
       VStack(alignment: .leading, spacing: 16) {
         statusCard
         controllersCard
+        virtualDevicesCard
         daemonLifecycleCard
         logCard
       }.padding()
@@ -193,6 +196,119 @@ struct DiagnosticsView: View {
     }
   }
 
+  private var virtualDevicesCard: some View {
+    let diag = model.virtualDeviceDiagnostics
+    return GroupBox {
+      VStack(alignment: .leading, spacing: 10) {
+        if let diag {
+          let modeLabel: String =
+            diag.outputMode == "secondaryOnly" ? "User-space only"
+            : (diag.outputMode == "both" ? "DriverKit + User-space" : "DriverKit only")
+          Text("Output mode: \(modeLabel)")
+            .font(.caption).foregroundStyle(.secondary)
+        }
+        HStack {
+          Text("User-space device:").font(.caption).foregroundStyle(.secondary)
+          Text(model.userSpaceVirtualDeviceEnabled ? "enabled" : "disabled").font(.caption)
+          Spacer()
+          Text(model.userSpaceVirtualDeviceStatus).font(.caption).foregroundStyle(
+            model.userSpaceVirtualDeviceStatus.hasPrefix("error:") ? .orange : .secondary
+          )
+        }
+        if let diag {
+          if diag.hidGamepads.isEmpty {
+            Text("No HID GamePad devices visible via IOKit.").font(.caption).foregroundStyle(
+              .secondary
+            )
+          } else {
+            VStack(spacing: 0) {
+              ForEach(Array(diag.hidGamepads.enumerated()), id: \.element) { index, dev in
+                if index > 0 { Divider() }
+                VStack(alignment: .leading, spacing: 4) {
+                  HStack {
+                    Text(dev.product ?? "GamePad").fontWeight(.medium)
+                    Spacer()
+                    if dev.isOJDDriverKit {
+                      Text("OJD DriverKit").font(.caption2).foregroundStyle(.secondary)
+                    } else if dev.isOJDUserSpace {
+                      Text("OJD User-space").font(.caption2).foregroundStyle(.secondary)
+                    }
+                  }
+                  HStack(spacing: 12) {
+                    Text(String(format: "VID 0x%04X  PID 0x%04X", dev.vendorID, dev.productID))
+                      .font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+                    Text("Transport: \(dev.transport ?? "unknown")").font(.caption).foregroundStyle(
+                      .tertiary
+                    )
+                  }
+                  HStack(spacing: 12) {
+                    if let loc = dev.locationID {
+                      Text("LocationID: \(loc)").font(.caption).foregroundStyle(.tertiary)
+                    } else {
+                      Text("LocationID: unknown").font(.caption).foregroundStyle(.tertiary)
+                    }
+                    Text("IOUserClass: \(dev.ioUserClass ?? "unknown")").font(.caption)
+                      .foregroundStyle(.tertiary)
+                    Text("Serial: \(serialLabel(dev.serialKind))").font(.caption).foregroundStyle(
+                      .tertiary
+                    )
+                  }
+                }.padding(.vertical, 6)
+              }
+            }
+          }
+        } else {
+          Text("Tap Refresh to query IOKit via daemon.").font(.caption).foregroundStyle(.secondary)
+        }
+
+        Divider().padding(.vertical, 4)
+
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Self-test: press buttons for 5 seconds.").font(.caption).foregroundStyle(.secondary)
+          if let t = model.virtualDeviceSelfTest {
+            VStack(alignment: .leading, spacing: 2) {
+              Text(
+                "DriverKit: value \(t.driverKitValueEvents), report \(t.driverKitReportEvents)"
+              ).font(.caption).foregroundStyle(.secondary)
+              Text(
+                "User-space: value \(t.userSpaceValueEvents), report \(t.userSpaceReportEvents)"
+              ).font(.caption).foregroundStyle(.secondary)
+            }
+          }
+          HStack {
+            SwiftUI.Button("Run Self-Test") {
+              Task { await model.runVirtualDeviceSelfTest(seconds: 5) }
+            }.buttonStyle(.bordered).disabled(!model.daemonConnected)
+            Spacer()
+          }
+        }
+
+        HStack {
+          SwiftUI.Button {
+            refreshingVirtualDevices = true
+            Task {
+              await model.refreshVirtualDeviceDiagnostics()
+              refreshingVirtualDevices = false
+            }
+          } label: {
+            Text(refreshingVirtualDevices ? "Refreshing…" : "Refresh")
+          }.buttonStyle(.bordered).disabled(!model.daemonConnected || refreshingVirtualDevices)
+          Spacer()
+        }
+      }
+    } label: {
+      Label("Virtual Devices", systemImage: "puzzlepiece.extension").fontWeight(.semibold)
+    }
+  }
+
+  private func serialLabel(_ kind: XPCSerialKind) -> String {
+    switch kind {
+    case .none: return "none"
+    case .ojdUserSpace: return "OJD"
+    case .present: return "present"
+    }
+  }
+
   private var logCard: some View {
     GroupBox {
       VStack(alignment: .leading, spacing: 8) {
@@ -265,6 +381,32 @@ struct DiagnosticsView: View {
             + " Parser: \(device.parser)"
         )
       }
+    }
+    lines.append("")
+    lines.append("User-space virtual device: \(model.userSpaceVirtualDeviceEnabled ? "enabled" : "disabled")")
+    lines.append("User-space status: \(model.userSpaceVirtualDeviceStatus)")
+    if let diag = model.virtualDeviceDiagnostics {
+      lines.append("")
+      lines.append("HID GamePad devices (IOKit): \(diag.hidGamepads.count)")
+      lines.append("Output mode: \(diag.outputMode)")
+      for d in diag.hidGamepads {
+        let tag = d.isOJDDriverKit ? "OJD-DriverKit" : (d.isOJDUserSpace ? "OJD-UserSpace" : "other")
+        lines.append(
+          "  \(d.product ?? "GamePad")"
+            + " — VID:0x" + String(format: "%04X", d.vendorID)
+            + " PID:0x" + String(format: "%04X", d.productID)
+            + " Transport:\(d.transport ?? "unknown")"
+            + " IOUserClass:\(d.ioUserClass ?? "unknown")"
+            + " Serial:\(serialLabel(d.serialKind))"
+            + " [\(tag)]"
+        )
+      }
+    }
+    if let t = model.virtualDeviceSelfTest {
+      lines.append("")
+      lines.append("Virtual device self-test (\(t.seconds)s):")
+      lines.append("  DriverKit: value \(t.driverKitValueEvents), report \(t.driverKitReportEvents)")
+      lines.append("  User-space: value \(t.userSpaceValueEvents), report \(t.userSpaceReportEvents)")
     }
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)

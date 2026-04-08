@@ -2,11 +2,10 @@ import OpenJoystickDriverKit
 import SwiftUI
 
 enum AppTab: Int, CaseIterable, Hashable {
-  case devices, permissions, diagnostics
+  case permissions, diagnostics
 
   var label: String {
     switch self {
-    case .devices: return "Devices"
     case .permissions: return "Permissions"
     case .diagnostics: return "Diagnostics"
     }
@@ -14,7 +13,6 @@ enum AppTab: Int, CaseIterable, Hashable {
 
   var systemImage: String {
     switch self {
-    case .devices: return "gamecontroller.fill"
     case .permissions: return "lock.shield.fill"
     case .diagnostics: return "stethoscope"
     }
@@ -23,8 +21,7 @@ enum AppTab: Int, CaseIterable, Hashable {
 
 struct ContentView: View {
   @EnvironmentObject var model: AppModel
-  @State private var selectedTab: AppTab = .devices
-  @State private var selectedDevice: DeviceViewModel?
+  @State private var selectedTab: AppTab = .diagnostics
 
   var body: some View {
     VStack(spacing: 0) {
@@ -33,9 +30,6 @@ struct ContentView: View {
       contentArea
       Divider()
       StatusFooter().environmentObject(model)
-    }.onChange(of: model.devices) { newDevices in
-      if let sel = selectedDevice, !newDevices.contains(sel) { selectedDevice = newDevices.first }
-      if selectedDevice == nil { selectedDevice = newDevices.first }
     }
   }
 
@@ -64,60 +58,8 @@ struct ContentView: View {
 
   @ViewBuilder private var contentArea: some View {
     switch selectedTab {
-    case .devices: devicesContent
     case .permissions: PermissionsView()
     case .diagnostics: DiagnosticsView()
     }
-  }
-
-  private var devicesContent: some View {
-    NavigationSplitView {
-      deviceSidebar.navigationSplitViewColumnWidth(min: 160, ideal: 200)
-    } detail: {
-      deviceDetail
-    }
-  }
-
-  @ViewBuilder private var deviceSidebar: some View {
-    if model.devices.isEmpty {
-      VStack(spacing: 10) {
-        Image(systemName: "gamecontroller").font(.system(size: 32)).foregroundStyle(.tertiary)
-        Text("No controllers").font(.callout).foregroundStyle(.secondary)
-        Text("Connect a USB controller.").font(.caption).foregroundStyle(.tertiary)
-          .multilineTextAlignment(.center)
-      }.frame(maxWidth: .infinity, maxHeight: .infinity)
-    } else {
-      List(model.devices, selection: $selectedDevice) { device in deviceRow(device).tag(device) }
-        .listStyle(.sidebar)
-    }
-  }
-
-  @ViewBuilder private var deviceDetail: some View {
-    if let device = selectedDevice {
-      DeviceDetailView(device: device).frame(maxWidth: .infinity, maxHeight: .infinity)
-    } else {
-      VStack(spacing: 8) {
-        Image(systemName: "arrow.left").font(.title3).foregroundStyle(.tertiary)
-        Text("Select a controller").font(.callout).foregroundStyle(.secondary)
-      }.frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-  }
-
-  private func deviceRow(_ device: DeviceViewModel) -> some View {
-    HStack(spacing: 10) {
-      Image(systemName: protocolIcon(for: device.parser)).font(.title3).foregroundStyle(
-        protocolColor(for: device.parser)
-      ).frame(width: 28, height: 28)
-      VStack(alignment: .leading, spacing: 3) {
-        Text(device.name).lineLimit(1).fontWeight(.medium)
-        HStack(spacing: 4) {
-          Text(device.parser).font(.caption2).padding(.horizontal, 5).padding(.vertical, 1)
-            .background(protocolColor(for: device.parser).opacity(0.15)).foregroundStyle(
-              protocolColor(for: device.parser)
-            ).clipShape(Capsule())
-          Text(device.connection).font(.caption2).foregroundStyle(.tertiary)
-        }
-      }
-    }.padding(.vertical, 2).contentShape(Rectangle())
   }
 }

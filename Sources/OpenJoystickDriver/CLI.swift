@@ -10,6 +10,9 @@ struct CLI {
     case "list": ListCommand().run()
     case "status": StatusCommand().run()
     case "diagnose": DiagnoseCommand().run()
+    case "userspace": UserSpaceCommand().run(arguments: Array(args.dropFirst()))
+    case "output": OutputModeCommand().run(arguments: Array(args.dropFirst()))
+    case "selftest": SelfTestCommand().run(arguments: Array(args.dropFirst()))
     case "start": StartDaemonCommand().run()
     case "restart": RestartDaemonCommand().run()
     case "install": InstallCommand().run()
@@ -39,6 +42,9 @@ struct CLI {
         list       List connected game controllers
         status     Show permission and device status
         diagnose   Hardware diagnostics
+        userspace  Toggle user-space virtual gamepad (IOHIDUserDevice)
+        output     Set output routing mode (DriverKit/user-space)
+        selftest   Count input events on virtual devices
         install    Install daemon as LaunchAgent \
       (auto-starts on login)
         uninstall  Remove daemon LaunchAgent

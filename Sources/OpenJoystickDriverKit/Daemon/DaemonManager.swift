@@ -31,7 +31,10 @@ public enum DaemonManager: Sendable {
     }
     try plist.write(to: plistURL, atomically: true, encoding: .utf8)
     let uid = String(getuid())
+    // If an older job is already loaded, boot it out first to keep install idempotent.
+    _ = try? launchctl(["bootout", "gui/\(uid)/\(label)"])
     try launchctl(["bootstrap", "gui/\(uid)", plistURL.path(percentEncoded: false)])
+    _ = try? launchctl(["kickstart", "-k", "gui/\(uid)/\(label)"])
     print("[DaemonManager] Installed")
   }
 
@@ -67,11 +70,84 @@ public enum DaemonManager: Sendable {
   /// Unloads daemon and removes LaunchAgent plist.
   public static func uninstall() throws {
     let uid = String(getuid())
-    try launchctl(["bootout", "gui/\(uid)/\(label)"])
+    _ = try? launchctl(["bootout", "gui/\(uid)/\(label)"])
     if FileManager.default.fileExists(atPath: plistURL.path(percentEncoded: false)) {
       try FileManager.default.removeItem(at: plistURL)
     }
     print("[DaemonManager] Uninstalled")
+  }
+
+  // MARK: - Diagnostics
+
+  public struct DaemonHealth: Sendable, Equatable {
+    public var installed: Bool
+    public var state: String?
+    public var pid: Int?
+    public var runs: Int?
+    public var immediateReason: String?
+    public var lastTerminatingSignal: String?
+    public var blame: String?
+    public var rawPrint: String?
+
+    public init(
+      installed: Bool,
+      state: String? = nil,
+      pid: Int? = nil,
+      runs: Int? = nil,
+      immediateReason: String? = nil,
+      lastTerminatingSignal: String? = nil,
+      blame: String? = nil,
+      rawPrint: String? = nil
+    ) {
+      self.installed = installed
+      self.state = state
+      self.pid = pid
+      self.runs = runs
+      self.immediateReason = immediateReason
+      self.lastTerminatingSignal = lastTerminatingSignal
+      self.blame = blame
+      self.rawPrint = rawPrint
+    }
+
+    public var wasSigkill9: Bool {
+      (lastTerminatingSignal ?? "").contains("Killed: 9")
+    }
+
+    public var isInefficientKillLoop: Bool {
+      let reason = (immediateReason ?? blame ?? "").lowercased()
+      return wasSigkill9 && reason.contains("inefficient")
+    }
+  }
+
+  /// Best-effort snapshot of launchd state for the daemon job.
+  ///
+  /// This is used to explain "couldn't communicate with a helper application"
+  /// XPC errors, which commonly occur when launchd kills/restarts the job.
+  public static func health() -> DaemonHealth {
+    guard isInstalled else { return DaemonHealth(installed: false) }
+    let uid = String(getuid())
+    let target = "gui/\(uid)/\(label)"
+
+    let printOut = (try? launchctl(["print", target])) ?? ""
+    let blameOut = (try? launchctl(["blame", target]))?.trimmingCharacters(in: .whitespacesAndNewlines)
+    var health = DaemonHealth(installed: true, blame: blameOut, rawPrint: printOut)
+
+    for rawLine in printOut.split(separator: "\n", omittingEmptySubsequences: false) {
+      let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+      if line.hasPrefix("state = ") {
+        health.state = String(line.dropFirst("state = ".count))
+      } else if line.hasPrefix("pid = ") {
+        health.pid = Int(line.dropFirst("pid = ".count))
+      } else if line.hasPrefix("runs = ") {
+        health.runs = Int(line.dropFirst("runs = ".count))
+      } else if line.hasPrefix("immediate reason = ") {
+        health.immediateReason = String(line.dropFirst("immediate reason = ".count))
+      } else if line.hasPrefix("last terminating signal = ") {
+        health.lastTerminatingSignal = String(line.dropFirst("last terminating signal = ".count))
+      }
+    }
+
+    return health
   }
 
   // MARK: - Private

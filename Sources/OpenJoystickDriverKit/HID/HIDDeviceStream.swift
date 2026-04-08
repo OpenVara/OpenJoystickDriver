@@ -83,6 +83,9 @@ public final class HIDDeviceStream: @unchecked Sendable {
   private func handleDeviceAdded(_ device: IOHIDDevice) {
     let vid = deviceProperty(device, kIOHIDVendorIDKey)
     let pid = deviceProperty(device, kIOHIDProductIDKey)
+    let serial = IOHIDDeviceGetProperty(device, kIOHIDSerialNumberKey as CFString) as? String
+    let productName = IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) as? String
+    let ioUserClass = IOHIDDeviceGetProperty(device, "IOUserClass" as CFString) as? String
 
     // Skip our virtual gamepad to prevent a feedback loop.
     // Distinguish from real controllers by checking transport = "Virtual".
@@ -93,9 +96,19 @@ public final class HIDDeviceStream: @unchecked Sendable {
       return
     }
 
-    let serial = IOHIDDeviceGetProperty(device, kIOHIDSerialNumberKey as CFString) as? String
+    // Some macOS versions report our DriverKit virtual HID device as Transport="USB".
+    // Exclude it by its IOUserClass to avoid a feedback loop.
+    if ioUserClass == "OpenJoystickVirtualHIDDevice" { return }
+
+    // Also skip our user-space virtual gamepad (IOHIDUserDevice), which intentionally
+    // uses Transport="USB" for compatibility.
+    if serial == UserSpaceVirtualDeviceConstants.serialNumber
+      || productName == UserSpaceVirtualDeviceConstants.product
+    {
+      return
+    }
+
     let loc = deviceProperty(device, kIOHIDLocationIDKey)
-    let productName = IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) as? String
     continuation?.yield(
       .connected(
         vendorID: UInt16(truncatingIfNeeded: vid),

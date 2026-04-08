@@ -41,6 +41,7 @@ if [[ "${CODESIGN_IDENTITY:--}" == "-" ]]; then
     echo "ERROR: DriverKit extensions cannot use ad-hoc signing."
     echo ""
     echo "You must set CODESIGN_IDENTITY to your Apple Development certificate."
+    echo "Tip: run ./scripts/configure-signing.sh to auto-generate scripts/.env.dev"
     echo "Find your signing identity:"
     echo "  security find-identity -v -p codesigning"
     echo ""
@@ -78,6 +79,29 @@ echo "  Build identity: $DEXT_BUILD_IDENTITY"
 echo "  Build profile:  $DEXT_BUILD_PROFILE"
 echo "  Final identity: $CODESIGN_IDENTITY"
 echo "  Team: $DEVELOPMENT_TEAM"
+
+# Ensure Xcode toolchain compilers are used even if Homebrew LLVM is earlier in PATH.
+# Some Xcode build invocations call `clang` by basename; if PATH resolves to a
+# non-Apple clang, the build can fail (e.g. unknown `-index-store-path`).
+#
+# This script is intentionally aggressive about PATH because the failure mode is
+# confusing: xcodebuild prints `clang ...` and you only see a cryptic
+# "unknown argument: -index-store-path" error.
+if [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+  export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+fi
+XCODE_CLANG="$(xcrun --find clang)"
+XCODE_CLANGXX="$(xcrun --find clang++ 2>/dev/null || true)"
+if [[ -z "$XCODE_CLANGXX" ]]; then
+  XCODE_CLANGXX="$(dirname "$XCODE_CLANG")/clang++"
+fi
+export PATH="$(dirname "$XCODE_CLANG"):/usr/bin:/bin:/usr/sbin:/sbin"
+echo "  Compiler: $("$XCODE_CLANG" --version | head -n 1)"
+
+# Xcode passes an index store path; create it proactively to avoid spurious
+# "no such file or directory" errors if the build tooling doesn't create it.
+mkdir -p "$DEXT_BUILD_DIR/Index.noindex/DataStore"
+
 # Always clean build — stale .iig stubs cause vtable mismatches that
 # produce kIOReturnNotPermitted (0xe00002eb) on setReport at runtime.
 xcodebuild \
@@ -85,6 +109,8 @@ xcodebuild \
     -scheme "$DEXT_SCHEME" \
     -configuration "$DEXT_CONFIG" \
     -derivedDataPath "$DEXT_BUILD_DIR" \
+    CC="$XCODE_CLANG" \
+    CXX="$XCODE_CLANGXX" \
     CODE_SIGN_IDENTITY="$DEXT_BUILD_IDENTITY" \
     DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
     PROVISIONING_PROFILE_SPECIFIER="$DEXT_BUILD_PROFILE" \

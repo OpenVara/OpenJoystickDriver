@@ -11,6 +11,8 @@ struct DiagnoseCommand {
 
     printSystemInfo()
     print("")
+    printSystemExtensionBundle()
+    print("")
     printPermissions()
     print("")
     printUSBDevices()
@@ -22,6 +24,55 @@ struct DiagnoseCommand {
     let ver = ProcessInfo.processInfo.operatingSystemVersion
     print("macOS: \(ver.majorVersion)" + ".\(ver.minorVersion)" + ".\(ver.patchVersion)")
     print("Binary: \(CommandLine.arguments[0])")
+  }
+
+  private func printSystemExtensionBundle() {
+    let appPath = "/Applications/OpenJoystickDriver.app"
+    let sysextDir = appPath + "/Contents/Library/SystemExtensions"
+    let expectedID = "com.openjoystickdriver.VirtualHIDDevice"
+    let expectedDextPath = sysextDir + "/com.openjoystickdriver.VirtualHIDDevice.dext"
+
+    print("DriverKit System Extension (in /Applications):")
+
+    let fm = FileManager.default
+    guard fm.fileExists(atPath: appPath) else {
+      print("  App: missing at \(appPath)")
+      print("  Fix: build + install the app to /Applications")
+      return
+    }
+
+    print("  App: present")
+    print("  Expected .dext: \(expectedDextPath)")
+
+    guard fm.fileExists(atPath: sysextDir) else {
+      print("  Result: FAIL (missing SystemExtensions folder)")
+      print("  Fix: rebuild with ./scripts/build-dext.sh and reopen the /Applications copy")
+      return
+    }
+
+    let items = (try? fm.contentsOfDirectory(atPath: sysextDir)) ?? []
+    let dexts = items.filter { $0.hasSuffix(".dext") }.sorted()
+    if dexts.isEmpty {
+      print("  Result: FAIL (no .dext bundles found)")
+      print("  Fix: rebuild with ./scripts/build-dext.sh and reopen the /Applications copy")
+      return
+    }
+
+    print("  Found .dext bundles:")
+    var foundExpected = false
+    for d in dexts {
+      let path = sysextDir + "/" + d
+      let bid = Bundle(path: path)?.bundleIdentifier ?? "UNKNOWN"
+      print("    - \(d) (id: \(bid))")
+      if bid == expectedID { foundExpected = true }
+    }
+
+    if foundExpected {
+      print("  Result: PASS (expected id present: \(expectedID))")
+    } else {
+      print("  Result: FAIL (expected id missing: \(expectedID))")
+      print("  Fix: rebuild with ./scripts/build-dext.sh and reopen the /Applications copy")
+    }
   }
 
   private func printPermissions() {

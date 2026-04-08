@@ -21,7 +21,7 @@ OpenJoystickDriver is to gamepads what [OpenTabletDriver](https://opentabletdriv
 | Xbox One / Series controllers (GIP protocol) | Working - hardware verified on Gamesir G7 SE |
 | GIP authentication (CMD 0x06 sub-protocol) | Working - state machine with dummy auth payloads |
 | Virtual HID gamepad (DriverKit extension) | Working - production output path on macOS 13+ |
-| Virtual HID gamepad (IOHIDUserDevice fallback) | Working - fallback when dext not installed |
+| Virtual HID gamepad (IOHIDUserDevice user-space) | Working - optional compatibility mode (no reboot) |
 | DualShock 4 (USB) | Implemented, untested (no PS4 hardware) |
 | Generic USB HID gamepads | Basic fallback (standard HID usage page) |
 | Button remapping | Working - JSON profiles per VID/PID |
@@ -73,7 +73,17 @@ One system permission is required:
 
 Grant it to the **daemon binary** (`OpenJoystickDriverDaemon`), not the GUI app.
 
-Accessibility permission is **not** needed — the driver injects gamepad input via a virtual HID device (DriverKit extension or IOHIDUserDevice fallback), not CGEvents.
+Accessibility permission is **not** needed — the driver injects gamepad input via a virtual HID device (DriverKit extension, and optionally a user-space IOHIDUserDevice), not CGEvents.
+
+### SDL compatibility (no reboot)
+
+Some SDL/IOKit apps ignore virtual devices with `Transport="Virtual"` (common for DriverKit virtual HID).
+If a game/emulator can *see* your controller but won’t react to inputs, enable:
+
+- `Permissions` → `Virtual HID Gamepad (DriverKit)` → `SDL Compatibility (User-Space Virtual Device)`
+
+This creates a second virtual controller from the daemon with `Transport="USB"`. It does not require a reboot.
+When enabled, OpenJoystickDriver mirrors output to **both** virtual devices — if a game binds both controllers at once, you may see double input.
 
 > **Note for development builds:** Ad-hoc signed binaries get a new code identity on every `swift build`. macOS ties TCC grants to **the** binary's code identity, so permissions reset after each rebuild. After rebuilding, re-grant both permissions and use `--headless restart` or the **Restart Daemon** button in the app. The Permissions view detects this state and shows a prompt automatically.
 >
@@ -94,11 +104,8 @@ Accessibility permission is **not** needed — the driver injects gamepad input 
 
 Launch `OpenJoystickDriver` from `/usr/local/bin` or Spotlight. It runs as a menu bar app.
 
-- **Sidebar** - lists connected controllers and navigation links for Permissions and Diagnostics
-- **Mapping tab** - remap any button to a keyboard key; configure stick deadzone, mouse sensitivity, scroll sensitivity
-- **Info tab** - VID, PID, protocol, connection details
-- **Permissions** - per-permission status cards with deep links to System Settings; shows a restart prompt when permissions reset after a rebuild
-- **Diagnostics** - daemon lifecycle controls (install / start / restart / uninstall), log path, troubleshooting tips, copy-to-clipboard diagnostics
+- **Permissions** - grant Input Monitoring; install/approve the DriverKit extension; toggle user-space virtual device + output routing
+- **Diagnostics** - daemon lifecycle controls (install / start / restart / uninstall), log path, virtual device diagnostics + self-test
 
 ### CLI
 
@@ -123,17 +130,57 @@ OpenJoystickDriver --headless start      # Start the daemon
 OpenJoystickDriver --headless restart    # Restart the daemon
 OpenJoystickDriver --headless uninstall  # Remove LaunchAgent
 
-# Profile management
-OpenJoystickDriver --headless profile list
-OpenJoystickDriver --headless profile show 13623:4112
-OpenJoystickDriver --headless profile set  13623:4112 A Return
-OpenJoystickDriver --headless profile set  13623:4112 LB [
-OpenJoystickDriver --headless profile reset 13623:4112
+# Virtual device toggles
+OpenJoystickDriver --headless userspace status
+OpenJoystickDriver --headless userspace on
+OpenJoystickDriver --headless userspace off
+
+# Output routing (DriverKit / user-space / both)
+OpenJoystickDriver --headless output status
+OpenJoystickDriver --headless output primary
+OpenJoystickDriver --headless output secondary
+OpenJoystickDriver --headless output both
+
+# Virtual device input self-test (press buttons while it runs)
+OpenJoystickDriver --headless selftest 5
 ```
 
-VID and PID in CLI commands are **decimal** integers (e.g. `13623:4112` for Gamesir G7 SE).
+---
 
-`profile set` accepts a button name (case-insensitive: `a`, `b`, `x`, `y`, `start`, `back`, `guide`, `lb`, `rb`, `dpadup`, `dpaddown`, `dpadleft`, `dpadright`) and either a key name (`Return`, `Escape`, `Space`) or a raw macOS keycode integer.
+## PCSX2 (SDL3) on macOS
+
+PCSX2 2.6.x uses **SDL3** for controller input on macOS. If you can see the controller in a browser gamepad tester but PCSX2 won’t react to inputs, do this:
+
+1. Open **PCSX2 → Settings → Controllers → Global Settings**
+2. Ensure **Enable SDL Input Source** is checked
+3. Pick the device under **Detected Devices** (you should see `SDL-0 OpenJoystickDriver Virtual Gamepad`)
+4. Bind buttons/axes under **Controller Port 1**
+
+If the controller only appears (or only works) when you enable **Enable MFI Driver**, that indicates PCSX2 is reading it through GameController.framework instead of SDL.
+
+To debug whether SDL is receiving events at all, build and run the SDL3 probe:
+
+```bash
+clang tools/sdl3-gamepad-probe/main.c $(pkg-config --cflags --libs sdl3) -o /tmp/sdl3-gamepad-probe
+/tmp/sdl3-gamepad-probe
+```
+
+If the probe prints no `axis`/`button` events while you press inputs, SDL isn’t receiving input from the virtual device (PCSX2 SDL input will also fail).
+Enable the user-space virtual device in the app (`Permissions` → `SDL Compatibility (User-Space Virtual Device)`) and try again.
+
+### If you see `setReport error: -1ffffd15`
+
+`-1ffffd15` is `kIOReturnAborted` (`0xe00002eb`). On macOS this commonly happens during
+system-extension upgrades/replacements: IOKit aborts in-flight operations and your process
+ends up holding a stale handle.
+
+Fix (fast):
+
+```bash
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless restart
+```
+
+If `./scripts/diagnose-dext.sh` reports stale sysext copies, a reboot cleans them up.
 
 ---
 
@@ -195,6 +242,9 @@ swift build
 # Run tests (no hardware required)
 swift test --filter OpenJoystickDriverKitTests
 
+# One-time signing setup (macOS 26+)
+./scripts/configure-signing.sh
+
 # Build + ad-hoc sign both debug binaries (creates .app bundle)
 ./scripts/build-dev.sh
 
@@ -204,11 +254,104 @@ swift test --filter OpenJoystickDriverKitTests
 # Build the DriverKit extension (requires provisioning profile)
 ./scripts/build-dext.sh
 
+# Full rebuild + deploy (reinstalls sysext; may require reboot if macOS gets stuck "terminating for upgrade")
+./scripts/rebuild.sh
+
+# Fast rebuild (does NOT reinstall/upgrade sysext; safe during streams / no reboot)
+./scripts/rebuild-fast.sh
+
 # Build universal release binaries, codesign, and notarize
 ./scripts/build-release.sh
 
 # Lint
 ./scripts/lint.sh
+```
+
+### Signing + provisioning (macOS 26+)
+
+macOS 26+ enforces provisioning for certain entitlements (system extension / DriverKit). This repo expects:
+
+- Provisioning profiles installed at `~/Library/MobileDevice/Provisioning Profiles/`
+- Two Keychain identities:
+  - `Apple Development: …` (for dev builds + dext build step)
+  - `Developer ID Application: …` (for release signing + notarization)
+
+The Team ID in the identity name (the `(...)` suffix) must match the provisioning profile’s Team ID. If you have multiple Apple Developer teams, it’s easy to create an Apple Development cert for the “wrong” team.
+
+Sanity-check installed profiles (safe output; no identifiers printed):
+
+```bash
+./scripts/profile-audit.sh "$HOME/Library/MobileDevice/Provisioning Profiles"/*.provisionprofile
+```
+
+Install profiles from `~/Documents/Profiles/` (or `~/Documents/profiles/`):
+
+```bash
+./scripts/install-profiles.sh
+```
+
+Generate `scripts/.env.dev` and `scripts/.env.release` automatically (no heredocs / no copy-paste):
+
+```bash
+./scripts/configure-signing.sh
+```
+
+If something fails, run the signing doctor first (prints safe info only):
+
+```bash
+./scripts/doctor-signing.sh
+```
+
+#### “Certificate is not trusted” (Keychain)
+
+If Keychain Access shows “not trusted” but `security find-identity` reports the identity as **valid**, you can usually ignore the UI.
+
+If `security find-identity` reports **0 valid identities**, you’re missing Apple’s intermediate CA certificates (WWDR / Developer ID). Get them from Apple’s Certificate Authority page and import them in Keychain Access (System keychain is fine):
+
+Apple PKI index:
+
+```text
+https://www.apple.com/certificateauthority/
+```
+Then re-check:
+
+```bash
+security find-identity -v -p codesigning
+```
+
+#### “Keychain Access shows certs, but security says 0 identities”
+
+If `security find-identity` prints `0 valid identities found` but Keychain Access shows your certs with private keys, your keychain file permissions are wrong (this can happen after migrations / restores).
+
+Fix:
+
+```bash
+chmod 700 "$HOME/Library/Keychains"
+chmod 600 "$HOME/Library/Keychains/login.keychain-db"
+```
+
+Then log out/in (or reboot), and re-run `security find-identity`.
+
+### Notarization (release builds)
+
+This repo uses `xcrun notarytool` with an Apple ID + an app-specific password.
+
+Create an app-specific password at:
+
+```text
+https://account.apple.com/  → Sign-In and Security → App-Specific Passwords
+```
+
+Put the values into `scripts/.env.release`:
+
+- `NOTARIZE_APPLE_ID="you@example.com"`
+- `NOTARIZE_PASSWORD="xxxx-xxxx-xxxx-xxxx"`
+
+Then run:
+
+```bash
+OJD_ENV=release ./scripts/rebuild.sh
+OJD_ENV=release ./scripts/notarize.sh
 ```
 
 Swift 6.2 strict concurrency is enforced. All warnings are errors. SwiftLint zero-suppression policy.

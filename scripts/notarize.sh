@@ -27,7 +27,7 @@ if [[ -z "${NOTARIZE_APPLE_ID:-}" || -z "${NOTARIZE_PASSWORD:-}" ]]; then
   echo ""
   echo "  NOTARIZE_APPLE_ID  = your Apple ID email"
   echo "  NOTARIZE_PASSWORD  = app-specific password from:"
-  echo "    account.apple.com → Sign-In and Security → App-Specific Passwords"
+  echo "    appleid.apple.com → Sign-In and Security → App-Specific Passwords"
   exit 1
 fi
 

@@ -8,6 +8,15 @@ public struct VirtualDeviceProfile: Sendable {
   public let productName: String
   public let manufacturer: String
 
+  /// OpenJoystickDriver virtual gamepad — a standard HID GamePad identity that
+  /// avoids triggering device-specific HID parsers in consumers (e.g. SDL's Xbox path).
+  public static let openJoystickDriver = VirtualDeviceProfile(
+    vendorID: 0x4F4A,  // "OJ"
+    productID: 0x4447,  // "DG" (arbitrary, stable)
+    productName: "OpenJoystickDriver Virtual Gamepad",
+    manufacturer: "OpenJoystickDriver"
+  )
+
   /// Xbox One S — standard for XInput/GIP controllers and the default
   /// normalization target for all protocols.
   public static let xboxOneS = VirtualDeviceProfile(
@@ -18,7 +27,11 @@ public struct VirtualDeviceProfile: Sendable {
   )
 
   /// Default profile used when no protocol-specific profile is configured.
-  /// Xbox is the universal standard that SDL, GCController, and browsers
-  /// all recognize and auto-map correctly.
-  public static let `default` = xboxOneS
+  /// Uses the OpenJoystickDriver virtual identity (generic HID GamePad).
+  ///
+  /// IMPORTANT: Do not default to spoofing a real controller's VID/PID unless
+  /// the report descriptor and report bytes exactly match that controller's HID
+  /// protocol. Many consumers (notably SDL) switch parsing logic based on VID/PID
+  /// and will ignore inputs if the descriptor doesn't match their expectations.
+  public static let `default` = openJoystickDriver
 }

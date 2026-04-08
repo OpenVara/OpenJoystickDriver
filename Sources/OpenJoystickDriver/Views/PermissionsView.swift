@@ -111,6 +111,51 @@ struct PermissionsView: View {
               .foregroundStyle(.red).disabled(ext.installState == .removing)
           }
         }
+
+        Divider().padding(.vertical, 4)
+
+        VStack(alignment: .leading, spacing: 6) {
+          Toggle(
+            "SDL Compatibility (User-Space Virtual Device)",
+            isOn: Binding(
+              get: { model.userSpaceVirtualDeviceEnabled },
+              set: { newValue in
+                Task { await model.setUserSpaceVirtualDeviceEnabled(newValue) }
+              }
+            )
+          ).disabled(!model.daemonConnected)
+          Text(
+            "Creates an extra virtual controller from the daemon (no reboot). "
+              + "Use this if an app ignores the DriverKit device."
+          ).font(.caption).foregroundStyle(.secondary)
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Output routing:").font(.caption).foregroundStyle(.secondary)
+            Picker(
+              "Output routing",
+              selection: Binding(
+                get: { model.outputMode },
+                set: { newValue in Task { await model.setOutputMode(newValue) } }
+              )
+            ) {
+              Text("DriverKit").tag("primaryOnly")
+              Text("User-space").tag("secondaryOnly")
+              Text("Both").tag("both")
+            }
+            .pickerStyle(.segmented)
+            .disabled(!model.daemonConnected || !model.userSpaceVirtualDeviceEnabled)
+
+            Text("DriverKit = one virtual pad via system extension.").font(.caption).foregroundStyle(
+              .secondary
+            )
+            Text("User-space = one virtual pad via IOHIDUserDevice (no reboot).").font(.caption)
+              .foregroundStyle(.secondary)
+            Text("Both = mirror to both pads (some apps may double-input).").font(.caption)
+              .foregroundStyle(.secondary)
+          }
+          Text("Status: \(model.userSpaceVirtualDeviceStatus)").font(.caption).foregroundStyle(
+            model.userSpaceVirtualDeviceStatus.hasPrefix("error:") ? .orange : .secondary
+          )
+        }
       }
     } label: {
       Label("Virtual Device Extension", systemImage: "puzzlepiece.extension").fontWeight(.semibold)

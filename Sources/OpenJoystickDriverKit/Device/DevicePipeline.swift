@@ -8,6 +8,11 @@ private let pipelineErrorRecoveryDelay: UInt64 = 10_000_000
 private let usbOpenRetryDelays: [UInt64] = [1_000_000_000, 2_000_000_000, 4_000_000_000]
 /// Send keep-alive every 40 read cycles × 100 ms timeout ≈ 4 seconds.
 private let keepAliveCycleInterval: UInt = 40
+/// Target input loop cadence in nanoseconds.
+///
+/// If libusb returns timeouts immediately (instead of waiting for timeout),
+/// this prevents a hot loop that can trigger launchd "inefficient" kills.
+private let usbInputLoopCadenceNs: UInt64 = UInt64(gipReadTimeoutMs) * 1_000_000
 
 /// Manages full lifecycle of single connected controller.
 /// Each controller gets its own DevicePipeline actor - one
@@ -24,6 +29,7 @@ actor DevicePipeline {
   private let transport: Transport
   private let parser: any InputParser
   private let dispatcher: any OutputDispatcher
+  private let usbContext: USBContext?
   private var isActive = false
   private var usbHandle: USBDeviceHandle?
   private var currentInputState: DeviceInputState
@@ -34,12 +40,14 @@ actor DevicePipeline {
     identifier: DeviceIdentifier,
     transport: Transport,
     parser: any InputParser,
-    dispatcher: any OutputDispatcher
+    dispatcher: any OutputDispatcher,
+    usbContext: USBContext?
   ) {
     self.identifier = identifier
     self.transport = transport
     self.parser = parser
     self.dispatcher = dispatcher
+    self.usbContext = usbContext
     self.currentInputState = DeviceInputState(
       vendorID: identifier.vendorID,
       productID: identifier.productID
@@ -135,7 +143,8 @@ actor DevicePipeline {
   // MARK: - Private USB pipeline
 
   private func startUSBPipeline(vendorID: UInt16, productID: UInt16) async {
-    guard let context = createUSBContext() else {
+    guard let context = usbContext else {
+      print("[DevicePipeline] Missing USBContext for \(identifier)")
       isActive = false
       return
     }
@@ -159,13 +168,6 @@ actor DevicePipeline {
     }
 
     await runUSBInputLoop(handle: handle)
-  }
-
-  private func createUSBContext() -> USBContext? {
-    do { return try USBContext() } catch {
-      print("[DevicePipeline] Failed to create USBContext" + " for \(identifier): \(error)")
-      return nil
-    }
   }
 
   private func performUSBHandshake(handle: USBDeviceHandle) async -> Bool {
@@ -238,25 +240,35 @@ actor DevicePipeline {
     print("[DevicePipeline] Starting USB input loop:" + " \(identifier)")
 
     while isActive {
+      let loopStartNs = DispatchTime.now().uptimeNanoseconds
       keepAliveCycle += 1
       if shouldSendKeepAlive(keepAliveCycle: keepAliveCycle) {
         keepAliveCycle = 0
         runKeepAlive(handle: handle)
       }
+      var shouldBreak = false
       do {
         let bytes = try readInterrupt(handle: handle, inEndpoint: inEndpoint)
         appendToPacketLog(bytes: bytes, direction: "rx")
         let events = try parseEvents(from: bytes)
         if !events.isEmpty { await dispatcher.dispatch(events: events, from: identifier) }
         updateInputState(from: events)
-      } catch let error as USBError where error.isTimeout { continue } catch let error as USBError
-        where error.isNoDevice
-      {
+      } catch let error as USBError where error.isTimeout {
+        // No data in this interval; throttle below to avoid a hot timeout loop.
+      } catch let error as USBError where error.isNoDevice {
         print("[DevicePipeline] Device disconnected:" + " \(identifier)")
-        break
+        shouldBreak = true
       } catch {
         print("[DevicePipeline] Read error" + " for \(identifier):" + " \(error) - continuing")
         try? await Task.sleep(nanoseconds: pipelineErrorRecoveryDelay)
+      }
+
+      if shouldBreak { break }
+
+      // Ensure we never spin faster than the intended read cadence.
+      let loopElapsedNs = DispatchTime.now().uptimeNanoseconds &- loopStartNs
+      if loopElapsedNs < usbInputLoopCadenceNs {
+        try? await Task.sleep(nanoseconds: usbInputLoopCadenceNs &- loopElapsedNs)
       }
     }
 

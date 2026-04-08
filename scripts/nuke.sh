@@ -63,6 +63,8 @@ echo ""
 echo "=== NUKE: clearing build artifacts ==="
 rm -rf "$SCRIPT_DIR/../.build/dext" 2>/dev/null || true
 rm -rf "$SCRIPT_DIR/../.build/debug/OpenJoystickDriver.app" 2>/dev/null || true
+rm -rf "$SCRIPT_DIR/../.build/arm64-apple-macosx" 2>/dev/null || true
+rm -rf "$SCRIPT_DIR/../.build/x86_64-apple-macosx" 2>/dev/null || true
 echo "  cleared .build/dext and .build/debug app"
 
 echo ""

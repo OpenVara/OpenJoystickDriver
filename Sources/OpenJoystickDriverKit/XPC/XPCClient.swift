@@ -13,6 +13,16 @@ public enum XPCError: Error, Sendable {
   case invalidResponse
 }
 
+extension XPCError: LocalizedError {
+  public var errorDescription: String? {
+    switch self {
+    case .notConnected: return "Not connected to daemon."
+    case .timeout: return "Daemon did not respond (timeout)."
+    case .invalidResponse: return "Invalid response from daemon (version mismatch?)."
+    }
+  }
+}
+
 /// Client for talking to the OpenJoystickDriver daemon over XPC.
 ///
 /// Typical usage:
@@ -111,6 +121,76 @@ public final class XPCClient: @unchecked Sendable {
     }
   }
 
+  /// Enables/disables the user-space virtual gamepad (IOHIDUserDevice).
+  public func setUserSpaceVirtualDeviceEnabled(_ enabled: Bool) async throws {
+    let _: Bool = try await xpcCall { service, reply in
+      service.setUserSpaceVirtualDeviceEnabled(enabled, reply: reply)
+    }
+  }
+
+  /// Sets the daemon virtual device mode.
+  ///
+  /// Values: "driverKit", "compatUserSpace", or "both".
+  public func setVirtualDeviceMode(_ mode: String) async throws {
+    let _: Bool = try await xpcCall { service, reply in
+      service.setVirtualDeviceMode(mode, reply: reply)
+    }
+  }
+
+  /// Returns the daemon virtual device mode.
+  public func getVirtualDeviceMode() async throws -> String {
+    try await xpcCall { service, reply in service.getVirtualDeviceMode(reply: reply) }
+  }
+
+  /// Returns whether the user-space virtual gamepad is enabled.
+  public func getUserSpaceVirtualDeviceEnabled() async throws -> Bool {
+    try await xpcCall { service, reply in service.getUserSpaceVirtualDeviceEnabled(reply: reply) }
+  }
+
+  /// Returns a short status string for the user-space virtual gamepad.
+  public func getUserSpaceVirtualDeviceStatus() async throws -> String {
+    try await xpcCall { service, reply in service.getUserSpaceVirtualDeviceStatus(reply: reply) }
+  }
+
+  /// Returns a diagnostics snapshot of HID gamepad devices as seen by IOKit.
+  public func getVirtualDeviceDiagnostics() async throws -> XPCVirtualDeviceDiagnosticsPayload {
+    let data: Data = try await xpcCall { service, reply in
+      service.getVirtualDeviceDiagnostics(reply: reply)
+    }
+    guard let payload = try? JSONDecoder().decode(XPCVirtualDeviceDiagnosticsPayload.self, from: data)
+    else {
+      throw XPCError.invalidResponse
+    }
+    return payload
+  }
+
+  /// Sets the daemon output routing mode.
+  ///
+  /// Values: "primaryOnly", "secondaryOnly", or "both".
+  public func setOutputMode(_ mode: String) async throws {
+    let _: Bool = try await xpcCall { service, reply in
+      service.setOutputMode(mode, reply: reply)
+    }
+  }
+
+  /// Gets the daemon output routing mode.
+  public func getOutputMode() async throws -> String {
+    try await xpcCall { service, reply in service.getOutputMode(reply: reply) }
+  }
+
+  /// Runs a short virtual device self-test.
+  public func runVirtualDeviceSelfTest(seconds: Int) async throws -> XPCVirtualDeviceSelfTestPayload
+  {
+    let data: Data = try await xpcCall { service, reply in
+      service.runVirtualDeviceSelfTest(seconds: seconds, reply: reply)
+    }
+    guard let payload = try? JSONDecoder().decode(XPCVirtualDeviceSelfTestPayload.self, from: data)
+    else {
+      throw XPCError.invalidResponse
+    }
+    return payload
+  }
+
   // MARK: - Private
 
   /// Wraps an XPC reply-block call as a Swift async function.
@@ -119,7 +199,11 @@ public final class XPCClient: @unchecked Sendable {
   ) async throws -> T {
     guard let conn = connection else { throw XPCError.notConnected }
     return try await withCheckedThrowingContinuation { cont in
-      let proxy = conn.remoteObjectProxyWithErrorHandler { error in cont.resume(throwing: error) }
+      let proxy = conn.remoteObjectProxyWithErrorHandler { [weak self] error in
+        // Ensure subsequent calls reconnect cleanly instead of staying on a poisoned connection.
+        self?.disconnect()
+        cont.resume(throwing: error)
+      }
       guard let service = proxy as? any OpenJoystickDriverXPCProtocol else {
         cont.resume(throwing: XPCError.invalidResponse)
         return
