@@ -10,28 +10,24 @@ source "$SCRIPT_DIR/lib.sh"
 
 # zsh has a 'log' builtin that shadows /usr/bin/log — always use full path
 LOG=/usr/bin/log
-DEXT_PLIST="$SCRIPT_DIR/../DriverKitExtension/Info.plist"
 
 echo "=== Step 1: Nuke all stale state ==="
 "$SCRIPT_DIR/nuke.sh"
 
 echo ""
-echo "=== Step 2: Bump CFBundleVersion ==="
-OLD_VERSION=$(plutil -extract CFBundleVersion raw "$DEXT_PLIST" 2>/dev/null || echo "0")
-NEW_BUILD_VERSION=$(( OLD_VERSION + 1 ))
-plutil -replace CFBundleVersion -string "$NEW_BUILD_VERSION" "$DEXT_PLIST"
-echo "  Bumped CFBundleVersion: $OLD_VERSION → $NEW_BUILD_VERSION"
-
-echo ""
-echo "=== Step 3: Build app ==="
+echo "=== Step 2: Build app ==="
 "$SCRIPT_DIR/build-dev.sh"
 
 echo ""
-echo "=== Step 4: Build dext ==="
-"$SCRIPT_DIR/build-dext.sh"
+echo "=== Step 3: Build dext ==="
+# Bump the built dext's CFBundleVersion without dirtying the repo.
+# Must be monotonically increasing for macOS to accept sysext upgrades.
+DEXT_BUNDLE_VERSION="$(date +%s)"
+echo "  Using CFBundleVersion=$DEXT_BUNDLE_VERSION"
+DEXT_BUNDLE_VERSION="$DEXT_BUNDLE_VERSION" "$SCRIPT_DIR/build-dext.sh"
 
 echo ""
-echo "=== Step 5: Verify bundle IDs ==="
+echo "=== Step 4: Verify bundle IDs ==="
 APP_ID=$(plutil -extract CFBundleIdentifier raw \
   .build/debug/OpenJoystickDriver.app/Contents/Info.plist 2>/dev/null || echo "MISSING")
 DEXT_ID=$(plutil -extract CFBundleIdentifier raw \
@@ -54,7 +50,7 @@ if [[ "$OJD_ENV" == "release" ]]; then
 fi
 
 echo ""
-echo "=== Step 6: Launch app ==="
+echo "=== Step 5: Launch app ==="
 : > /tmp/com.openjoystickdriver.daemon.out 2>/dev/null || true
 : > /tmp/com.openjoystickdriver.daemon.err 2>/dev/null || true
 
@@ -62,7 +58,7 @@ open /Applications/OpenJoystickDriver.app
 echo "  Launched /Applications/OpenJoystickDriver.app"
 
 echo ""
-echo "=== Step 7: Wait for sysext activation ==="
+echo "=== Step 6: Wait for sysext activation ==="
 echo "  Click 'Install Extension' in the app if prompted…"
 echo ""
 
@@ -89,7 +85,7 @@ fi
 # the kernel does not auto-restart (only AppleUserHIDDevice auto-restarts).
 
 echo ""
-echo "=== Step 8: Wait for dext start ==="
+echo "=== Step 7: Wait for dext start ==="
 
 TIMEOUT=60
 ELAPSED=0
@@ -126,7 +122,7 @@ if (( ELAPSED >= TIMEOUT )); then
 fi
 
 echo ""
-echo "=== Step 9: Restart daemon ==="
+echo "=== Step 8: Restart daemon ==="
 APP_BIN="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver"
 if "$APP_BIN" --headless restart; then
   echo "  ✓ Daemon restarted"
@@ -137,7 +133,7 @@ fi
 sleep 3
 
 echo ""
-echo "=== Step 10: Diagnostics ==="
+echo "=== Step 9: Diagnostics ==="
 
 echo "--- Dext os_log (last 60s) ---"
 $LOG show --last 60s --predicate 'eventMessage CONTAINS "OpenJoystickVirtualHID"' \

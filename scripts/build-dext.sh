@@ -33,6 +33,7 @@ else
   DEXT_CONFIG="Debug"
 fi
 DEXT_PRODUCT="$DEXT_BUILD_DIR/Build/Products/${DEXT_CONFIG}-driverkit/OpenJoystickVirtualHID.dext"
+DEXT_BUNDLE_VERSION="${DEXT_BUNDLE_VERSION:-}"
 
 # ---------------------------------------------------------------------------
 # Step 1: Validate signing requirements
@@ -74,11 +75,187 @@ fi
 DEXT_BUILD_IDENTITY="${DEXT_BUILD_IDENTITY:-$CODESIGN_IDENTITY}"
 DEXT_BUILD_PROFILE="${DEXT_BUILD_PROFILE:-OpenJoystickDriver (VirtualHIDDevice)}"
 
+resolve_xcodebuild_identity() {
+  local id="$1"
+  # Our scripts commonly store the identity as the SHA1 fingerprint (40 hex chars),
+  # which `codesign` accepts, but `xcodebuild` expects the certificate's common name.
+  if [[ "$id" =~ ^[0-9A-Fa-f]{40}$ ]]; then
+    local line name
+    line="$(
+      security find-identity -v -p codesigning 2>/dev/null \
+        | awk -v needle="$id" 'tolower($0) ~ tolower(needle) {print $0; exit}'
+    )"
+    name="$(echo "$line" | awk -F'"' '{print $2}')"
+    if [[ -n "$name" ]]; then
+      echo "$name"
+      return 0
+    fi
+
+    # If Keychain is in a state where `security find-identity` reports 0 identities,
+    # fall back to extracting the certificate CN from the provisioning profile.
+    #
+    # This is the string that Xcode expects in CODE_SIGN_IDENTITY.
+    local dext_profile="${DEXT_PROVISIONING_PROFILE:-$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver_VirtualHIDDevice.provisionprofile}"
+    if [[ -f "$dext_profile" ]]; then
+      local pyout=""
+      pyout="$(
+        python3 - "$dext_profile" "$id" <<'PY' 2>/dev/null || true
+import os, sys, plistlib, subprocess, tempfile
+profile, want = sys.argv[1], sys.argv[2].lower()
+
+def decode(path: str) -> bytes:
+    p = subprocess.run(["security","cms","-D","-i",path], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    if p.returncode == 0 and p.stdout:
+        return p.stdout
+    p = subprocess.run(
+        ["openssl","smime","-inform","der","-verify","-noverify","-in",path],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    return p.stdout if (p.returncode == 0 and p.stdout) else b""
+
+raw = decode(profile)
+if not raw or b"<?xml" not in raw:
+    raise SystemExit(0)
+raw = raw[raw.index(b"<?xml") :]
+obj = plistlib.loads(raw)
+certs = obj.get("DeveloperCertificates") or []
+if not certs:
+    raise SystemExit(0)
+
+der = certs[0]
+with tempfile.NamedTemporaryFile(delete=False) as f:
+    f.write(der)
+    tmp = f.name
+try:
+    fp = subprocess.run(["openssl","x509","-inform","DER","-in",tmp,"-noout","-fingerprint","-sha1"],
+                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    sha = fp.stdout.strip().split("=")[-1].replace(":","").lower()
+    if sha != want:
+        raise SystemExit(0)
+    subj = subprocess.run(["openssl","x509","-inform","DER","-in",tmp,"-noout","-subject","-nameopt","RFC2253"],
+                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    s = subj.stdout.strip()
+    # Extract CN=... from RFC2253 subject line.
+    # Example: subject=CN=Apple Development: Name (TEAM),OU=...,O=...,C=US
+    if "CN=" not in s:
+        raise SystemExit(0)
+    cn = s.split("CN=", 1)[1].split(",", 1)[0]
+    if cn:
+        print(cn)
+finally:
+    try: os.unlink(tmp)
+    except OSError: pass
+PY
+      )"
+      if [[ -n "$pyout" ]]; then
+        echo "$pyout"
+        return 0
+      fi
+    fi
+
+    # Fall back to the original value so we don't accidentally pass an empty identity.
+    echo "$id"
+    return 0
+  fi
+  echo "$id"
+}
+
+DEXT_BUILD_IDENTITY_XCODE="$(resolve_xcodebuild_identity "$DEXT_BUILD_IDENTITY")"
+FINAL_IDENTITY_XCODE="$(resolve_xcodebuild_identity "$CODESIGN_IDENTITY")"
+
 echo "Building DriverKit extension..."
-echo "  Build identity: $DEXT_BUILD_IDENTITY"
+echo "  Build identity: $DEXT_BUILD_IDENTITY_XCODE"
 echo "  Build profile:  $DEXT_BUILD_PROFILE"
-echo "  Final identity: $CODESIGN_IDENTITY"
+echo "  Final identity: $FINAL_IDENTITY_XCODE"
 echo "  Team: $DEVELOPMENT_TEAM"
+
+# If the Apple Development identity string ends with a team-like suffix "(XXXXXXXXXX)",
+# validate it matches DEVELOPMENT_TEAM. This catches the common failure mode where
+# the GUI/daemon profiles are for one team but the Apple Development certificate is
+# issued under a different team, causing xcodebuild to fail with:
+#   "No certificate for team '...' matching 'Apple Development: ... (...)' found"
+IDENTITY_SUFFIX_TEAM="$(echo "$DEXT_BUILD_IDENTITY_XCODE" | sed -n 's/.*(\([A-Z0-9]\{10\}\)).*/\1/p')"
+if [[ -n "$IDENTITY_SUFFIX_TEAM" && "$IDENTITY_SUFFIX_TEAM" != "$DEVELOPMENT_TEAM" ]]; then
+  echo ""
+  echo "ERROR: Apple Development certificate team mismatch."
+  echo "  DEVELOPMENT_TEAM: $DEVELOPMENT_TEAM"
+  echo "  Apple Development cert: (...$IDENTITY_SUFFIX_TEAM)"
+  echo ""
+  echo "Fix (no guessing):"
+  echo "  1) In Apple Developer portal, create/download an Apple Development certificate for team $DEVELOPMENT_TEAM."
+  echo "  2) Re-generate the DEXT provisioning profile selecting that certificate."
+  echo "  3) Re-run: ./scripts/install-profiles.sh and ./scripts/configure-signing.sh"
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Preflight: profile team must match cert team
+# ---------------------------------------------------------------------------
+DEXT_PROFILE_PATH="${DEXT_PROVISIONING_PROFILE:-$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver_VirtualHIDDevice.provisionprofile}"
+if [[ -f "$DEXT_PROFILE_PATH" ]]; then
+  read -r PROFILE_TEAM CERT_OU < <(
+    python3 - "$DEXT_PROFILE_PATH" <<'PY' 2>/dev/null || true
+import plistlib, subprocess, sys, tempfile, os
+profile = sys.argv[1]
+
+def decode(path: str) -> bytes:
+    p = subprocess.run(["security","cms","-D","-i",path], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    if p.returncode == 0 and p.stdout:
+        return p.stdout
+    p = subprocess.run(
+        ["openssl","smime","-inform","der","-verify","-noverify","-in",path],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    return p.stdout if (p.returncode == 0 and p.stdout) else b""
+
+raw = decode(profile)
+if not raw or b"<?xml" not in raw:
+    raise SystemExit(0)
+raw = raw[raw.index(b"<?xml") :]
+obj = plistlib.loads(raw)
+team = ""
+ti = obj.get("TeamIdentifier") or []
+if isinstance(ti, list) and ti:
+    team = str(ti[0])
+
+certs = obj.get("DeveloperCertificates") or []
+ou = ""
+if certs:
+    der = certs[0]
+    with tempfile.NamedTemporaryFile(delete=False) as f:
+        f.write(der)
+        tmp = f.name
+    try:
+        subj = subprocess.run(["openssl","x509","-inform","DER","-in",tmp,"-noout","-subject","-nameopt","RFC2253"],
+                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        s = subj.stdout.strip()
+        # Extract OU=... from RFC2253 subject.
+        if "OU=" in s:
+            ou = s.split("OU=", 1)[1].split(",", 1)[0]
+    finally:
+        try: os.unlink(tmp)
+        except OSError: pass
+
+print(team, ou)
+PY
+  )
+
+  if [[ -n "${PROFILE_TEAM:-}" && -n "${CERT_OU:-}" && "$PROFILE_TEAM" != "$CERT_OU" ]]; then
+    echo ""
+    echo "ERROR: Signing team mismatch for DriverKit extension."
+    echo "  DEXT provisioning profile team: $PROFILE_TEAM"
+    echo "  Apple Development certificate team: $CERT_OU"
+    echo ""
+    echo "Fix (no guessing):"
+    echo "  1) Create/download an Apple Development certificate for team $PROFILE_TEAM, OR"
+    echo "  2) Regenerate the DEXT provisioning profile for team $CERT_OU and reinstall it."
+    echo ""
+    echo "Then re-run: ./scripts/build-dext.sh"
+    exit 1
+  fi
+fi
 
 # Ensure Xcode toolchain compilers are used even if Homebrew LLVM is earlier in PATH.
 # Some Xcode build invocations call `clang` by basename; if PATH resolves to a
@@ -111,7 +288,7 @@ xcodebuild \
     -derivedDataPath "$DEXT_BUILD_DIR" \
     CC="$XCODE_CLANG" \
     CXX="$XCODE_CLANGXX" \
-    CODE_SIGN_IDENTITY="$DEXT_BUILD_IDENTITY" \
+    CODE_SIGN_IDENTITY="$DEXT_BUILD_IDENTITY_XCODE" \
     DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
     PROVISIONING_PROFILE_SPECIFIER="$DEXT_BUILD_PROFILE" \
     CODE_SIGN_STYLE=Manual \
@@ -120,6 +297,16 @@ xcodebuild \
 if [[ ! -d "$DEXT_PRODUCT" ]]; then
     echo "ERROR: .dext not found at expected path: $DEXT_PRODUCT"
     exit 1
+fi
+
+if [[ -n "$DEXT_BUNDLE_VERSION" ]]; then
+    # IMPORTANT:
+    # System extensions are versioned. During development, macOS may refuse to
+    # "upgrade" a sysext if CFBundleVersion does not increase.
+    #
+    # Do NOT bump DriverKitExtension/Info.plist in the repo (it dirties the tree).
+    # Instead, bump the built product's Info.plist here and re-sign later when embedding.
+    plutil -replace CFBundleVersion -string "$DEXT_BUNDLE_VERSION" "$DEXT_PRODUCT/Info.plist"
 fi
 
 echo "Built: $DEXT_PRODUCT"
@@ -204,12 +391,18 @@ if [[ -d "$GUI_APP" ]]; then
     fi
     codesign "${APP_SIGN_ARGS[@]}" "$GUI_APP"
 
-    # Always copy to /Applications/ — sysextd requires the containing app
-    # to be in /Applications/ for system extension discovery
-    echo "Installing to /Applications/OpenJoystickDriver.app..."
-    rm -rf /Applications/OpenJoystickDriver.app
-    cp -R "$GUI_APP" /Applications/
-    echo "Copied to /Applications"
+    # Copy to /Applications/ — sysextd requires the containing app to be in
+    # /Applications/ for system extension discovery.
+    #
+    # During iteration (or in sandboxed environments), you may want to skip this step.
+    if [[ "${OJD_SKIP_INSTALL:-0}" == "1" ]]; then
+      echo "Skipping /Applications install (OJD_SKIP_INSTALL=1)"
+    else
+      echo "Installing to /Applications/OpenJoystickDriver.app..."
+      rm -rf /Applications/OpenJoystickDriver.app
+      cp -R "$GUI_APP" /Applications/
+      echo "Copied to /Applications"
+    fi
 else
     echo "Note: GUI app bundle not found at $GUI_APP — build the main project first."
     echo "      Run ./scripts/build-dev.sh, then ./scripts/build-dext.sh again."

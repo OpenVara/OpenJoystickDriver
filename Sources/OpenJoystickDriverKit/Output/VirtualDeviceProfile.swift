@@ -5,6 +5,12 @@
 public struct VirtualDeviceProfile: Sendable {
   public let vendorID: Int
   public let productID: Int
+  /// Value used for `kIOHIDVersionNumberKey` / SDL "product version".
+  ///
+  /// SDL includes this 16-bit value in the GUID it uses to look up controller mappings.
+  /// For some apps (PCSX2/SDL on macOS), having the expected version is required for
+  /// automatic mapping to be applied.
+  public let versionNumber: Int
   public let productName: String
   public let manufacturer: String
 
@@ -13,6 +19,7 @@ public struct VirtualDeviceProfile: Sendable {
   public static let openJoystickDriver = VirtualDeviceProfile(
     vendorID: 0x4F4A,  // "OJ"
     productID: 0x4447,  // "DG" (arbitrary, stable)
+    versionNumber: 0x0408,
     productName: "OpenJoystickDriver Virtual Gamepad",
     manufacturer: "OpenJoystickDriver"
   )
@@ -22,6 +29,10 @@ public struct VirtualDeviceProfile: Sendable {
   public static let xboxOneS = VirtualDeviceProfile(
     vendorID: 0x045E,
     productID: 0x02EA,
+    // Important: SDL mapping DB entry for macOS expects version=0x0000 for GUID
+    // `030000005e040000ea02000000000000` (Xbox One Controller, platform: Mac OS X).
+    // Matching this makes SDL treat the device as a Gamepad with automatic mappings.
+    versionNumber: 0x0000,
     productName: "Xbox Wireless Controller",
     manufacturer: "Microsoft"
   )
@@ -32,6 +43,7 @@ public struct VirtualDeviceProfile: Sendable {
   public static let xbox360Wired = VirtualDeviceProfile(
     vendorID: 0x045E,
     productID: 0x028E,
+    versionNumber: 0x0000,
     productName: "Xbox 360 Controller",
     manufacturer: "Microsoft"
   )

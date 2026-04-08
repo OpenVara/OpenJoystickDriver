@@ -78,6 +78,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       kIOHIDReportDescriptorKey as String: descriptor,
       kIOHIDVendorIDKey as String: NSNumber(value: profile.vendorID),
       kIOHIDProductIDKey as String: NSNumber(value: profile.productID),
+      kIOHIDVersionNumberKey as String: NSNumber(value: profile.versionNumber),
       kIOHIDProductKey as String: profile.productName,
       kIOHIDManufacturerKey as String: profile.manufacturer,
       kIOHIDSerialNumberKey as String: UserSpaceVirtualDeviceConstants.serialNumber,

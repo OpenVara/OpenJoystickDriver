@@ -182,9 +182,14 @@ auto OpenJoystickVirtualHIDDevice::newDeviceDescription() -> OSDictionary* {
         dbg->release();
     }
 
-    // SDL's macOS IOKit backend (and some other HID consumers) may ignore devices
-    // that identify as Transport="Virtual". Present as a normal USB controller.
-    if (auto* transport = OSString::withCString("USB")) {
+    // Important:
+    // - SDL-based apps may enumerate DriverKit HID devices but not treat them as "real" gamepads.
+    // - Our no-reboot Compatibility mode uses a user-space IOHIDUserDevice, which SDL *should*
+    //   see as a normal controller.
+    //
+    // Setting Transport="Virtual" here avoids SDL picking the DriverKit device over the
+    // user-space device in Compatibility mode (which would result in "detected but no input").
+    if (auto* transport = OSString::withCString("Virtual")) {
         OSDictionarySetValue(dict, kIOHIDTransportKey, transport);
         transport->release();
     }
