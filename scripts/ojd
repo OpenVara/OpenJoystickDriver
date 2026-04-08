@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# OpenJoystickDriver developer entrypoint.
+#
+# Goal: one command surface for common tasks, with self-describing failures.
+#
+# Use this instead of invoking individual scripts directly.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+usage() {
+  cat <<'USAGE'
+OpenJoystickDriver — dev helper
+
+Usage:
+  ./scripts/ojd <command> [args]
+
+Commands:
+  rebuild dev                 Full rebuild (app + dext), installs to /Applications
+  rebuild release             Same as above, but uses release signing + notarization
+  rebuild-fast dev            Fast rebuild (app only; preserves installed dext)
+
+  build dev                   Build + sign app bundle into `.build/` (no dext)
+  build release               Build + sign app bundle for release (no dext)
+  build dext                  Build DriverKit `.dext` and embed into `.build/` app
+
+  signing install-profiles    Copy profiles from ~/Documents/Profiles into MobileDevice
+  signing configure            Generate scripts/.env.dev + scripts/.env.release from Keychain + profiles
+  signing doctor               Diagnose common cert/profile mismatch errors (safe output)
+  signing audit [paths...]     Audit profiles without leaking identifiers
+  signing cert-info <cer>      Show safe-ish .cer info (Team ID = Subject OU)
+  signing profile-info <pp>    Show safe-ish profile embedded cert info
+  signing import-embedded <pp> Import embedded cert from a profile into Keychain
+
+  diagnose dext               Run dext diagnostics (activation, codesign, IORegistry, daemon connection)
+  diagnose sdl3 [--seconds N] Run SDL3 probe against the virtual device
+  diagnose pcsx2-latency      Compare native SDL3 vs PCSX2/Rosetta SDL3 input timing
+
+  notarize submit             Submit + poll + staple (release only)
+  notarize status [id]        Show notarization status (release only)
+  notarize log <id>           Fetch notarization log (release only)
+  notarize history            List notarization history (release only)
+
+  lint                        Run SwiftLint (requires swiftlint)
+
+Examples:
+  ./scripts/ojd signing install-profiles
+  ./scripts/ojd signing configure
+  ./scripts/ojd rebuild-fast dev
+
+Notes:
+  - Most commands expect the app to be installed to /Applications.
+  - DriverKit upgrades can require a reboot; use rebuild-fast while streaming.
+USAGE
+}
+
+die() { echo "ERROR: $*" >&2; exit 2; }
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  ""|-h|--help|help)
+    usage
+    exit 0
+    ;;
+
+  build)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      dev)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-build.sh" build dev
+        ;;
+      dext)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-build.sh" build dext
+        ;;
+      release)
+        exec env OJD_ENV=release /usr/bin/env bash "$SCRIPT_DIR/ojd-build.sh" build release
+        ;;
+      *)
+        die "Unknown: build $sub (expected: dev | dext | release)"
+        ;;
+    esac
+    ;;
+
+  rebuild)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      dev)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-build.sh" rebuild dev
+        ;;
+      release)
+        exec env OJD_ENV=release /usr/bin/env bash "$SCRIPT_DIR/ojd-build.sh" rebuild release
+        ;;
+      *)
+        die "Unknown: rebuild $sub (expected: dev | release)"
+        ;;
+    esac
+    ;;
+
+  rebuild-fast)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      dev)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-build.sh" rebuild-fast dev
+        ;;
+      *)
+        die "Unknown: rebuild-fast $sub (expected: dev)"
+        ;;
+    esac
+    ;;
+
+  signing)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      install-profiles)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-signing.sh" install-profiles "${1:-}"
+        ;;
+      configure)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-signing.sh" configure
+        ;;
+      doctor)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-signing.sh" doctor
+        ;;
+      audit)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-signing.sh" audit "$@"
+        ;;
+      cert-info)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-signing.sh" cert-info "$@"
+        ;;
+      profile-info)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-signing.sh" profile-info "$@"
+        ;;
+      import-embedded)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-signing.sh" import-embedded "$@"
+        ;;
+      *)
+        die "Unknown: signing $sub (expected: install-profiles | configure | doctor | audit | cert-info | profile-info | import-embedded)"
+        ;;
+    esac
+    ;;
+
+  diagnose)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      dext)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" dext
+        ;;
+      sdl3)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" sdl3 "$@"
+        ;;
+      pcsx2-latency)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" pcsx2-latency "$@"
+        ;;
+      *)
+        die "Unknown: diagnose $sub (expected: dext | sdl3 | pcsx2-latency)"
+        ;;
+    esac
+    ;;
+
+  lint)
+    exec /usr/bin/env bash "$SCRIPT_DIR/ojd-build.sh" lint
+    ;;
+
+  notarize)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      submit|"")
+        exec env OJD_ENV=release /usr/bin/env bash "$SCRIPT_DIR/ojd-notarize.sh" submit "$@"
+        ;;
+      status)
+        exec env OJD_ENV=release /usr/bin/env bash "$SCRIPT_DIR/ojd-notarize.sh" status "$@"
+        ;;
+      history)
+        exec env OJD_ENV=release /usr/bin/env bash "$SCRIPT_DIR/ojd-notarize.sh" history "$@"
+        ;;
+      log)
+        exec env OJD_ENV=release /usr/bin/env bash "$SCRIPT_DIR/ojd-notarize.sh" log "$@"
+        ;;
+      *)
+        die "Unknown: notarize $sub (expected: submit | status | history | log)"
+        ;;
+    esac
+    ;;
+
+  *)
+    die "Unknown command: $cmd (run: ./scripts/ojd --help)"
+    ;;
+esac

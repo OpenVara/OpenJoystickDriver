@@ -13,7 +13,7 @@ The scripts look for provisioning profiles at:
 Install (copies from `~/Documents/Profiles/` or `~/Documents/profiles/`):
 
 ```bash
-./scripts/install-profiles.sh
+./scripts/ojd signing install-profiles
 ```
 
 Expected filenames:
@@ -27,13 +27,13 @@ Expected filenames:
 Sanity-check what you installed (safe output; no identifiers printed):
 
 ```bash
-./scripts/profile-audit.sh "$HOME/Library/MobileDevice/Provisioning Profiles"/*.provisionprofile
+./scripts/ojd signing audit "$HOME/Library/MobileDevice/Provisioning Profiles"/*.provisionprofile
 ```
 
 If something fails, run the signing doctor (safe output; no Apple ID / no full subjects):
 
 ```bash
-./scripts/doctor-signing.sh
+./scripts/ojd signing doctor
 ```
 
 ### 2) Ensure Keychain identities exist
@@ -98,8 +98,8 @@ If those Team IDs differ:
 1. Create an **Apple Development** certificate for the **same team** as the provisioning profiles (Developer portal → Certificates → `+` → Apple Development).
 2. Import the downloaded `.cer` into Keychain Access (it must include a private key).
 3. Regenerate the **Apple Development** provisioning profiles (GUI, daemon, dext) selecting that new Apple Development certificate.
-4. Reinstall profiles: `./scripts/install-profiles.sh`
-5. Re-generate env files: `./scripts/configure-signing.sh`
+4. Reinstall profiles: `./scripts/ojd signing install-profiles`
+5. Re-generate env files: `./scripts/ojd signing configure`
 
 For the entitlement `com.apple.developer.hid.virtual.device`:
 
@@ -116,14 +116,14 @@ Apple certificates encode the team ID in the **Subject OU**. Some tooling/UI als
 certificate’s **CN** (the `(...)` part of the display name). If those disagree, use the provisioning profile’s
 `TeamIdentifier` (and the certificate Subject OU) as the source of truth and sign by **SHA1 identity** instead of the display name.
 
-This repo’s `./scripts/configure-signing.sh` writes `CODESIGN_IDENTITY` as a 40‑hex SHA1 for that reason.
+This repo’s `./scripts/ojd signing configure` writes `CODESIGN_IDENTITY` as a 40‑hex SHA1 for that reason.
 
 ### 3) Generate `scripts/.env.dev` and `scripts/.env.release`
 
 This repo has a helper that reads your Keychain + installed profiles and writes both env files:
 
 ```bash
-./scripts/configure-signing.sh
+./scripts/ojd signing configure
 ```
 
 ## Common tasks
@@ -144,13 +144,13 @@ Commands (run the app-bundled binary):
 ### Dev build (signed) + app bundle
 
 ```bash
-./scripts/build-dev.sh
+./scripts/ojd build dev
 ```
 
 ### Build the DriverKit system extension (.dext)
 
 ```bash
-./scripts/build-dext.sh
+./scripts/ojd build dext
 ```
 
 ### If DriverKit build fails with “No certificate for team … matching …”
@@ -166,8 +166,8 @@ certificate display name suffix `(...)`.
 
 Fix:
 
-1) Re-run `./scripts/configure-signing.sh` so `CODESIGN_IDENTITY` is a SHA1 fingerprint.
-2) Re-run `./scripts/build-dext.sh` (this script prefers SHA1 for xcodebuild).
+1) Re-run `./scripts/ojd signing configure` so `CODESIGN_IDENTITY` is a SHA1 fingerprint.
+2) Re-run `./scripts/ojd build dext` (this prefers SHA1 for xcodebuild).
 
 ## Notarization
 
@@ -185,7 +185,7 @@ Put these into `scripts/.env.release`:
 Then:
 
 ```bash
-OJD_ENV=release ./scripts/rebuild.sh
-OJD_ENV=release ./scripts/notarize.sh
-OJD_ENV=release ./scripts/notarize-status.sh
+OJD_ENV=release ./scripts/ojd rebuild release
+OJD_ENV=release ./scripts/ojd notarize submit
+OJD_ENV=release ./scripts/ojd notarize status
 ```

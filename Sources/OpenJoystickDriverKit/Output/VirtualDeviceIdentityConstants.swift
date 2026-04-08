@@ -18,7 +18,12 @@ public enum VirtualDeviceIdentityConstants {
   /// ambiguous matches when multiple devices share the same VID/PID.
   public static let driverKitSerialNumber = "OpenJoystickDriver-DriverKit"
 
-  /// LocationID used by the user-space IOHIDUserDevice virtual gamepad.
-  public static let userSpaceLocationID: UInt32 = 0x4F4A_4402  // "OJD" namespace
+  /// User-space IOHIDUserDevice LocationID namespace.
+  ///
+  /// We intentionally use a *range* (not a single constant) so we can create one
+  /// virtual controller per physical controller without collisions.
+  ///
+  /// The high 16 bits ("OJ") are a stable namespace. The low 16 bits are derived
+  /// (deterministically) from the physical device identifier.
+  public static let userSpaceLocationIDNamespace: UInt32 = 0x4F4A_0000  // "OJ" namespace
 }
-

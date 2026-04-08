@@ -52,16 +52,13 @@ brew install libusb
 ```bash
 git clone https://github.com/OpenVara/OpenJoystickDriver.git
 cd OpenJoystickDriver
-./scripts/install.sh
+./scripts/ojd signing install-profiles
+./scripts/ojd signing configure
+./scripts/ojd rebuild dev
 ```
 
-This builds release binaries, installs to `/usr/local/bin`, and registers the daemon as a LaunchAgent so it starts automatically on login.
-
-To uninstall:
-
-```bash
-./scripts/uninstall.sh
-```
+This builds a signed app bundle and installs it to `/Applications/OpenJoystickDriver.app`.
+The daemon is managed as a LaunchAgent via `SMAppService` from inside the app/CLI.
 
 ---
 
@@ -90,8 +87,8 @@ When enabled, OpenJoystickDriver routes output to the user-space device (and dis
 > To avoid this, sign with a real Apple Development certificate:
 >
 > ```bash
-> export CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)"
-> ./scripts/build-dev.sh
+> ./scripts/ojd signing configure
+> ./scripts/ojd build dev
 > ```
 >
 > Find your identity: `security find-identity -v -p codesigning`
@@ -166,7 +163,7 @@ If the controller only appears (or only works) when you enable **Enable MFI Driv
 To debug whether SDL is receiving events at all, build and run the SDL3 probe:
 
 ```bash
-./scripts/sdl3-probe.sh --seconds 10
+./scripts/ojd diagnose sdl3 --seconds 10
 ```
 
 If the probe prints no `axis`/`button` events while you press inputs, SDL isn’t receiving input from the virtual device (PCSX2 SDL input will also fail).
@@ -182,7 +179,7 @@ Some PCSX2 builds ship as Intel-only and run under Rosetta. SDL input behavior c
 This repo includes a script that runs both probes back-to-back:
 
 ```bash
-./scripts/diagnose-pcsx2-input-latency.sh
+./scripts/ojd diagnose pcsx2-latency
 ```
 
 If the native probe reports instant events but the PCSX2/Rosetta probe reports 0 devices (or very delayed events),
@@ -200,7 +197,7 @@ Fix (fast):
 /Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless restart
 ```
 
-If `./scripts/diagnose-dext.sh` reports stale sysext copies, a reboot cleans them up.
+If `./scripts/ojd diagnose dext` reports stale sysext copies, a reboot cleans them up.
 
 ---
 
@@ -256,35 +253,22 @@ VID and PID values in JSON must be **decimal** integers, not hex strings.
 ## Development
 
 ```bash
-# Build
-swift build
-
-# Run tests (no hardware required)
-swift test --filter OpenJoystickDriverKitTests
-
 # One-time signing setup (macOS 26+)
-./scripts/configure-signing.sh
+./scripts/ojd signing install-profiles
+./scripts/ojd signing configure
 
-# Build + ad-hoc sign both debug binaries (creates .app bundle)
-./scripts/build-dev.sh
-
-# Build + sign + immediately run the daemon (fast dev loop)
-./scripts/run-dev.sh
-
-# Build the DriverKit extension (requires provisioning profile)
-./scripts/build-dext.sh
-
-# Full rebuild + deploy (reinstalls sysext; may require reboot if macOS gets stuck "terminating for upgrade")
-./scripts/rebuild.sh
+# Full rebuild + deploy (reinstalls sysext; may require reboot)
+./scripts/ojd rebuild dev
 
 # Fast rebuild (does NOT reinstall/upgrade sysext; safe during streams / no reboot)
-./scripts/rebuild-fast.sh
+./scripts/ojd rebuild-fast dev
 
 # Build universal release binaries, codesign, and notarize
-./scripts/build-release.sh
+OJD_ENV=release ./scripts/ojd rebuild release
+OJD_ENV=release ./scripts/ojd notarize submit
 
-# Lint
-./scripts/lint.sh
+# Lint (requires swiftlint)
+./scripts/ojd lint
 ```
 
 ### Signing + provisioning (macOS 26+)
@@ -301,25 +285,25 @@ The Team ID in the identity name (the `(...)` suffix) must match the provisionin
 Sanity-check installed profiles (safe output; no identifiers printed):
 
 ```bash
-./scripts/profile-audit.sh "$HOME/Library/MobileDevice/Provisioning Profiles"/*.provisionprofile
+./scripts/ojd signing audit "$HOME/Library/MobileDevice/Provisioning Profiles"/*.provisionprofile
 ```
 
 Install profiles from `~/Documents/Profiles/` (or `~/Documents/profiles/`):
 
 ```bash
-./scripts/install-profiles.sh
+./scripts/ojd signing install-profiles
 ```
 
 Generate `scripts/.env.dev` and `scripts/.env.release` automatically (no heredocs / no copy-paste):
 
 ```bash
-./scripts/configure-signing.sh
+./scripts/ojd signing configure
 ```
 
 If something fails, run the signing doctor first (prints safe info only):
 
 ```bash
-./scripts/doctor-signing.sh
+./scripts/ojd signing doctor
 ```
 
 #### “Certificate is not trusted” (Keychain)
@@ -370,8 +354,8 @@ Put the values into `scripts/.env.release`:
 Then run:
 
 ```bash
-OJD_ENV=release ./scripts/rebuild.sh
-OJD_ENV=release ./scripts/notarize.sh
+OJD_ENV=release ./scripts/ojd rebuild release
+OJD_ENV=release ./scripts/ojd notarize submit
 ```
 
 Swift 6.2 strict concurrency is enforced. All warnings are errors. SwiftLint zero-suppression policy.

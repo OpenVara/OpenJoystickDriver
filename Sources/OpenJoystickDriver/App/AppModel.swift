@@ -334,7 +334,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
         Typical cause: the system extension (.dext) was copied into the app without re-signing.
 
         Fix (no reboot):
-          1) Run: ./scripts/rebuild-fast.sh
+          1) Run: ./scripts/ojd rebuild-fast dev
           2) Then re-try \(action)
 
         Diagnostic command:

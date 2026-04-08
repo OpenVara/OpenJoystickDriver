@@ -52,6 +52,18 @@ public struct HIDDescriptorReportFormat: VirtualGamepadReportFormat, @unchecked 
   /// This avoids hardcoding descriptor bytes in the repo and lets developers confirm
   /// the exact descriptor used by their controller on their macOS build.
   public static func copyPhysicalReportDescriptor(vendorID: Int, productID: Int) -> [UInt8]? {
+    copyPhysicalReportDescriptor(vendorID: vendorID, productID: productID, preferredTransport: nil)
+  }
+
+  /// Copies the HID report descriptor from a currently connected physical HID device,
+  /// optionally preferring a specific transport ("USB", "Bluetooth", ...).
+  ///
+  /// This function explicitly filters out OpenJoystickDriver-created virtual devices.
+  public static func copyPhysicalReportDescriptor(
+    vendorID: Int,
+    productID: Int,
+    preferredTransport: String?
+  ) -> [UInt8]? {
     let matching: [String: Any] = [
       kIOHIDVendorIDKey as String: vendorID,
       kIOHIDProductIDKey as String: productID,
@@ -64,7 +76,35 @@ public struct HIDDescriptorReportFormat: VirtualGamepadReportFormat, @unchecked 
     }
 
     let devices = (IOHIDManagerCopyDevices(mgr) as? Set<IOHIDDevice>) ?? []
-    for dev in devices {
+
+    func strProp(_ dev: IOHIDDevice, _ key: String) -> String? {
+      IOHIDDeviceGetProperty(dev, key as CFString) as? String
+    }
+
+    func score(_ dev: IOHIDDevice) -> Int {
+      let transport = strProp(dev, kIOHIDTransportKey as String)
+      let ioUserClass = strProp(dev, "IOUserClass")
+      let serial = strProp(dev, kIOHIDSerialNumberKey as String) ?? strProp(dev, "SerialNumber")
+
+      // Exclude OJD virtual devices.
+      if ioUserClass == "OpenJoystickVirtualHIDDevice" { return Int.min / 2 }
+      if ioUserClass == "IOHIDUserDevice" { return Int.min / 2 }
+      if UserSpaceVirtualDeviceConstants.isOJDUserSpaceSerial(serial) { return Int.min / 2 }
+      if serial == VirtualDeviceIdentityConstants.driverKitSerialNumber { return Int.min / 2 }
+
+      var s = 0
+      if let preferredTransport, let transport, transport == preferredTransport { s += 10_000 }
+      if let transport, transport != "Virtual" { s += 1_000 }
+      if transport == "USB" { s += 100 }
+      return s
+    }
+
+    let candidates = devices
+      .map { ($0, score($0)) }
+      .sorted { a, b in a.1 > b.1 }
+
+    for (dev, s) in candidates {
+      if s <= Int.min / 4 { continue }
       if let data = IOHIDDeviceGetProperty(dev, kIOHIDReportDescriptorKey as CFString) as? Data {
         return [UInt8](data)
       }
@@ -439,4 +479,3 @@ private struct HIDReportPacker: @unchecked Sendable {
     return payload
   }
 }
-

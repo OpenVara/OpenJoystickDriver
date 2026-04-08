@@ -40,6 +40,12 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   private var autoRetryBackoffNs: UInt64 = 250_000_000  // 250ms
   private var lastConnectionLostLogNs: UInt64 = 0
 
+  // MARK: - Optional exclusive-seize (Compatibility mode)
+
+  private let seizeLock = NSLock()
+  private var seizedDevice: IOHIDDevice?
+  private var seizedManager: IOHIDManager?
+
   // MARK: - Stability tracking
 
   private let stabilityLock = NSLock()
@@ -100,9 +106,38 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     connectionLock.withLock { hidDevice != nil }
   }
 
+  /// Best-effort: when enabled, tries to seize the DriverKit virtual HID device so
+  /// SDL/IOKit apps prefer the user-space controller (Compatibility mode) and do not
+  /// accidentally open the idle DriverKit device.
+  ///
+  /// This does not uninstall/disable the system extension; it only attempts exclusive open.
+  public func setCompatibilitySeizeEnabled(_ enabled: Bool) {
+    if enabled {
+      let already = seizeLock.withLock { seizedDevice != nil }
+      if already { return }
+      guard let (device, mgr) = findDevice(openOptions: IOOptionBits(kIOHIDOptionsTypeSeizeDevice)) else {
+        return
+      }
+      seizeLock.withLock {
+        seizedDevice = device
+        seizedManager = mgr
+      }
+    } else {
+      let (oldDevice, oldMgr) = seizeLock.withLock { () -> (IOHIDDevice?, IOHIDManager?) in
+        let d = seizedDevice
+        let m = seizedManager
+        seizedDevice = nil
+        seizedManager = nil
+        return (d, m)
+      }
+      if let device = oldDevice { IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeSeizeDevice)) }
+      if let mgr = oldMgr { IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone)) }
+    }
+  }
+
   @discardableResult public func connect() -> Bool {
     guard connectionLock.withLock({ enabled }) else { return false }
-    guard let (device, mgr) = findDevice() else {
+    guard let (device, mgr) = findDevice(openOptions: IOOptionBits(kIOHIDOptionsTypeNone)) else {
       print("[DextOutputDispatcher] Virtual gamepad not found — not installed or not approved")
       return false
     }
@@ -128,7 +163,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     if let mgr = oldMgr { IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone)) }
   }
 
-  private func findDevice() -> (IOHIDDevice, IOHIDManager)? {
+  private func findDevice(openOptions: IOOptionBits) -> (IOHIDDevice, IOHIDManager)? {
     // Do NOT match by VID/PID.
     //
     // During development and during sysext replacement/upgrade, the installed dext may be an
@@ -186,10 +221,15 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       let serial = strProp(device, kIOHIDSerialNumberKey as String)
       let location = intProp(device, kIOHIDLocationIDKey as String)
 
-      if serial == UserSpaceVirtualDeviceConstants.serialNumber {
+      if UserSpaceVirtualDeviceConstants.isOJDUserSpaceSerial(serial) {
         return Int.min / 2
       }
       if ioUserClass == "IOHIDUserDevice" {
+        return Int.min / 2
+      }
+      // Extra guard: our user-space devices live in the OJ namespace.
+      if (UInt32(truncatingIfNeeded: location) & 0xFFFF_0000) == VirtualDeviceIdentityConstants.userSpaceLocationIDNamespace
+      {
         return Int.min / 2
       }
 
@@ -213,7 +253,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
     for (device, s) in candidates {
       if s <= Int.min / 4 { continue }  // filtered (likely our user-space device)
-      let ret = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
+      let ret = IOHIDDeviceOpen(device, openOptions)
       if ret == kIOReturnSuccess { return (device, mgr) }
     }
 
@@ -233,7 +273,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       let now = DispatchTime.now().uptimeNanoseconds
       let shouldAttempt = connectionLock.withLock { now >= nextAutoRetryConnectNs }
       if shouldAttempt {
-        if let (newDevice, mgr) = findDevice() {
+        if let (newDevice, mgr) = findDevice(openOptions: IOOptionBits(kIOHIDOptionsTypeNone)) {
           device = newDevice
           print("[DextOutputDispatcher] Auto-retry connected to virtual gamepad")
           connectionLock.withLock {

@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Notarize the app bundle with Apple. Requires OJD_ENV=release.
+# Notarize helper for OpenJoystickDriver. Requires OJD_ENV=release.
+#
+# Human-facing entrypoint:
+#   ./scripts/ojd notarize <submit|status|history|log>
 #
 # Prerequisites:
 #   1. Developer ID signing (scripts/.env.release)
@@ -15,7 +18,24 @@
 #   OJD_ENV=release ./scripts/notarize.sh
 #
 set -euo pipefail
-source "$(dirname "$0")/lib.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/ojd-common.sh"
+
+die() { echo "ERROR: $*" >&2; exit 2; }
+
+subcmd="${1:-submit}"
+shift || true
+
+if [[ "$subcmd" == "-h" || "$subcmd" == "--help" || "$subcmd" == "help" ]]; then
+  cat <<'TXT'
+Usage:
+  OJD_ENV=release ./scripts/ojd notarize submit
+  OJD_ENV=release ./scripts/ojd notarize status [submission-id]
+  OJD_ENV=release ./scripts/ojd notarize log <submission-id>
+  OJD_ENV=release ./scripts/ojd notarize history
+TXT
+  exit 0
+fi
 
 if [[ "$OJD_ENV" != "release" ]]; then
   echo "ERROR: Notarization requires OJD_ENV=release"
@@ -40,8 +60,44 @@ MAX_RETRIES="${NOTARIZE_MAX_RETRIES:-5}"
 
 if [[ ! -d "$APP" ]]; then
   echo "ERROR: App not found at $APP"
-  echo "Run OJD_ENV=release ./scripts/rebuild.sh first."
+  echo "Run: OJD_ENV=release ./scripts/ojd rebuild release"
   exit 1
+fi
+
+AUTH_ARGS=(
+  --apple-id "$NOTARIZE_APPLE_ID"
+  --password "$NOTARIZE_PASSWORD"
+  --team-id "$DEVELOPMENT_TEAM"
+)
+
+if [[ "$subcmd" == "history" ]]; then
+  echo "Recent notarization history:"
+  xcrun notarytool history "${AUTH_ARGS[@]}"
+  exit 0
+fi
+
+if [[ "$subcmd" == "status" ]]; then
+  if [[ -n "${1:-}" ]]; then
+    echo "Checking submission: $1"
+    xcrun notarytool info "$1" "${AUTH_ARGS[@]}"
+    echo ""
+    echo "To fetch the log: OJD_ENV=release ./scripts/ojd notarize log $1"
+  else
+    echo "Recent notarization history:"
+    xcrun notarytool history "${AUTH_ARGS[@]}"
+  fi
+  exit 0
+fi
+
+if [[ "$subcmd" == "log" ]]; then
+  [[ -n "${1:-}" ]] || die "Missing submission id (Usage: ./scripts/ojd notarize log <id>)"
+  echo "Fetching log for: $1"
+  xcrun notarytool log "$1" "${AUTH_ARGS[@]}"
+  exit 0
+fi
+
+if [[ "$subcmd" != "submit" ]]; then
+  die "Unknown notarize subcommand: $subcmd"
 fi
 
 # ---------------------------------------------------------------------------
@@ -56,9 +112,7 @@ echo "  Zip: $ZIP_PATH ($(du -h "$ZIP_PATH" | cut -f1))"
 # ---------------------------------------------------------------------------
 echo "Submitting to Apple for notarization..."
 SUBMIT_OUTPUT=$(xcrun notarytool submit "$ZIP_PATH" \
-  --apple-id "$NOTARIZE_APPLE_ID" \
-  --password "$NOTARIZE_PASSWORD" \
-  --team-id "$DEVELOPMENT_TEAM" 2>&1)
+  "${AUTH_ARGS[@]}" 2>&1)
 
 echo "$SUBMIT_OUTPUT"
 
@@ -93,8 +147,8 @@ while true; do
     echo "  Submission ID: $SUBMISSION_ID"
     echo ""
     echo "  The submission is still queued with Apple — it may yet complete."
-    echo "  Check status:  OJD_ENV=release ./scripts/notarize-status.sh $SUBMISSION_ID"
-    echo "  View history:  OJD_ENV=release ./scripts/notarize-status.sh"
+    echo "  Check status:  OJD_ENV=release ./scripts/ojd notarize status $SUBMISSION_ID"
+    echo "  View history:  OJD_ENV=release ./scripts/ojd notarize history"
     echo ""
     echo "  If it completes later, staple manually:"
     echo "    xcrun stapler staple $APP"
@@ -105,9 +159,7 @@ while true; do
 
   # Query status, handling transient failures
   if INFO_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" \
-    --apple-id "$NOTARIZE_APPLE_ID" \
-    --password "$NOTARIZE_PASSWORD" \
-    --team-id "$DEVELOPMENT_TEAM" 2>&1); then
+    "${AUTH_ARGS[@]}" 2>&1); then
     CONSECUTIVE_FAILURES=0
   else
     CONSECUTIVE_FAILURES=$(( CONSECUTIVE_FAILURES + 1 ))
@@ -137,9 +189,7 @@ while true; do
       echo ""
       echo "Fetching notarization log..."
       xcrun notarytool log "$SUBMISSION_ID" \
-        --apple-id "$NOTARIZE_APPLE_ID" \
-        --password "$NOTARIZE_PASSWORD" \
-        --team-id "$DEVELOPMENT_TEAM" 2>&1 || true
+        "${AUTH_ARGS[@]}" 2>&1 || true
       exit 1
       ;;
     "in progress"|*)

@@ -110,7 +110,7 @@ public final class HIDDeviceStream: @unchecked Sendable {
 
     // Also skip our user-space virtual gamepad (IOHIDUserDevice), which intentionally
     // uses Transport="USB" for compatibility.
-    if serial == UserSpaceVirtualDeviceConstants.serialNumber
+    if UserSpaceVirtualDeviceConstants.isOJDUserSpaceSerial(serial)
       || productName == UserSpaceVirtualDeviceConstants.product
     {
       return

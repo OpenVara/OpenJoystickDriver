@@ -46,7 +46,7 @@ struct DiagnoseCommand {
 
     guard fm.fileExists(atPath: sysextDir) else {
       print("  Result: FAIL (missing SystemExtensions folder)")
-      print("  Fix: rebuild with ./scripts/build-dext.sh and reopen the /Applications copy")
+      print("  Fix: run: ./scripts/ojd rebuild dev")
       return
     }
 
@@ -54,7 +54,7 @@ struct DiagnoseCommand {
     let dexts = items.filter { $0.hasSuffix(".dext") }.sorted()
     if dexts.isEmpty {
       print("  Result: FAIL (no .dext bundles found)")
-      print("  Fix: rebuild with ./scripts/build-dext.sh and reopen the /Applications copy")
+      print("  Fix: run: ./scripts/ojd build dext")
       return
     }
 
@@ -71,7 +71,7 @@ struct DiagnoseCommand {
       print("  Result: PASS (expected id present: \(expectedID))")
     } else {
       print("  Result: FAIL (expected id missing: \(expectedID))")
-      print("  Fix: rebuild with ./scripts/build-dext.sh and reopen the /Applications copy")
+      print("  Fix: run: ./scripts/ojd build dext")
     }
   }
 
@@ -109,9 +109,9 @@ struct DiagnoseCommand {
 
   private func printTroubleshooting() {
     print("Troubleshooting:")
-    print("  USB access denied?")
-    print("    -> Run: ./scripts/sign-dev.sh" + " && sudo .build/debug/" + "OpenJoystickDriver run")
     print("  No input from controller?")
-    print("    -> Grant Input Monitoring:" + " System Settings > Privacy" + " > Input Monitoring")
+    print("    -> Grant Input Monitoring: System Settings → Privacy & Security → Input Monitoring")
+    print("  DriverKit extension missing/broken?")
+    print("    -> Run: ./scripts/ojd rebuild dev")
   }
 }

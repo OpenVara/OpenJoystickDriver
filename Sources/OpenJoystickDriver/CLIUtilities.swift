@@ -72,7 +72,7 @@ func requireValidBundleSignatureOrExit(action: String) {
       print("ERROR: \(action) failed: this app bundle's signature is INVALID (modified after signing).")
       print("")
       print("Fix:")
-      print("  1) Run: ./scripts/rebuild-fast.sh")
+      print("  1) Run: ./scripts/ojd rebuild-fast dev")
       print("  2) Then re-run: /Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless \(action.lowercased())")
       print("")
       print("Diagnostic command:")

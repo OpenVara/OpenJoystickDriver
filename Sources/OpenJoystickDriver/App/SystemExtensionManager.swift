@@ -172,7 +172,7 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
         lines.append("")
         lines.append("Fix checklist (no guesswork):")
         lines.append("  1) Make sure you are running `/Applications/OpenJoystickDriver.app` (not `.build/...`).")
-        lines.append("  2) If you are streaming / cannot reboot: use `./scripts/rebuild-fast.sh` to avoid sysext upgrades.")
+        lines.append("  2) If you are streaming / cannot reboot: use `./scripts/ojd rebuild-fast dev` to avoid sysext upgrades.")
         lines.append("  3) If you see \"stale sysext copies\" in diagnostics, macOS typically needs a reboot to fully clean up old versions.")
         lines.append("  4) Meanwhile, you can still use Compatibility mode (user-space virtual device) without touching the system extension.")
         return lines.joined(separator: "\n")

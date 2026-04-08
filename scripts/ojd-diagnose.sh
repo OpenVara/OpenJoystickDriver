@@ -1,9 +1,129 @@
 #!/usr/bin/env bash
-# Diagnose DriverKit extension state: activation, binaries, signing, IORegistry.
+# Diagnostics helper for OpenJoystickDriver.
+#
+# Human-facing entrypoint:
+#   ./scripts/ojd diagnose <subcommand>
+#
+# Subcommands:
+#   dext (default), sdl3, pcsx2-latency
+#
 # Runs all checks regardless of individual failures.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/lib.sh"
+source "$SCRIPT_DIR/ojd-common.sh"
+
+die() { echo "ERROR: $*" >&2; exit 2; }
+
+cmd="${1:-dext}"
+shift || true
+
+if [[ "$cmd" == "-h" || "$cmd" == "--help" || "$cmd" == "help" ]]; then
+  cat <<'TXT'
+Usage:
+  ./scripts/ojd diagnose dext
+  ./scripts/ojd diagnose sdl3 [--seconds N] [other args]
+  ./scripts/ojd diagnose pcsx2-latency
+TXT
+  exit 0
+fi
+
+run_sdl3_probe_native() {
+  local ROOT
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  local SRC="$ROOT/tools/sdl3-gamepad-probe/main.c"
+  local OUT="/tmp/ojd-sdl3-probe"
+
+  command -v pkg-config >/dev/null 2>&1 || die "pkg-config not found (brew install pkg-config)"
+  pkg-config --exists sdl3 || die "SDL3 not found (brew install sdl3)"
+  [[ -f "$SRC" ]] || die "Missing probe source: $SRC"
+
+  echo "Building SDL3 probe (native)..."
+  clang "$SRC" $(pkg-config --cflags --libs sdl3) -o "$OUT"
+
+  echo
+  echo "Running: $OUT $*"
+  echo "Tip: if it prints 'Found 0 joystick(s)', grant Input Monitoring to your terminal app:"
+  echo "  System Settings -> Privacy & Security -> Input Monitoring"
+  echo
+  "$OUT" "$@"
+}
+
+run_sdl3_probe_pcsx2_x86_64() {
+  local PCSX2_APP="/Applications/PCSX2.app"
+  local PCSX2_SDL3="$PCSX2_APP/Contents/Frameworks/libSDL3.0.dylib"
+  local ROOT SRC OUT
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  SRC="$ROOT/tools/sdl3-gamepad-probe/main.c"
+  OUT="/tmp/ojd-sdl3-probe-pcsx2-x86_64"
+
+  [[ -d "$PCSX2_APP" ]] || die "PCSX2 not found at: $PCSX2_APP"
+  [[ -f "$PCSX2_SDL3" ]] || die "PCSX2 SDL3 dylib not found at: $PCSX2_SDL3"
+  [[ -f "$SRC" ]] || die "Missing probe source: $SRC"
+
+  echo "Building SDL3 probe (PCSX2/Rosetta x86_64)..."
+  clang -arch x86_64 "$SRC" -I/opt/homebrew/include -I/opt/homebrew/include/SDL3 \
+    -L"$PCSX2_APP/Contents/Frameworks" -lSDL3.0 \
+    -Wl,-headerpad_max_install_names \
+    -o "$OUT"
+
+  echo "Patching dylib path so it loads PCSX2's SDL3..."
+  install_name_tool -change "@executable_path/../Frameworks/libSDL3.0.dylib" "$PCSX2_SDL3" "$OUT" || true
+
+  echo
+  echo "Running: $OUT $*"
+  echo "Tip: Input Monitoring must be granted to the terminal app you are using."
+  echo
+  "$OUT" "$@"
+}
+
+run_pcsx2_latency_triage() {
+  local APP_BIN="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver"
+  local PCSX2_DB="/Applications/PCSX2.app/Contents/Resources/game_controller_db.txt"
+
+  echo "=== OpenJoystickDriver vs SDL3 latency triage ==="
+  echo
+
+  if [[ -x "$APP_BIN" ]]; then
+    echo "0) OJD daemon status (shows mode/identity/output):"
+    "$APP_BIN" --headless status || true
+    echo
+    echo "1) Virtual device self-test (press buttons while it runs):"
+    "$APP_BIN" --headless selftest 5 || true
+    echo
+  else
+    echo "1) SKIP: OpenJoystickDriver not installed at:"
+    echo "   $APP_BIN"
+    echo "   Fix: build+install the app bundle, then re-run this script."
+    echo
+  fi
+
+  echo "2) SDL3 probe (native):"
+  if [[ -f "$PCSX2_DB" ]]; then
+    run_sdl3_probe_native --seconds 10 --mappings-file "$PCSX2_DB" || true
+  else
+    run_sdl3_probe_native --seconds 10 || true
+  fi
+  echo
+
+  echo "3) SDL3 probe (PCSX2/Rosetta x86_64, uses PCSX2's bundled SDL3):"
+  if [[ -f "$PCSX2_DB" ]]; then
+    run_sdl3_probe_pcsx2_x86_64 --seconds 10 --mappings-file "$PCSX2_DB" || true
+  else
+    run_sdl3_probe_pcsx2_x86_64 --seconds 10 || true
+  fi
+}
+
+if [[ "$cmd" == "sdl3" ]]; then
+  run_sdl3_probe_native "$@"
+  exit 0
+fi
+
+if [[ "$cmd" == "pcsx2-latency" ]]; then
+  run_pcsx2_latency_triage
+  exit 0
+fi
+
+# cmd == dext falls through to the dext diagnostics implementation below.
 
 # zsh has a 'log' builtin that shadows /usr/bin/log — always use full path
 LOG=/usr/bin/log

@@ -50,7 +50,8 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     self.dextDispatcher = dextDispatcher
     self.userSpaceEnabled = UserDefaults.standard.bool(forKey: Self.userSpaceEnabledDefaultsKey)
     let savedCompat = UserDefaults.standard.string(forKey: Self.compatibilityIdentityDefaultsKey)
-    self.compatibilityIdentity = CompatibilityIdentity(rawValue: savedCompat ?? "") ?? .generic
+    // Default to Xbox One identity so SDL/Steam auto-mapping works out of the box.
+    self.compatibilityIdentity = CompatibilityIdentity(rawValue: savedCompat ?? "") ?? .xboxOne
     let savedVirtual = UserDefaults.standard.string(forKey: Self.virtualDeviceModeDefaultsKey)
     if let raw = savedVirtual, let mode = VirtualDeviceMode(rawValue: raw) {
       self.virtualDeviceMode = mode
@@ -89,37 +90,29 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     case .auto:
       // Prefer DriverKit, but allow an automatic one-way fall back to user-space if DriverKit
       // output becomes unstable (during sysext replacement/upgrade, or if the dext isn't ready).
+      dextDispatcher.setCompatibilitySeizeEnabled(false)
       dextDispatcher.setEnabled(true)
       _ = setUserSpaceVirtualDeviceEnabledInternal(false)
       effectiveOutputMode = .primaryOnly
       dispatcher.setMode(.primaryOnly)
       UserDefaults.standard.set(CompositeOutputDispatcher.Mode.primaryOnly.rawValue, forKey: Self.outputModeDefaultsKey)
     case .driverKit:
+      dextDispatcher.setCompatibilitySeizeEnabled(false)
       dextDispatcher.setEnabled(true)
       _ = setUserSpaceVirtualDeviceEnabledInternal(false)
       effectiveOutputMode = .primaryOnly
       dispatcher.setMode(.primaryOnly)
       UserDefaults.standard.set(CompositeOutputDispatcher.Mode.primaryOnly.rawValue, forKey: Self.outputModeDefaultsKey)
     case .compatUserSpace:
-      // If DriverKit is active, do not allow Compatibility: SDL-based apps will see two controllers.
-      if dextDispatcher.isConnected() {
-        userSpaceStatus =
-          "error: Compatibility is disabled while DriverKit is active (would create duplicate controllers in SDL/PCSX2)."
-        dextDispatcher.setEnabled(true)
-        effectiveOutputMode = .primaryOnly
-        dispatcher.setMode(.primaryOnly)
-        UserDefaults.standard.set(
-          CompositeOutputDispatcher.Mode.primaryOnly.rawValue,
-          forKey: Self.outputModeDefaultsKey
-        )
-        return
-      }
       // Compatibility is user-requested. Do not rewrite the requested mode on failures.
       //
       // If user-space creation fails, keep DriverKit enabled as a fallback but keep the
       // requested mode as Compatibility and show an explicit error string.
       if setUserSpaceVirtualDeviceEnabledInternal(true) {
         dextDispatcher.setEnabled(false)
+        // Best-effort: seize the DriverKit virtual device so SDL/IOKit apps don't
+        // open the idle DriverKit device while Compatibility is active.
+        dextDispatcher.setCompatibilitySeizeEnabled(true)
         effectiveOutputMode = .secondaryOnly
         dispatcher.setMode(.secondaryOnly)
         UserDefaults.standard.set(
@@ -127,6 +120,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
           forKey: Self.outputModeDefaultsKey
         )
       } else {
+        dextDispatcher.setCompatibilitySeizeEnabled(false)
         dextDispatcher.setEnabled(true)
         effectiveOutputMode = .primaryOnly
         dispatcher.setMode(.primaryOnly)
@@ -142,6 +136,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         }
       }
     case .both:
+      dextDispatcher.setCompatibilitySeizeEnabled(false)
       dextDispatcher.setEnabled(true)
       if setUserSpaceVirtualDeviceEnabledInternal(true) {
         effectiveOutputMode = .both
@@ -398,7 +393,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       userSpaceStatus = "off"
     }
 
-    compatibilityIdentity = .generic
+    compatibilityIdentity = .xboxOne
     virtualDeviceMode = .compatUserSpace
     effectiveOutputMode = .primaryOnly
     applyMode(.compatUserSpace)
@@ -426,11 +421,24 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       format = OJDGenericGamepadFormat()
     case .xboxOne:
       profile = .xboxOneS
-      // Full Xbox One HID identity for SDL/Steam/PCSX2:
-      // - VID/PID + strings match a real Xbox Wireless Controller
-      // - report descriptor matches the expected Xbox BT HID layout
-      // - input reports are packed according to that descriptor (Report ID 1)
-      format = try HIDDescriptorReportFormat(descriptor: XboxOneBluetoothHIDDescriptor.descriptor)
+      // Xbox One identity for SDL/Steam/PCSX2:
+      // - Prefer the physical HID report descriptor exposed by macOS for 045E:02EA (USB).
+      //   This makes SDL treat the virtual device as a real Xbox controller.
+      // - Fall back to a built-in descriptor if the physical device is not present.
+      if let physical = HIDDescriptorReportFormat.copyPhysicalReportDescriptor(
+        vendorID: profile.vendorID,
+        productID: profile.productID,
+        preferredTransport: "USB"
+      ) {
+        do {
+          format = try HIDDescriptorReportFormat(descriptor: physical)
+        } catch {
+          // If parsing fails on this OS build, fall back to the built-in descriptor.
+          format = try HIDDescriptorReportFormat(descriptor: XboxOneBluetoothHIDDescriptor.descriptor)
+        }
+      } else {
+        format = try HIDDescriptorReportFormat(descriptor: XboxOneBluetoothHIDDescriptor.descriptor)
+      }
     case .xbox360:
       throw CompatError.unsupported(
         "Xbox 360 (experimental) is not supported yet (no built-in HID descriptor available). Use Generic or Xbox One (HID)."
@@ -555,8 +563,8 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       let manufacturer = strProp(kIOHIDManufacturerKey as String)
 
       let isUserSpace =
-        (serial == UserSpaceVirtualDeviceConstants.serialNumber)
-        || (location == Int(VirtualDeviceIdentityConstants.userSpaceLocationID))
+        UserSpaceVirtualDeviceConstants.isOJDUserSpaceSerial(serial)
+        || ((UInt32(truncatingIfNeeded: location) & 0xFFFF_0000) == VirtualDeviceIdentityConstants.userSpaceLocationIDNamespace)
         || (ioUserClass == "IOHIDUserDevice")
 
       let looksLikeOJDVirtual =

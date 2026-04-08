@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Shared constants and helpers for OpenJoystickDriver build scripts.
-# Source this file: source "$(dirname "$0")/lib.sh"
+# Shared constants and helpers for OpenJoystickDriver scripts.
+# Source this file: source "$(dirname "$0")/ojd-common.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -208,7 +208,15 @@ verify_profile_cert() {
     echo ""
     echo "ERROR: Provisioning profile cert does not match signing identity!"
     echo ""
-    "$SCRIPT_DIR/check-profiles.sh"
+    echo "  profile: $profile"
+    echo "  profile_cert_sha1: $profile_sha1"
+    echo "  keychain_identity_sha1: $keychain_sha1"
+    echo ""
+    echo "Fix (no guessing):"
+    echo "  1) Run: ./scripts/ojd signing doctor"
+    echo "  2) Regenerate the provisioning profile selecting the certificate you have locally."
+    echo "  3) Reinstall profiles: ./scripts/ojd signing install-profiles"
+    echo "  4) Re-generate env:     ./scripts/ojd signing configure"
     echo ""
     return 1
   fi

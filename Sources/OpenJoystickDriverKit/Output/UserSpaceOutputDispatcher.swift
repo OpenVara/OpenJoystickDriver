@@ -34,13 +34,22 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
 
   private let profile: VirtualDeviceProfile
   private let format: any VirtualGamepadReportFormat
-  private var userDevice: IOHIDUserDevice?
-  private let deviceLock = NSLock()
+  private let registryLock = NSLock()
+
+  private final class Entry {
+    let device: IOHIDUserDevice
+    let lock = NSLock()
+    var state = VirtualGamepadState()
+
+    init(device: IOHIDUserDevice) { self.device = device }
+  }
+
+  /// One user-space IOHIDUserDevice per connected physical controller.
+  ///
+  /// Keyed by the physical identifier provided by the input pipeline.
+  private var entries: [DeviceIdentifier: Entry] = [:]
 
   // MARK: - Report state
-
-  private let reportLock = NSLock()
-  private var state = VirtualGamepadState()
 
   /// Last creation error (human-readable), for UI display.
   public private(set) var status: String = "off"
@@ -51,18 +60,30 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
   ) throws {
     self.profile = profile
     self.format = format
-    try createDevice()
+    // Device(s) are created lazily on first dispatch for each physical controller.
   }
 
   deinit { close() }
 
   public func close() {
-    deviceLock.withLock { userDevice = nil }
+    registryLock.withLock { entries.removeAll() }
     status = "off"
   }
 
-  private func createDevice() throws {
+  private func recomputeStatusLocked() {
+    if entries.isEmpty {
+      if !status.hasPrefix("error:") { status = "off" }
+      return
+    }
+    if !status.hasPrefix("error:") {
+      status = "on (devices=\(entries.count))"
+    }
+  }
+
+  private func createDevice(for identifier: DeviceIdentifier) throws -> IOHIDUserDevice {
     let descriptor = Data(format.descriptor)
+    let serialNumber = UserSpaceVirtualDeviceConstants.serialNumber(for: identifier)
+    let locationID = UserSpaceVirtualDeviceConstants.locationID(for: identifier)
 
     // IMPORTANT: Keep the properties dictionary minimal. Some HID keys that are valid on
     // real devices are rejected for IOHIDUserDevice creation on newer macOS builds.
@@ -81,7 +102,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       kIOHIDVersionNumberKey as String: NSNumber(value: profile.versionNumber),
       kIOHIDProductKey as String: profile.productName,
       kIOHIDManufacturerKey as String: profile.manufacturer,
-      kIOHIDSerialNumberKey as String: UserSpaceVirtualDeviceConstants.serialNumber,
+      kIOHIDSerialNumberKey as String: serialNumber,
       kIOHIDTransportKey as String: "USB",
       kIOHIDMaxInputReportSizeKey as String: NSNumber(
         value: (format.inputReportID == nil) ? format.inputReportPayloadSize : (format.inputReportPayloadSize + 1)
@@ -108,10 +129,10 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       ("no-usage", baseProperties),
     ]
     // Some macOS builds reject certain LocationID values for IOHIDUserDevice creation.
-    // Try a stable-but-small LocationID first, then fall back to the namespaced constant.
+    // Try the computed namespaced LocationID first, then a small stable fallback.
     let candidateLocationIDs: [UInt32] = [
-      0x1000_0002,  // stable, non-zero; avoids LocationID=0/1 ambiguity in some consumers
-      UserSpaceVirtualDeviceConstants.locationID,
+      locationID,
+      0x1000_0002,
     ]
 
     var dev: IOHIDUserDevice?
@@ -122,7 +143,6 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
         properties[kIOHIDLocationIDKey as String] = NSNumber(value: Int64(loc))
         dev = tryCreate(properties)
         if dev != nil {
-          if status == "off" { status = "on (\(variant.label))" }
           break attemptLoop
         }
       }
@@ -131,7 +151,6 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       properties.removeValue(forKey: kIOHIDLocationIDKey as String)
       dev = tryCreate(properties)
       if dev != nil {
-        status = "warning: created without LocationID (\(variant.label))"
         break attemptLoop
       }
     }
@@ -145,8 +164,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       status = "error: \(CreationError.createFailed)"
       throw CreationError.createFailed
     }
-    deviceLock.withLock { userDevice = dev }
-    if status == "off" { status = "on" }
+    return dev
   }
 
   private static func hasEntitlement(_ entitlement: String) -> Bool {
@@ -162,17 +180,35 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
 
   public func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) async {
     guard !suppressOutput else { return }
-    guard let dev = deviceLock.withLock({ userDevice }) else { return }
 
-    let report = reportLock.withLock { () -> [UInt8] in
-      for event in events { applyEvent(event, deadzone: 0.15) }
-      return format.buildInputReport(from: state)
+    var entry: Entry? = registryLock.withLock { entries[identifier] }
+    if entry == nil {
+      do {
+        let dev = try createDevice(for: identifier)
+        let newEntry = Entry(device: dev)
+        registryLock.withLock {
+          entries[identifier] = newEntry
+          if !status.hasPrefix("error:") { status = "on" }
+          recomputeStatusLocked()
+        }
+        entry = newEntry
+      } catch {
+        status = "error: \(error)"
+        return
+      }
+    }
+
+    guard let entry else { return }
+
+    let report = entry.lock.withLock { () -> [UInt8] in
+      for event in events { applyEvent(event, deadzone: 0.15, state: &entry.state) }
+      return format.buildInputReport(from: entry.state)
     }
 
     let result = report.withUnsafeBytes { ptr -> IOReturn in
       guard let base = ptr.baseAddress else { return kIOReturnBadArgument }
       return IOHIDUserDeviceHandleReportWithTimeStamp(
-        dev,
+        entry.device,
         mach_absolute_time(),
         base.assumingMemoryBound(to: UInt8.self),
         ptr.count
@@ -188,7 +224,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
 
   // MARK: - Event application (called inside reportLock.withLock)
 
-  private func applyEvent(_ event: ControllerEvent, deadzone: Float) {
+  private func applyEvent(_ event: ControllerEvent, deadzone: Float, state: inout VirtualGamepadState) {
     switch event {
     case .buttonPressed(let btn):
       if let bit = buttonBit(for: btn) { state.buttons |= (1 << bit) }

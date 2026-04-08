@@ -49,7 +49,7 @@ enum VirtualDeviceDiagnostics {
       let isOJDDriverKit = (ioUserClass == "OpenJoystickVirtualHIDDevice")
       let isOJDUserSpace =
         (ioUserClass == "IOHIDUserDevice")
-        || (serial == UserSpaceVirtualDeviceConstants.serialNumber)
+        || UserSpaceVirtualDeviceConstants.isOJDUserSpaceSerial(serial)
 
       // Only report:
       // - OJD virtual devices (DriverKit or user-space), OR
@@ -60,7 +60,7 @@ enum VirtualDeviceDiagnostics {
 
       let serialKind: XPCSerialKind =
         (serial == nil || serial == "") ? .none
-        : ((serial == UserSpaceVirtualDeviceConstants.serialNumber) ? .ojdUserSpace : .present)
+        : (UserSpaceVirtualDeviceConstants.isOJDUserSpaceSerial(serial) ? .ojdUserSpace : .present)
 
       return XPCHIDGamepadSnapshot(
         vendorID: UInt16(truncatingIfNeeded: vid),
