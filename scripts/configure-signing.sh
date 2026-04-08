@@ -273,7 +273,16 @@ def pick_identity_matching_profile(prefix: str, profile_path: str) -> str:
         f"  profile_team: {profile_team}\n"
         f"  profile_embedded_cert_sha1: {want}\n"
         f"  keychain_{prefix.replace(' ', '_').lower()}_sha1s: {sha1_str}\n"
-        "Fix: regenerate the provisioning profile selecting the certificate you have locally, or create/import the matching certificate+private-key."
+        "\n"
+        "Fix (no guessing):\n"
+        "  1) Identify the Apple Development cert you have locally:\n"
+        "       ./scripts/cert-info.sh --full \"$HOME/Documents/Certificates/development.cer\"\n"
+        "  2) Identify which cert your DEXT profile embeds:\n"
+        "       ./scripts/profile-cert-info.sh --full \"$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver_VirtualHIDDevice.provisionprofile\"\n"
+        "  3) In Apple Developer portal, regenerate the DEXT provisioning profile and explicitly select\n"
+        "     the Apple Development certificate that matches your local cert.\n"
+        "     (If the portal picked a different cert, the embedded SHA1 will differ and builds will fail.)\n"
+        "  4) Reinstall profiles: ./scripts/install-profiles.sh \"$HOME/Documents/Profiles\"\n"
     )
 
 # Match identities to the certs embedded in the relevant profiles (most reliable).
