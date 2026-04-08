@@ -267,6 +267,7 @@ def pick_identity_matching_profile(prefix: str, profile_path: str) -> str:
             return got
     profile_team = team_id_from_profile(profile_path)
     sha1_str = ", ".join(available_sha1s) if available_sha1s else "UNKNOWN"
+    profile_base = os.path.basename(profile_path)
     raise SystemExit(
         f"ERROR: No {prefix} identity matches the certificate embedded in provisioning profile.\n"
         f"  profile: {profile_path}\n"
@@ -275,17 +276,16 @@ def pick_identity_matching_profile(prefix: str, profile_path: str) -> str:
         f"  keychain_{prefix.replace(' ', '_').lower()}_sha1s: {sha1_str}\n"
         "\n"
         "Fix (no guessing):\n"
-        "  1) Identify the Apple Development cert you have locally:\n"
-        "       ./scripts/cert-info.sh --full \"$HOME/Documents/Certificates/development.cer\"\n"
-        "  2) Identify which cert your DEXT profile embeds:\n"
-        "       ./scripts/profile-cert-info.sh --full \"$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver_VirtualHIDDevice.provisionprofile\"\n"
-        "  2b) If the profile embeds a cert you *do* have a private key for, but it isn't present as a Keychain identity,\n"
-        "      import the embedded cert into Keychain:\n"
-        "       ./scripts/import-embedded-cert-from-profile.sh \"$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver_VirtualHIDDevice.provisionprofile\"\n"
-        "  3) In Apple Developer portal, regenerate the DEXT provisioning profile and explicitly select\n"
-        "     the Apple Development certificate that matches your local cert.\n"
-        "     (If the portal picked a different cert, the embedded SHA1 will differ and builds will fail.)\n"
-        "  4) Reinstall profiles: ./scripts/install-profiles.sh \"$HOME/Documents/Profiles\"\n"
+        f"  1) Show what certificate this profile embeds:\n"
+        f"       ./scripts/profile-cert-info.sh --full \"$HOME/Library/MobileDevice/Provisioning Profiles/{profile_base}\"\n"
+        "  2) Show what identities you can actually sign with (must have private key):\n"
+        "       security find-identity -v -p codesigning\n"
+        "  3) If the embedded cert SHA1 exists in Keychain but is not a signing identity yet,\n"
+        "     import it from the profile (this only helps if you already have the matching private key):\n"
+        f"       ./scripts/import-embedded-cert-from-profile.sh \"$HOME/Library/MobileDevice/Provisioning Profiles/{profile_base}\"\n"
+        "  4) If you still cannot get a matching identity, regenerate the provisioning profile in the Apple Developer portal\n"
+        "     and explicitly select the certificate that matches an identity you have locally.\n"
+        "  5) Reinstall profiles: ./scripts/install-profiles.sh \"$HOME/Documents/Profiles\"\n"
     )
 
 # Match identities to the certs embedded in the relevant profiles (most reliable).
@@ -293,7 +293,6 @@ def pick_identity_matching_profile(prefix: str, profile_path: str) -> str:
 # Important: for building the DriverKit extension we must match the certificate
 # embedded in the DEXT provisioning profile (not the GUI provisioning profile).
 apple_dev_identity = pick_identity_matching_profile("Apple Development", dext_profile)
-devid_app_identity = pick_identity_matching_profile("Developer ID Application", gui_devid_profile)
 
 dext_build_profile_name = profile_name(dext_profile) or "OpenJoystickDriver (VirtualHIDDevice)"
 
@@ -304,6 +303,19 @@ dev_env.write_text(
     f'DEXT_BUILD_PROFILE="{dext_build_profile_name}"\n',
     encoding="utf-8",
 )
+
+print("Wrote scripts/.env.dev")
+
+try:
+    devid_app_identity = pick_identity_matching_profile("Developer ID Application", gui_devid_profile)
+except SystemExit as e:
+    # Development builds can still proceed. Release signing is publisher-only.
+    print("", file=sys.stderr)
+    print("WARN: Release signing is NOT configured; Developer ID identity/profile mismatch:", file=sys.stderr)
+    print(str(e), file=sys.stderr)
+    print("", file=sys.stderr)
+    print("Wrote scripts/.env.dev (OK).", file=sys.stderr)
+    raise SystemExit(0)
 
 rel_env.write_text(
     "# Release signing (generated). Add notarization credentials separately.\n"
@@ -316,6 +328,5 @@ rel_env.write_text(
     encoding="utf-8",
 )
 
-print("Wrote scripts/.env.dev")
 print("Wrote scripts/.env.release")
 PY

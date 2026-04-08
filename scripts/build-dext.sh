@@ -78,14 +78,10 @@ DEXT_BUILD_PROFILE="${DEXT_BUILD_PROFILE:-OpenJoystickDriver (VirtualHIDDevice)}
 resolve_xcodebuild_identity() {
   local id="$1"
   # Prefer passing the SHA1 identity straight through to xcodebuild.
-  #
-  # Reason: we've seen cases where the Apple Development certificate display name ends
-  # in "(XXXXXXXXXX)" that does NOT match the TeamIdentifier (OU) and Xcode rejects it
-  # when CODE_SIGN_IDENTITY is a full "Apple Development: … (…)" string.
-  #
-  # Passing SHA1 avoids name-based matching.
+  # This avoids name-based matching (which can accidentally pick a revoked cert
+  # when multiple "Apple Development: …" certs exist in Keychain).
   if [[ "$id" =~ ^[0-9A-Fa-f]{40}$ ]]; then
-    echo "Apple Development"
+    echo "$id"
     return 0
   fi
 
@@ -169,7 +165,7 @@ if certs:
 
 print(sha, team, ou)
 PY
-  )
+  ) || true
 
   # Only enforce this when `security find-identity` is usable (GUI session).
   KEYCHAIN_SHA1S="$(security find-identity -v -p codesigning 2>/dev/null | awk '/\"Apple Development:/{print tolower($2)}' | tr '\n' ' ')"
@@ -242,7 +238,7 @@ if certs:
 
 print(team, ou)
 PY
-  )
+  ) || true
 
   if [[ -n "${PROFILE_TEAM:-}" && -n "${CERT_OU:-}" && "$PROFILE_TEAM" != "$CERT_OU" ]]; then
     echo ""

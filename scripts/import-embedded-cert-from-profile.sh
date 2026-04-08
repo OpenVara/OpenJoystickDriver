@@ -9,7 +9,24 @@
 # This script does NOT print the certificate contents.
 set -euo pipefail
 
-profile="${1:-}"
+trim_ws() {
+  local s="$1"
+  # trim leading
+  s="${s#"${s%%[!$' \t\r\n']*}"}"
+  # trim trailing
+  s="${s%"${s##*[!$' \t\r\n']}"}"
+  printf '%s' "$s"
+}
+
+filtered_args=()
+for a in "$@"; do
+  t="$(trim_ws "$a")"
+  if [[ -n "$t" ]]; then
+    filtered_args+=("$t")
+  fi
+done
+
+profile="${filtered_args[0]:-}"
 if [[ -z "$profile" || "${profile:-}" == "-h" || "${profile:-}" == "--help" ]]; then
   cat <<'TXT'
 Usage:
@@ -19,14 +36,31 @@ Example:
   ./scripts/import-embedded-cert-from-profile.sh \
     "$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver_VirtualHIDDevice.provisionprofile"
 
+Common mistake:
+  If you type a stray backslash + space (`\ `) you will accidentally pass an extra
+  blank argument and this script will treat it as the profile path.
+  Fix: run the command on ONE line (copy/paste exactly) with quotes.
+
 After running, verify:
   security find-identity -v -p codesigning
 TXT
   exit 2
 fi
 
+if [[ ${#filtered_args[@]} -ne 1 ]]; then
+  echo "ERROR: expected exactly 1 argument (profile path), got ${#filtered_args[@]}." 1>&2
+  echo "Fix: run:" 1>&2
+  echo "  ./scripts/import-embedded-cert-from-profile.sh \"$profile\"" 1>&2
+  exit 2
+fi
+
 if [[ ! -f "$profile" ]]; then
   echo "ERROR: missing profile file: $profile" 1>&2
+  echo "" 1>&2
+  echo "Fix: check what profiles you actually have installed:" 1>&2
+  echo "  ls -la \"$HOME/Library/MobileDevice/Provisioning Profiles\" | sed -n '1,80p'" 1>&2
+  echo "" 1>&2
+  echo "If the file exists there, re-run with that exact path in quotes." 1>&2
   exit 1
 fi
 
@@ -69,4 +103,3 @@ echo "Done."
 echo ""
 echo "Now run:"
 echo "  security find-identity -v -p codesigning"
-
