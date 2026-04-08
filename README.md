@@ -166,12 +166,27 @@ If the controller only appears (or only works) when you enable **Enable MFI Driv
 To debug whether SDL is receiving events at all, build and run the SDL3 probe:
 
 ```bash
-clang tools/sdl3-gamepad-probe/main.c $(pkg-config --cflags --libs sdl3) -o /tmp/sdl3-gamepad-probe
-/tmp/sdl3-gamepad-probe
+./scripts/sdl3-probe.sh --seconds 10
 ```
 
 If the probe prints no `axis`/`button` events while you press inputs, SDL isn’t receiving input from the virtual device (PCSX2 SDL input will also fail).
 Enable Compatibility mode in the menu bar app (`Mode` → `Compatibility`) and try again.
+
+### PCSX2 is Intel (Rosetta): compare SDL3 behavior
+
+Some PCSX2 builds ship as Intel-only and run under Rosetta. SDL input behavior can differ between:
+
+- native arm64 SDL3
+- Intel (x86_64) SDL3 under Rosetta
+
+This repo includes a script that runs both probes back-to-back:
+
+```bash
+./scripts/diagnose-pcsx2-input-latency.sh
+```
+
+If the native probe reports instant events but the PCSX2/Rosetta probe reports 0 devices (or very delayed events),
+the bottleneck is on the PCSX2/Rosetta SDL input path, not in OpenJoystickDriver.
 
 ### If you see `setReport error: -1ffffd15`
 
