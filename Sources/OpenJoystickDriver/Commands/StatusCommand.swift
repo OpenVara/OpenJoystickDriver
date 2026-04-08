@@ -39,6 +39,24 @@ struct StatusCommand {
     print("Permissions:")
     print("  Input Monitoring : " + payload.inputMonitoring)
     print("")
+    if let mode = payload.virtualDeviceMode {
+      print("Virtual device mode:")
+      print("  requested : \(mode)")
+      if let output = payload.effectiveOutputMode {
+        print("  output    : \(output)")
+      }
+      if let id = payload.compatibilityIdentity {
+        print("  identity  : \(id)")
+      }
+      if let enabled = payload.userSpaceVirtualDeviceEnabled {
+        let s = enabled ? "enabled" : "disabled"
+        print("  user-space: \(s)")
+      }
+      if let s = payload.userSpaceVirtualDeviceStatus {
+        print("  status    : \(s)")
+      }
+      print("")
+    }
     if payload.connectedDevices.isEmpty {
       print("Devices: (none connected)")
     } else {

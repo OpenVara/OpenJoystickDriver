@@ -1,17 +1,18 @@
 #include <SDL3/SDL.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#
+
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #endif
-#
+
 static const char *env_or_unset(const char *key) {
   const char *v = getenv(key);
   return v ? v : "(unset)";
 }
-#
+
 static void print_joystick_id(SDL_JoystickID id) {
   const char *joystick_name = SDL_GetJoystickNameForID(id);
   const char *gamepad_name = SDL_GetGamepadNameForID(id);
@@ -45,7 +46,7 @@ static void print_joystick_id(SDL_JoystickID id) {
     }
   }
 }
-#
+
 static int parse_seconds(int argc, char **argv) {
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "--seconds") == 0 && (i + 1) < argc) {
@@ -57,19 +58,36 @@ static int parse_seconds(int argc, char **argv) {
   }
   return 10;
 }
-#
+
+static const char *parse_mappings_file(int argc, char **argv) {
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "--mappings-file") == 0 && (i + 1) < argc) {
+      return argv[i + 1];
+    }
+  }
+  return NULL;
+}
+
+static int file_exists(const char *path) {
+  FILE *f = fopen(path, "rb");
+  if (!f) return 0;
+  fclose(f);
+  return 1;
+}
+
 int main(int argc, char **argv) {
   int seconds = parse_seconds(argc, argv);
-#
+  const char *mappings_file = parse_mappings_file(argc, argv);
+
   int v = SDL_GetVersion();
   int major = SDL_VERSIONNUM_MAJOR(v);
   int minor = SDL_VERSIONNUM_MINOR(v);
   int patch = SDL_VERSIONNUM_MICRO(v);
-#
+
   printf("SDL linked version: %d.%d.%d (raw=%d)\n", major, minor, patch, v);
   printf("SDL_JOYSTICK_MFI=%s\n", env_or_unset("SDL_JOYSTICK_MFI"));
   printf("SDL_JOYSTICK_IOKIT=%s\n", env_or_unset("SDL_JOYSTICK_IOKIT"));
-#
+
   if (!SDL_Init(SDL_INIT_GAMEPAD | SDL_INIT_JOYSTICK | SDL_INIT_EVENTS)) {
     fprintf(stderr, "ERROR: SDL_Init failed: %s\n", SDL_GetError());
     fprintf(stderr, "\nWhat to do:\n");
@@ -77,7 +95,23 @@ int main(int argc, char **argv) {
     fprintf(stderr, "    System Settings -> Privacy & Security -> Input Monitoring\n");
     return 2;
   }
-#
+
+  if (!mappings_file) {
+    const char *default_db = "/Applications/PCSX2.app/Contents/Resources/game_controller_db.txt";
+    if (file_exists(default_db)) mappings_file = default_db;
+  }
+
+  if (mappings_file) {
+    int added = SDL_AddGamepadMappingsFromFile(mappings_file);
+    if (added < 0) {
+      printf("\nLoaded mappings: ERROR (%s)\n", SDL_GetError());
+    } else {
+      printf("\nLoaded mappings: %d (%s)\n", added, mappings_file);
+    }
+  } else {
+    printf("\nLoaded mappings: (none)\n");
+  }
+
   int joy_count = 0;
   SDL_JoystickID *joy_ids = SDL_GetJoysticks(&joy_count);
   printf("\nFound %d joystick(s)\n", joy_count);
@@ -96,7 +130,7 @@ int main(int argc, char **argv) {
     printf("  - If PCSX2 sees devices but this probe doesn't, PCSX2 may be running under a different\n");
     printf("    architecture (Rosetta) / different SDL build.\n");
   }
-#
+
   printf("\nListening for %ds (press buttons now) ...\n", seconds);
   Uint64 start = SDL_GetTicks();
   Uint64 last = start;
@@ -151,8 +185,7 @@ int main(int argc, char **argv) {
     }
     SDL_Delay(1);
   }
-#
+
   SDL_Quit();
   return 0;
 }
-

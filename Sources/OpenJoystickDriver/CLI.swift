@@ -12,6 +12,7 @@ struct CLI {
     case "diagnose": DiagnoseCommand().run()
     case "userspace": UserSpaceCommand().run(arguments: Array(args.dropFirst()))
     case "output": OutputModeCommand().run(arguments: Array(args.dropFirst()))
+    case "compat": CompatibilityCommand().run(arguments: Array(args.dropFirst()))
     case "selftest": SelfTestCommand().run(arguments: Array(args.dropFirst()))
     case "start": StartDaemonCommand().run()
     case "restart": RestartDaemonCommand().run()
@@ -45,6 +46,7 @@ struct CLI {
         diagnose   Hardware diagnostics
         userspace  Toggle user-space virtual gamepad (IOHIDUserDevice)
         output     Set output routing mode (DriverKit/user-space)
+        compat     Set compatibility identity (generic/xboxOne)
         selftest   Count input events on virtual devices
         install    Register daemon LaunchAgent (SMAppService)
         uninstall  Unregister daemon LaunchAgent
