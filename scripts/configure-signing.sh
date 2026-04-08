@@ -104,8 +104,8 @@ def decode_profile(path: str) -> dict:
             "Fix: reinstall/regenerate the profile and re-run `./scripts/install-profiles.sh`.\n"
             "Debug (safe): `./scripts/profile-audit.sh \"$HOME/Library/MobileDevice/Provisioning Profiles\"/*.provisionprofile`"
         )
-    if b\"<?xml\" in raw:
-        raw = raw[raw.index(b\"<?xml\") :]
+    if b"<?xml" in raw:
+        raw = raw[raw.index(b"<?xml") :]
     try:
         return plistlib.loads(raw)
     except Exception:
@@ -231,23 +231,25 @@ def pick_identity_matching_profile(prefix: str, profile_path: str) -> str:
     want = embedded_cert_sha1_from_profile(profile_path)
     out = run(["security","find-identity","-v","-p","codesigning"]).stdout
     if "0 valid identities found" in out:
-        raise SystemExit(
-            "ERROR: macOS reports 0 valid code-signing identities in Keychain.\n"
-            "Fix (do these in Keychain Access):\n"
+        # In some environments `security` cannot read the keychain (sandbox, SSH, locked keychain).
+        # We can still proceed by writing the identity as the embedded certificate SHA1.
+        #
+        # This keeps the scripts non-blocking, while the actual build will still fail
+        # if the private key is missing or the keychain is inaccessible.
+        print(
+            "WARN: macOS reports 0 valid code-signing identities in Keychain.\n"
+            "      Proceeding by using the provisioning profile's embedded certificate SHA1.\n"
+            "      (The build will still fail if the matching private key isn't available.)\n"
+            "Fix checklist (Keychain Access):\n"
             "  1) Unlock the 'login' keychain.\n"
-            "  2) Make sure your signing certs show under 'My Certificates' with a private key underneath.\n"
-            "     (A downloaded .cer alone is not enough without the matching private key.)\n"
-            "  3) If Keychain Access shows certs but the `security` CLI still reports 0 identities,\n"
-            "     check Keychain file permissions:\n"
+            "  2) Ensure signing certs appear under 'My Certificates' with a private key underneath.\n"
+            "  3) If needed, fix keychain permissions then log out/in:\n"
             "       chmod 700 \"$HOME/Library/Keychains\"\n"
             "       chmod 600 \"$HOME/Library/Keychains/login.keychain-db\"\n"
-            "     then log out/in (or reboot).\n"
-            "  3) If the cert shows as untrusted, import Apple's intermediate CAs from:\n"
-            "       https://www.apple.com/certificateauthority/\n"
-            "     (AppleWWDRCAG3.cer and DeveloperIDG2CA.cer)\n"
-            "  4) Re-run: security find-identity -v -p codesigning\n"
-            "Tip: run ./scripts/doctor-signing.sh for a one-shot diagnosis.\n"
+            "  4) Import Apple intermediates (WWDR + DeveloperIDG2CA) if certs show untrusted.\n",
+            file=sys.stderr,
         )
+        return want
     available_sha1s: list[str] = []
     for line in out.splitlines():
         # Format:  1) <sha1> "<identity>"

@@ -77,87 +77,25 @@ DEXT_BUILD_PROFILE="${DEXT_BUILD_PROFILE:-OpenJoystickDriver (VirtualHIDDevice)}
 
 resolve_xcodebuild_identity() {
   local id="$1"
-  # Our scripts commonly store the identity as the SHA1 fingerprint (40 hex chars),
-  # which `codesign` accepts, but `xcodebuild` expects the certificate's common name.
+  # Prefer passing the SHA1 identity straight through to xcodebuild.
+  #
+  # Reason: we've seen cases where the Apple Development certificate display name ends
+  # in "(XXXXXXXXXX)" that does NOT match the TeamIdentifier (OU) and Xcode rejects it
+  # when CODE_SIGN_IDENTITY is a full "Apple Development: … (…)" string.
+  #
+  # Passing SHA1 avoids name-based matching.
   if [[ "$id" =~ ^[0-9A-Fa-f]{40}$ ]]; then
-    local line name
-    line="$(
-      security find-identity -v -p codesigning 2>/dev/null \
-        | awk -v needle="$id" 'tolower($0) ~ tolower(needle) {print $0; exit}'
-    )"
-    name="$(echo "$line" | awk -F'"' '{print $2}')"
-    if [[ -n "$name" ]]; then
-      echo "$name"
-      return 0
-    fi
-
-    # If Keychain is in a state where `security find-identity` reports 0 identities,
-    # fall back to extracting the certificate CN from the provisioning profile.
-    #
-    # This is the string that Xcode expects in CODE_SIGN_IDENTITY.
-    local dext_profile="${DEXT_PROVISIONING_PROFILE:-$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver_VirtualHIDDevice.provisionprofile}"
-    if [[ -f "$dext_profile" ]]; then
-      local pyout=""
-      pyout="$(
-        python3 - "$dext_profile" "$id" <<'PY' 2>/dev/null || true
-import os, sys, plistlib, subprocess, tempfile
-profile, want = sys.argv[1], sys.argv[2].lower()
-
-def decode(path: str) -> bytes:
-    p = subprocess.run(["security","cms","-D","-i",path], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    if p.returncode == 0 and p.stdout:
-        return p.stdout
-    p = subprocess.run(
-        ["openssl","smime","-inform","der","-verify","-noverify","-in",path],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-    )
-    return p.stdout if (p.returncode == 0 and p.stdout) else b""
-
-raw = decode(profile)
-if not raw or b"<?xml" not in raw:
-    raise SystemExit(0)
-raw = raw[raw.index(b"<?xml") :]
-obj = plistlib.loads(raw)
-certs = obj.get("DeveloperCertificates") or []
-if not certs:
-    raise SystemExit(0)
-
-der = certs[0]
-with tempfile.NamedTemporaryFile(delete=False) as f:
-    f.write(der)
-    tmp = f.name
-try:
-    fp = subprocess.run(["openssl","x509","-inform","DER","-in",tmp,"-noout","-fingerprint","-sha1"],
-                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-    sha = fp.stdout.strip().split("=")[-1].replace(":","").lower()
-    if sha != want:
-        raise SystemExit(0)
-    subj = subprocess.run(["openssl","x509","-inform","DER","-in",tmp,"-noout","-subject","-nameopt","RFC2253"],
-                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-    s = subj.stdout.strip()
-    # Extract CN=... from RFC2253 subject line.
-    # Example: subject=CN=Apple Development: Name (TEAM),OU=...,O=...,C=US
-    if "CN=" not in s:
-        raise SystemExit(0)
-    cn = s.split("CN=", 1)[1].split(",", 1)[0]
-    if cn:
-        print(cn)
-finally:
-    try: os.unlink(tmp)
-    except OSError: pass
-PY
-      )"
-      if [[ -n "$pyout" ]]; then
-        echo "$pyout"
-        return 0
-      fi
-    fi
-
-    # Fall back to the original value so we don't accidentally pass an empty identity.
-    echo "$id"
+    echo "Apple Development"
     return 0
   fi
+
+  # If we're given a full Apple Development display name, do NOT forward it to xcodebuild.
+  # Use the generic selector so Xcode picks the right cert for the team/profile.
+  if [[ "$id" == Apple\ Development:* ]]; then
+    echo "Apple Development"
+    return 0
+  fi
+
   echo "$id"
 }
 

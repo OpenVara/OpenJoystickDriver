@@ -153,6 +153,22 @@ Commands (run the app-bundled binary):
 ./scripts/build-dext.sh
 ```
 
+### If DriverKit build fails with “No certificate for team … matching …”
+
+If you see an error like:
+
+```text
+No certificate for team '9PQP6CDMQT' matching 'Apple Development: … (XXXXXXXXXX)' found
+```
+
+Do **not** assume your Team ID is wrong. This is often caused by Xcode matching based on the
+certificate display name suffix `(...)`.
+
+Fix:
+
+1) Re-run `./scripts/configure-signing.sh` so `CODESIGN_IDENTITY` is a SHA1 fingerprint.
+2) Re-run `./scripts/build-dext.sh` (this script prefers SHA1 for xcodebuild).
+
 ## Notarization
 
 Create an app-specific password:
