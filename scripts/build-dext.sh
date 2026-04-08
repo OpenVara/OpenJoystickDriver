@@ -109,9 +109,92 @@ echo "  Final identity: $FINAL_IDENTITY_XCODE"
 echo "  Team: $DEVELOPMENT_TEAM"
 
 # ---------------------------------------------------------------------------
-# Preflight: profile team must match cert team
+# Preflight: the DEXT profile must embed a cert that exists as a Keychain identity
 # ---------------------------------------------------------------------------
 DEXT_PROFILE_PATH="${DEXT_PROVISIONING_PROFILE:-$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver_VirtualHIDDevice.provisionprofile}"
+if [[ -f "$DEXT_PROFILE_PATH" ]]; then
+  read -r PROFILE_EMBEDDED_SHA1 PROFILE_TEAM CERT_OU < <(
+    python3 - "$DEXT_PROFILE_PATH" <<'PY' 2>/dev/null || true
+import plistlib, subprocess, sys, tempfile, os
+profile = sys.argv[1]
+
+def decode(path: str) -> bytes:
+    p = subprocess.run(["security","cms","-D","-i",path], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    if p.returncode == 0 and p.stdout:
+        return p.stdout
+    p = subprocess.run(
+        ["openssl","smime","-inform","der","-verify","-noverify","-in",path],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    return p.stdout if (p.returncode == 0 and p.stdout) else b""
+
+raw = decode(profile)
+if not raw or b"<?xml" not in raw:
+    raise SystemExit(0)
+raw = raw[raw.index(b"<?xml") :]
+obj = plistlib.loads(raw)
+
+team = ""
+ti = obj.get("TeamIdentifier") or []
+if isinstance(ti, list) and ti:
+    team = str(ti[0])
+
+certs = obj.get("DeveloperCertificates") or []
+sha = ""
+ou = ""
+if certs:
+    der = certs[0]
+    fp = subprocess.run(
+        ["openssl","x509","-inform","DER","-noout","-fingerprint","-sha1"],
+        input=der,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    ).stdout.strip()
+    if "=" in fp:
+        sha = fp.split("=",1)[1].replace(":","").lower()
+
+    with tempfile.NamedTemporaryFile(delete=False) as f:
+        f.write(der)
+        tmp = f.name
+    try:
+        subj = subprocess.run(["openssl","x509","-inform","DER","-in",tmp,"-noout","-subject","-nameopt","RFC2253"],
+                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).stdout.strip()
+        if "OU=" in subj:
+            ou = subj.split("OU=",1)[1].split(",",1)[0]
+    finally:
+        try: os.unlink(tmp)
+        except OSError: pass
+
+print(sha, team, ou)
+PY
+  )
+
+  # Only enforce this when `security find-identity` is usable (GUI session).
+  KEYCHAIN_SHA1S="$(security find-identity -v -p codesigning 2>/dev/null | awk '/\"Apple Development:/{print tolower($2)}' | tr '\n' ' ')"
+  if [[ -n "${PROFILE_EMBEDDED_SHA1:-}" && -n "${KEYCHAIN_SHA1S// /}" ]]; then
+    if ! echo " $KEYCHAIN_SHA1S " | grep -q " ${PROFILE_EMBEDDED_SHA1} "; then
+      echo ""
+      echo "ERROR: DEXT provisioning profile does not match your Keychain Apple Development certificate."
+      echo "  DEXT profile: $DEXT_PROFILE_PATH"
+      echo "  profile_team: ${PROFILE_TEAM:-UNKNOWN}"
+      echo "  profile_embedded_cert_sha1: ${PROFILE_EMBEDDED_SHA1}"
+      echo "  keychain_apple_development_sha1s: ${KEYCHAIN_SHA1S:-UNKNOWN}"
+      echo ""
+      echo "Fix (no guessing):"
+      echo "  1) In Apple Developer portal, regenerate the DEXT provisioning profile"
+      echo "     selecting the Apple Development certificate you actually have in Keychain."
+      echo "  2) Reinstall it: ./scripts/install-profiles.sh \"$HOME/Documents/Profiles\""
+      echo "  3) Re-run: ./scripts/configure-signing.sh"
+      exit 1
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Preflight: profile team must match cert team
+# ---------------------------------------------------------------------------
 if [[ -f "$DEXT_PROFILE_PATH" ]]; then
   read -r PROFILE_TEAM CERT_OU < <(
     python3 - "$DEXT_PROFILE_PATH" <<'PY' 2>/dev/null || true
