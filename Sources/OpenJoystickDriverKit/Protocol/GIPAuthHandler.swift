@@ -9,10 +9,14 @@ import SwiftUSB
 /// transition to FULL_POWER via xboxgip.sys retry/timeout logic.
 final class GIPAuthHandler: @unchecked Sendable {
 
-  private let outEndpoint: UInt8 = 0x02
+  private let outEndpoint: UInt8
 
   /// Current device power state, driven by auth progress.
   private(set) var deviceState: GIPDeviceState = .start
+
+  init(outEndpoint: UInt8 = 0x02) {
+    self.outEndpoint = outEndpoint
+  }
 
   /// Maps device auth states to the host response state we should send.
   private static let responseMap: [GIPAuthState: GIPAuthState] = [

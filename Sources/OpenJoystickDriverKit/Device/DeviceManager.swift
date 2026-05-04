@@ -220,12 +220,14 @@ public actor DeviceManager {
     deviceInfos[identifier] = DeviceInfo(name: productName, connection: "USB", serialNumber: serial)
     print("[DeviceManager] USB device added: \(productName) (\(identifier))")
     let parser = parserRegistry.parser(for: identifier)
+    let endpoints = parserRegistry.endpointConfig(for: identifier)
     let pipeline = DevicePipeline(
       identifier: identifier,
       transport: .usb(vendorID: device.idVendor, productID: device.idProduct),
       parser: parser,
       dispatcher: dispatcher,
-      usbContext: usbContext
+      usbContext: usbContext,
+      endpointConfig: endpoints
     )
     pipelines[identifier] = pipeline
     Task { await pipeline.start() }

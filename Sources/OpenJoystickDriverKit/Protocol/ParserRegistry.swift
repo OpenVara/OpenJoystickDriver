@@ -15,11 +15,17 @@ public final class ParserRegistry: Sendable {
 
   /// Returns parser for given device identifier.
   public func parser(for identifier: DeviceIdentifier) -> any InputParser {
+    let endpoints = catalog.endpointConfig(for: identifier)
     switch catalog.parserName(for: identifier) {
-    case "GIP": return GIPParser()
+    case "GIP": return GIPParser(endpointConfig: endpoints)
     case "DS4": return DS4Parser()
     default: return GenericHIDParser(identifier: identifier)
     }
+  }
+
+  /// Returns USB endpoint config for given device identifier.
+  public func endpointConfig(for identifier: DeviceIdentifier) -> USBEndpointConfig {
+    catalog.endpointConfig(for: identifier)
   }
 
   /// Returns the suggested virtual device identity for compatibility mode.

@@ -36,10 +36,10 @@ public final class GIPParser: InputParser, @unchecked Sendable {
   //   is accessed exclusively from the owning DevicePipeline actor's
   //   feedHIDData/feedUSBData methods — no concurrent access occurs
 
-  private let outEndpoint: UInt8 = 0x02
+  private let outEndpoint: UInt8
 
   private var sequencer = GIPSequencer()
-  private let authHandler = GIPAuthHandler()
+  private let authHandler: GIPAuthHandler
   private var handle: USBDeviceHandle?
 
   /// Current device state, driven by auth progress.
@@ -54,8 +54,11 @@ public final class GIPParser: InputParser, @unchecked Sendable {
   private var prevRSX: Int16 = 0
   private var prevRSY: Int16 = 0
 
-  /// Creates a new GIPParser.
-  public init() {}
+  /// Creates a new GIPParser with the given endpoint configuration.
+  public init(endpointConfig: USBEndpointConfig = .gipDefault) {
+    self.outEndpoint = endpointConfig.outputEndpoint
+    self.authHandler = GIPAuthHandler(outEndpoint: endpointConfig.outputEndpoint)
+  }
 
   // MARK: - InputParser
 
@@ -68,7 +71,8 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     for attempt in 0..<gipHandshakeMaxAttempts {
       do {
         try await sendInitSequence(handle: handle)
-        print("[GIPParser] Init sequence sent" + " (attempt \(attempt + 1))")
+        print("[GIPParser] Init sequence sent" + " (attempt \(attempt + 1))"
+              + " outEP=0x\(String(outEndpoint, radix: 16))")
         return
       } catch {
         print("[GIPParser] Init attempt \(attempt + 1) " + "failed: \(error)")
