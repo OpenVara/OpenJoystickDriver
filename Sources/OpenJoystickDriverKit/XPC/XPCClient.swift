@@ -112,6 +112,30 @@ public final class XPCClient: @unchecked Sendable {
     return entries
   }
 
+  /// Sends a short physical rumble command to a connected USB controller.
+  public func sendPhysicalRumble(
+    vendorID: UInt16,
+    productID: UInt16,
+    left: UInt8,
+    right: UInt8,
+    lt: UInt8,
+    rt: UInt8,
+    durationMs: Int
+  ) async throws -> Bool {
+    try await xpcCall { service, reply in
+      service.sendPhysicalRumble(
+        vendorID: Int(vendorID),
+        productID: Int(productID),
+        left: Int(left),
+        right: Int(right),
+        lt: Int(lt),
+        rt: Int(rt),
+        durationMs: durationMs,
+        reply: reply
+      )
+    }
+  }
+
   /// Enables or disables keyboard/mouse output from button mappings.
   ///
   /// Pass true to suppress output during developer packet capture.

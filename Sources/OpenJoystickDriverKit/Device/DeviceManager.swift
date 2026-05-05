@@ -85,6 +85,29 @@ public actor DeviceManager {
     return await pipelines[key]?.getPacketLog() ?? []
   }
 
+  /// Sends a short physical-controller rumble command for a matched USB device.
+  public func sendRumble(
+    for identifier: DeviceIdentifier,
+    left: UInt8,
+    right: UInt8,
+    lt: UInt8,
+    rt: UInt8,
+    durationMs: Int
+  ) async -> Bool {
+    guard let key = pipelines.keys.first(where: { $0.modelMatches(identifier) }),
+      let pipeline = pipelines[key]
+    else {
+      return false
+    }
+    await pipeline.sendRumble(left: left, right: right, lt: lt, rt: rt)
+    let clampedDurationMs = max(0, min(durationMs, 5_000))
+    if clampedDurationMs > 0 {
+      try? await Task.sleep(nanoseconds: UInt64(clampedDurationMs) * 1_000_000)
+      await pipeline.sendRumble(left: 0, right: 0, lt: 0, rt: 0)
+    }
+    return true
+  }
+
   /// Returns structured descriptions for all connected controllers.
   ///
   /// Used by XPCService to report live device list.

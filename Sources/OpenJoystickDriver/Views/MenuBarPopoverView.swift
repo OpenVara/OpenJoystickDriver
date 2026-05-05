@@ -6,6 +6,7 @@ struct MenuBarPopoverView: View {
   @EnvironmentObject var model: AppModel
   @State private var runningSelfTest = false
   @State private var showUninstallConfirm = false
+  @State private var inputTester = InputTestWindowController()
 
   var body: some View {
     ScrollView {
@@ -15,6 +16,7 @@ struct MenuBarPopoverView: View {
         daemonRow
         driverKitRow
         modeRow
+        inputTestRow
         selfTestRow
         Divider()
         footerRow
@@ -302,6 +304,25 @@ struct MenuBarPopoverView: View {
     }
   }
 
+  private var inputTestRow: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack {
+        Text("Input test").font(.subheadline)
+        Spacer()
+        SwiftUI.Button("Open") {
+          inputTester.show(model: model)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(!model.daemonConnected)
+        .accessibilityLabel("Open input test window")
+      }
+      Text("Live physical input, packet log, and physical rumble test.")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+    }
+  }
+
   private var footerRow: some View {
     HStack(spacing: 10) {
       SwiftUI.Button("Refresh") {
@@ -319,5 +340,258 @@ struct MenuBarPopoverView: View {
       Spacer()
     }
     .font(.caption)
+  }
+}
+
+@MainActor private final class InputTestWindowController {
+  private var window: NSWindow?
+
+  func show(model: AppModel) {
+    if let window {
+      window.makeKeyAndOrderFront(nil)
+      NSApp.activate(ignoringOtherApps: true)
+      return
+    }
+
+    let root = InputTestWindowView().environmentObject(model)
+    let hosting = NSHostingController(rootView: root)
+    let newWindow = NSWindow(contentViewController: hosting)
+    newWindow.title = "OpenJoystickDriver Input Test"
+    newWindow.setContentSize(NSSize(width: 760, height: 620))
+    newWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+    newWindow.isReleasedWhenClosed = false
+    newWindow.center()
+    newWindow.makeKeyAndOrderFront(nil)
+    NSApp.activate(ignoringOtherApps: true)
+    window = newWindow
+  }
+}
+
+private struct InputTestWindowView: View {
+  @EnvironmentObject var model: AppModel
+  @State private var selectedDeviceID: String?
+  @State private var state: DeviceInputState?
+  @State private var packetLog: [PacketLogEntry] = []
+  @State private var rumbleRunning = false
+  @State private var rumbleResult: String?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      header
+      Divider()
+      if let device = selectedDevice {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 12) {
+            deviceSummary(device)
+            axesGrid
+            buttonGrid
+            outputTestRow(device)
+            packetLogView
+          }
+          .padding(.trailing, 8)
+        }
+      } else {
+        VStack(spacing: 10) {
+          Image(systemName: "gamecontroller")
+            .font(.system(size: 42))
+            .foregroundStyle(.secondary)
+          Text("No controller selected").font(.headline)
+          Text("Connect a controller or restart the daemon, then refresh.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      }
+    }
+    .padding(14)
+    .frame(minWidth: 700, minHeight: 560)
+    .onAppear {
+      selectedDeviceID = selectedDeviceID ?? model.devices.first?.id
+    }
+    .task {
+      while !Task.isCancelled {
+        await refresh()
+        try? await Task.sleep(for: .milliseconds(100))
+      }
+    }
+  }
+
+  private var selectedDevice: DeviceViewModel? {
+    if let selectedDeviceID, let selected = model.devices.first(where: { $0.id == selectedDeviceID }) {
+      return selected
+    }
+    return model.devices.first
+  }
+
+  private var header: some View {
+    HStack(spacing: 10) {
+      Text("Input Test").font(.title2.weight(.semibold))
+      Spacer()
+      Picker("Controller", selection: Binding(get: {
+        selectedDevice?.id ?? ""
+      }, set: { value in
+        selectedDeviceID = value
+      })) {
+        ForEach(model.devices) { device in
+          Text(device.name).tag(device.id)
+        }
+      }
+      .frame(width: 260)
+      .disabled(model.devices.isEmpty)
+      SwiftUI.Button("Refresh") {
+        Task { await model.syncFromDaemonNow(); await refresh() }
+      }
+    }
+  }
+
+  private func deviceSummary(_ device: DeviceViewModel) -> some View {
+    Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 16, verticalSpacing: 6) {
+      GridRow {
+        Text("Device").foregroundStyle(.secondary)
+        Text(device.name)
+      }
+      GridRow {
+        Text("VID:PID").foregroundStyle(.secondary)
+        Text(String(format: "%04X:%04X", device.vendorID, device.productID))
+      }
+      GridRow {
+        Text("Parser").foregroundStyle(.secondary)
+        Text(device.parser)
+      }
+      GridRow {
+        Text("Connection").foregroundStyle(.secondary)
+        Text(device.connection)
+      }
+    }
+    .font(.caption)
+  }
+
+  private var axesGrid: some View {
+    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 8) {
+      GridRow {
+        AxisMeter(label: "LX", value: state?.leftStickX ?? 0, range: -1...1)
+        AxisMeter(label: "LY", value: state?.leftStickY ?? 0, range: -1...1)
+      }
+      GridRow {
+        AxisMeter(label: "RX", value: state?.rightStickX ?? 0, range: -1...1)
+        AxisMeter(label: "RY", value: state?.rightStickY ?? 0, range: -1...1)
+      }
+      GridRow {
+        AxisMeter(label: "LT", value: state?.leftTrigger ?? 0, range: 0...1)
+        AxisMeter(label: "RT", value: state?.rightTrigger ?? 0, range: 0...1)
+      }
+    }
+  }
+
+  private var buttonGrid: some View {
+    let pressed = Set(state?.pressedButtons ?? [])
+    return VStack(alignment: .leading, spacing: 8) {
+      Text("Buttons").font(.headline)
+      LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 8)], alignment: .leading, spacing: 8) {
+        ForEach(Button.allCases, id: \.rawValue) { button in
+          let isDown = pressed.contains(button.rawValue)
+          Text(button.displayName)
+            .font(.caption)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity, minHeight: 30)
+            .background(isDown ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.14))
+            .foregroundStyle(isDown ? .white : .primary)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .accessibilityLabel(button.displayName)
+            .accessibilityValue(isDown ? "pressed" : "released")
+        }
+      }
+    }
+  }
+
+  private func outputTestRow(_ device: DeviceViewModel) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Physical output").font(.headline)
+      HStack {
+        SwiftUI.Button(rumbleRunning ? "Rumbling..." : "Rumble pulse") {
+          rumbleRunning = true
+          rumbleResult = nil
+          Task {
+            let ok = await model.sendPhysicalRumble(
+              vendorID: device.vendorID,
+              productID: device.productID,
+              left: 180,
+              right: 180,
+              lt: 120,
+              rt: 120,
+              durationMs: 450
+            )
+            rumbleResult = ok ? "sent" : "not available"
+            rumbleRunning = false
+          }
+        }
+        .disabled(rumbleRunning)
+        .accessibilityLabel("Send physical rumble pulse")
+        Text("LED: not exposed")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        if let rumbleResult {
+          Text("Rumble: \(rumbleResult)").font(.caption).foregroundStyle(.secondary)
+        }
+      }
+      Text("LED needs a verified per-protocol command surface before it becomes a live control.")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+    }
+  }
+
+  private var packetLogView: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Recent packets").font(.headline)
+      if packetLog.isEmpty {
+        Text("No packets captured yet.").font(.caption).foregroundStyle(.secondary)
+      } else {
+        ForEach(Array(packetLog.suffix(12).enumerated()), id: \.offset) { _, entry in
+          Text("\(entry.direction) \(entry.length)b \(entry.hex)")
+            .font(.system(.caption2, design: .monospaced))
+            .textSelection(.enabled)
+            .lineLimit(2)
+        }
+      }
+    }
+  }
+
+  private func refresh() async {
+    guard let device = selectedDevice else {
+      state = nil
+      packetLog = []
+      return
+    }
+    state = await model.deviceInputState(vendorID: device.vendorID, productID: device.productID)
+    packetLog = await model.packetLog(vendorID: device.vendorID, productID: device.productID)
+  }
+}
+
+private struct AxisMeter: View {
+  let label: String
+  let value: Float
+  let range: ClosedRange<Float>
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      HStack {
+        Text(label).font(.caption.weight(.semibold))
+        Spacer()
+        Text(String(format: "%.3f", value))
+          .font(.system(.caption, design: .monospaced))
+      }
+      ProgressView(value: normalizedValue)
+        .frame(width: 300)
+        .accessibilityLabel(label)
+        .accessibilityValue(String(format: "%.3f", value))
+    }
+  }
+
+  private var normalizedValue: Double {
+    let width = range.upperBound - range.lowerBound
+    guard width > 0 else { return 0 }
+    let normalized = (value - range.lowerBound) / width
+    return Double(max(0, min(1, normalized)))
   }
 }

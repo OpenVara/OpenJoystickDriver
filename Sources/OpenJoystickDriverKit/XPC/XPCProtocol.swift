@@ -111,6 +111,18 @@ public enum VirtualDeviceMode: String, Codable, CaseIterable, Sendable {
   /// Replies with a JSON-encoded array of ``PacketLogEntry``.
   @objc func getPacketLog(vendorID: Int, productID: Int, reply: @escaping (Data) -> Void)
 
+  /// Sends a short physical rumble command to a connected USB controller.
+  @objc func sendPhysicalRumble(
+    vendorID: Int,
+    productID: Int,
+    left: Int,
+    right: Int,
+    lt: Int,
+    rt: Int,
+    durationMs: Int,
+    reply: @escaping (Bool) -> Void
+  )
+
   /// Enables or disables keyboard/mouse output from button mappings.
   /// Pass true to suppress output (useful during developer packet capture).
   /// Replies with true to confirm the change.

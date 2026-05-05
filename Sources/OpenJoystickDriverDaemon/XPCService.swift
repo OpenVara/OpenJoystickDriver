@@ -267,6 +267,32 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
+  public func sendPhysicalRumble(
+    vendorID: Int,
+    productID: Int,
+    left: Int,
+    right: Int,
+    lt: Int,
+    rt: Int,
+    durationMs: Int,
+    reply: @escaping (Bool) -> Void
+  ) {
+    let callback = SendableReply(call: reply)
+    let dm = deviceManager
+    Task {
+      let identifier = DeviceIdentifier(vendorID: UInt16(vendorID), productID: UInt16(productID))
+      let ok = await dm.sendRumble(
+        for: identifier,
+        left: UInt8(clamping: left),
+        right: UInt8(clamping: right),
+        lt: UInt8(clamping: lt),
+        rt: UInt8(clamping: rt),
+        durationMs: durationMs
+      )
+      callback.call(ok)
+    }
+  }
+
   /// Enables or disables virtual output suppression and reports success.
   public func setSuppressOutput(_ suppress: Bool, reply: @escaping (Bool) -> Void) {
     dispatcher.suppressOutput = suppress

@@ -171,6 +171,32 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     return (try? await client.packetLog(vendorID: vendorID, productID: productID)) ?? []
   }
 
+  func sendPhysicalRumble(
+    vendorID: UInt16,
+    productID: UInt16,
+    left: UInt8,
+    right: UInt8,
+    lt: UInt8,
+    rt: UInt8,
+    durationMs: Int
+  ) async -> Bool {
+    guard daemonConnected else { return false }
+    do {
+      return try await client.sendPhysicalRumble(
+        vendorID: vendorID,
+        productID: productID,
+        left: left,
+        right: right,
+        lt: lt,
+        rt: rt,
+        durationMs: durationMs
+      )
+    } catch {
+      daemonError = formatDaemonError(error)
+      return false
+    }
+  }
+
   func setSuppressOutput(_ suppress: Bool) async {
     guard daemonConnected else { return }
     try? await client.setSuppressOutput(suppress)
