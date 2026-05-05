@@ -74,7 +74,7 @@ public actor DeviceManager {
   /// Returns nil if no pipeline is active for the device.
   public func inputState(for identifier: DeviceIdentifier) async -> DeviceInputState? {
     guard let key = pipelines.keys.first(where: { $0.modelMatches(identifier) }) else { return nil }
-    return await pipelines[key]?.inputState()
+    return pipelines[key]?.inputState()
   }
 
   /// Returns recent raw USB packets for a device matched by vendor and product ID.
@@ -82,7 +82,7 @@ public actor DeviceManager {
   /// Returns an empty array if no pipeline is active for the device.
   public func packetLog(for identifier: DeviceIdentifier) async -> [PacketLogEntry] {
     guard let key = pipelines.keys.first(where: { $0.modelMatches(identifier) }) else { return [] }
-    return await pipelines[key]?.getPacketLog() ?? []
+    return pipelines[key]?.getPacketLog() ?? []
   }
 
   /// Sends a short physical-controller rumble command for a matched USB device.
@@ -99,11 +99,12 @@ public actor DeviceManager {
     else {
       return false
     }
-    await pipeline.sendRumble(left: left, right: right, lt: lt, rt: rt)
+    let didStart = await pipeline.sendRumble(left: left, right: right, lt: lt, rt: rt)
+    guard didStart else { return false }
     let clampedDurationMs = max(0, min(durationMs, 5_000))
     if clampedDurationMs > 0 {
       try? await Task.sleep(nanoseconds: UInt64(clampedDurationMs) * 1_000_000)
-      await pipeline.sendRumble(left: 0, right: 0, lt: 0, rt: 0)
+      _ = await pipeline.sendRumble(left: 0, right: 0, lt: 0, rt: 0)
     }
     return true
   }

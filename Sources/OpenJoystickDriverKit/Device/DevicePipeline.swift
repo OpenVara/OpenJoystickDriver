@@ -15,6 +15,39 @@ private let usbIOErrorBackoffBaseNs: UInt64 = 250_000_000  // 250ms
 private let usbIOErrorBackoffMaxNs: UInt64 = 2_000_000_000  // 2s
 private let usbIOErrorLogIntervalNs: UInt64 = 5_000_000_000  // 5s
 
+private final class DevicePipelineSnapshots: @unchecked Sendable {
+  private let lock = NSLock()
+  private var inputState: DeviceInputState
+  private var packetLog: [PacketLogEntry] = []
+  private let maxPacketLogEntries: Int
+
+  init(inputState: DeviceInputState, maxPacketLogEntries: Int) {
+    self.inputState = inputState
+    self.maxPacketLogEntries = maxPacketLogEntries
+  }
+
+  func updateInputState(_ state: DeviceInputState) {
+    lock.withLock { inputState = state }
+  }
+
+  func currentInputState() -> DeviceInputState {
+    lock.withLock { inputState }
+  }
+
+  func appendPacket(_ entry: PacketLogEntry) {
+    lock.withLock {
+      packetLog.append(entry)
+      if packetLog.count > maxPacketLogEntries {
+        packetLog.removeFirst(packetLog.count - maxPacketLogEntries)
+      }
+    }
+  }
+
+  func currentPacketLog() -> [PacketLogEntry] {
+    lock.withLock { packetLog }
+  }
+}
+
 /// Manages full lifecycle of single connected controller.
 /// Each controller gets its own DevicePipeline actor - one
 /// failure never affects others.
@@ -37,6 +70,7 @@ actor DevicePipeline {
   private var currentInputState: DeviceInputState
   private var packetLog: [PacketLogEntry] = []
   private let maxPacketLogEntries = 200
+  private let snapshots: DevicePipelineSnapshots
   private var consecutiveUSBIOErrors: Int = 0
   private var lastUSBIOErrorLogNs: UInt64 = 0
 
@@ -54,9 +88,14 @@ actor DevicePipeline {
     self.dispatcher = dispatcher
     self.usbContext = usbContext
     self.endpointConfig = endpointConfig
-    self.currentInputState = DeviceInputState(
+    let initialState = DeviceInputState(
       vendorID: identifier.vendorID,
       productID: identifier.productID
+    )
+    self.currentInputState = initialState
+    self.snapshots = DevicePipelineSnapshots(
+      inputState: initialState,
+      maxPacketLogEntries: maxPacketLogEntries
     )
   }
 
@@ -96,8 +135,8 @@ actor DevicePipeline {
 
   // MARK: - Input state and packet log
 
-  func inputState() -> DeviceInputState { currentInputState }
-  func getPacketLog() -> [PacketLogEntry] { packetLog }
+  nonisolated func inputState() -> DeviceInputState { snapshots.currentInputState() }
+  nonisolated func getPacketLog() -> [PacketLogEntry] { snapshots.currentPacketLog() }
 
   private func updateInputState(from events: [ControllerEvent]) {
     for event in events {
@@ -120,6 +159,7 @@ actor DevicePipeline {
       case .dpadChanged: break
       }
     }
+    snapshots.updateInputState(currentInputState)
   }
 
   private func appendToPacketLog(bytes: [UInt8], direction: String) {
@@ -134,20 +174,27 @@ actor DevicePipeline {
     if packetLog.count > maxPacketLogEntries {
       packetLog.removeFirst(packetLog.count - maxPacketLogEntries)
     }
+    snapshots.appendPacket(entry)
   }
 
   // MARK: - Rumble
 
-  func sendRumble(left: UInt8, right: UInt8, lt: UInt8, rt: UInt8) {
-    guard let handle = usbHandle else { return }
+  func sendRumble(left: UInt8, right: UInt8, lt: UInt8, rt: UInt8) -> Bool {
+    guard let handle = usbHandle else { return false }
     do {
       if let gipParser = parser as? GIPParser {
         try gipParser.sendRumble(handle: handle, left: left, right: right, ltMotor: lt, rtMotor: rt)
+        return true
       } else if let xbox360Parser = parser as? Xbox360Parser {
         // Xbox 360 has left/right motors only; trigger motor values are ignored.
         try xbox360Parser.sendRumble(handle: handle, left: left, right: right)
+        return true
       }
-    } catch { print("[DevicePipeline] Rumble send failed for \(identifier): \(error)") }
+    } catch {
+      print("[DevicePipeline] Rumble send failed for \(identifier): \(error)")
+      return false
+    }
+    return false
   }
 
   // MARK: - Private USB pipeline

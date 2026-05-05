@@ -408,10 +408,17 @@ private struct InputTestWindowView: View {
     .onAppear {
       selectedDeviceID = selectedDeviceID ?? model.devices.first?.id
     }
-    .task {
+    .task(id: selectedDevice?.id ?? "") {
       while !Task.isCancelled {
-        await refresh()
-        try? await Task.sleep(for: .milliseconds(100))
+        await refreshState()
+        try? await Task.sleep(for: .milliseconds(33))
+      }
+    }
+    .task(id: selectedDevice?.id ?? "") {
+      await refreshPacketLog()
+      while !Task.isCancelled {
+        try? await Task.sleep(for: .seconds(1))
+        await refreshPacketLog()
       }
     }
   }
@@ -439,7 +446,11 @@ private struct InputTestWindowView: View {
       .frame(width: 260)
       .disabled(model.devices.isEmpty)
       SwiftUI.Button("Refresh") {
-        Task { await model.syncFromDaemonNow(); await refresh() }
+        Task {
+          await model.syncFromDaemonNow()
+          await refreshState()
+          await refreshPacketLog()
+        }
       }
     }
   }
@@ -557,13 +568,19 @@ private struct InputTestWindowView: View {
     }
   }
 
-  private func refresh() async {
+  private func refreshState() async {
     guard let device = selectedDevice else {
       state = nil
-      packetLog = []
       return
     }
     state = await model.deviceInputState(vendorID: device.vendorID, productID: device.productID)
+  }
+
+  private func refreshPacketLog() async {
+    guard let device = selectedDevice else {
+      packetLog = []
+      return
+    }
     packetLog = await model.packetLog(vendorID: device.vendorID, productID: device.productID)
   }
 }
