@@ -105,6 +105,15 @@ write_secret_file() {
   printf '%s' "$value" > "$values_dir/$name.txt"
 }
 
+display_path() {
+  local path="$1"
+  if [[ "$path" == "$PROJECT_DIR/"* ]]; then
+    printf '%s' "${path#"$PROJECT_DIR/"}"
+  else
+    printf '%s' "$path"
+  fi
+}
+
 gui_devid_profile="${OPENJOYSTICKDRIVER_GUI_DEVID_PROFILE:-$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver_DevID.provisionprofile}"
 daemon_devid_profile="${OPENJOYSTICKDRIVER_DAEMON_DEVID_PROFILE:-$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriverDaemon_DevID.provisionprofile}"
 dext_profile="${OPENJOYSTICKDRIVER_DEXT_PROFILE:-$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver_VirtualHIDDevice.provisionprofile}"
@@ -173,6 +182,9 @@ done
 SH
 chmod 700 "$out_dir/apply-github-secrets.sh"
 
+display_out_dir="$(display_path "$out_dir")"
+display_apply_path="$(display_path "$out_dir/apply-github-secrets.sh")"
+
 cat > "$out_dir/README.txt" <<TXT
 OpenJoystickDriver GitHub Actions secrets
 
@@ -180,20 +192,26 @@ Files:
   values/*.txt                 One secret value per file
   apply-github-secrets.sh      Imports values with gh secret set
 
+Apply:
+  ./$display_apply_path${repo_arg[*]:+ --repo ${repo_arg[1]}}
+
 Keep this directory private. Delete it after importing secrets if you do not
 need a local backup.
 TXT
 chmod 600 "$out_dir/README.txt"
 
 echo "Wrote GitHub Actions secret files:"
-echo "  $out_dir"
+echo "  $display_out_dir"
 echo ""
 echo "Import with:"
 if [[ "${#repo_arg[@]}" -gt 0 ]]; then
-  echo "  $out_dir/apply-github-secrets.sh --repo ${repo_arg[1]}"
+  echo "  ./$display_apply_path --repo ${repo_arg[1]}"
 else
-  echo "  $out_dir/apply-github-secrets.sh"
+  echo "  ./$display_apply_path"
 fi
+echo ""
+echo "Full command also written to:"
+echo "  $display_out_dir/README.txt"
 
 if [[ "$apply" -eq 1 ]]; then
   "$out_dir/apply-github-secrets.sh" "${repo_arg[@]}"
