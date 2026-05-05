@@ -19,16 +19,25 @@ unset _ENV_FILE
 # Prefer full Xcode toolchain when installed, even if `xcode-select` still
 # points at Command Line Tools (avoids requiring sudo for local builds).
 XCODE_SELECT_PATH="$(xcode-select -p 2>/dev/null || true)"
-if [[ -z "${DEVELOPER_DIR:-}" ]] \
-  && [[ "$XCODE_SELECT_PATH" == "/Library/Developer/CommandLineTools" ]] \
-  && [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
-  export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+if [[ -z "${DEVELOPER_DIR:-}" ]] && [[ "$XCODE_SELECT_PATH" == "/Library/Developer/CommandLineTools" ]]; then
+  if [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+    export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+  elif [[ -d "/Applications/Xcode_26.3.app/Contents/Developer" ]]; then
+    export DEVELOPER_DIR="/Applications/Xcode_26.3.app/Contents/Developer"
+  fi
+fi
+if [[ -n "${DEVELOPER_DIR:-}" ]]; then
   XCODE_SELECT_PATH="$DEVELOPER_DIR"
 fi
 
 # Workaround: xcrun --sdk hangs on macOS 26.3.1 (Xcode 26.3).
 # Export SDKROOT so swift build, xcodebuild, and clang skip the xcrun lookup.
-export SDKROOT="${SDKROOT:-$XCODE_SELECT_PATH/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk}"
+_DEFAULT_SDKROOT="$XCODE_SELECT_PATH/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+if [[ ! -d "$_DEFAULT_SDKROOT" && -d "$XCODE_SELECT_PATH/SDKs/MacOSX.sdk" ]]; then
+  _DEFAULT_SDKROOT="$XCODE_SELECT_PATH/SDKs/MacOSX.sdk"
+fi
+export SDKROOT="${SDKROOT:-$_DEFAULT_SDKROOT}"
+unset _DEFAULT_SDKROOT
 unset XCODE_SELECT_PATH
 
 IDENTITY="${CODESIGN_IDENTITY:--}"

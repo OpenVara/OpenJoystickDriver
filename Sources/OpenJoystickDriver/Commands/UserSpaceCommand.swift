@@ -25,7 +25,8 @@ struct UserSpaceCommand {
         print("ERROR: failed to enable user-space virtual gamepad (daemon not running?)")
         exit(1)
       }
-      let status = runSyncResult { try? await client.getStatus() }
+      let status: XPCStatusPayload? =
+        runSyncResult(timeout: xpcCallTimeoutSeconds) { try? await client.getStatus() } ?? nil
       print("user-space: enabled")
       if let s = status?.userSpaceVirtualDeviceStatus { print("status: \(s)") }
     case "off":
@@ -43,8 +44,12 @@ struct UserSpaceCommand {
       }
       print("user-space: disabled")
     case "status":
-      let enabled = runSyncResult { try? await client.getUserSpaceVirtualDeviceEnabled() }
-      let status = runSyncResult { try? await client.getUserSpaceVirtualDeviceStatus() }
+      let enabled: Bool? = runSyncResult(timeout: xpcCallTimeoutSeconds) {
+        try? await client.getUserSpaceVirtualDeviceEnabled()
+      } ?? nil
+      let status: String? = runSyncResult(timeout: xpcCallTimeoutSeconds) {
+        try? await client.getUserSpaceVirtualDeviceStatus()
+      } ?? nil
       print("user-space: " + ((enabled ?? false) ? "enabled" : "disabled"))
       if let status { print("status: \(status)") }
     default:
@@ -53,4 +58,3 @@ struct UserSpaceCommand {
     }
   }
 }
-

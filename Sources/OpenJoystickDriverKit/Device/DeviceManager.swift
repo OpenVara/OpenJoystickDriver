@@ -91,13 +91,21 @@ public actor DeviceManager {
   public func connectedDeviceDescriptions() -> [XPCDeviceDescription] {
     pipelines.keys.map { id in
       let info = deviceInfos[id]
+      let profile = parserRegistry.runtimeProfile(for: id)
       return XPCDeviceDescription(
         name: info?.name ?? "Controller",
         vendorID: id.vendorID,
         productID: id.productID,
-        parser: parserRegistry.parserName(for: id),
+        parser: profile.parserName,
         connection: info?.connection ?? "USB",
-        serialNumber: info?.serialNumber
+        serialNumber: info?.serialNumber,
+        protocolVariant: profile.protocolVariant.rawValue,
+        mappingFlags: profile.mappingFlags,
+        inputEndpoint: profile.transportProfile.inputEndpoint,
+        outputEndpoint: profile.transportProfile.outputEndpoint,
+        needsSetConfiguration: profile.transportProfile.needsSetConfiguration,
+        postHandshakeSettleMs: Int(profile.transportProfile.postHandshakeSettleNanoseconds / 1_000_000),
+        preferredBackends: profile.preferredBackends.map(\.rawValue)
       )
     }
   }
@@ -220,14 +228,14 @@ public actor DeviceManager {
     deviceInfos[identifier] = DeviceInfo(name: productName, connection: "USB", serialNumber: serial)
     print("[DeviceManager] USB device added: \(productName) (\(identifier))")
     let parser = parserRegistry.parser(for: identifier)
-    let endpoints = parserRegistry.endpointConfig(for: identifier)
+    let transportProfile = parserRegistry.transportProfile(for: identifier)
     let pipeline = DevicePipeline(
       identifier: identifier,
       transport: .usb(vendorID: device.idVendor, productID: device.idProduct),
       parser: parser,
       dispatcher: dispatcher,
       usbContext: usbContext,
-      endpointConfig: endpoints
+      endpointConfig: transportProfile
     )
     pipelines[identifier] = pipeline
     Task { await pipeline.start() }

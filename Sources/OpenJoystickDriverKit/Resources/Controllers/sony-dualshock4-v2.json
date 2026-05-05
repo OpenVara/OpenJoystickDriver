@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/controller-profile.schema.json",
+  "profile_version": "1.0.0",
+  "identity": {
+    "vendor_id": 1356,
+    "product_id": 2508,
+    "name": "DualShock 4 v2",
+    "short_name": "DS4v2"
+  },
+  "input": {
+    "transport": "hid",
+    "usb": {
+      "class": 3,
+      "interface": 0
+    }
+  },
+  "protocol": {
+    "driver": "DS4",
+    "variant": "dualShock4"
+  },
+  "output": {
+    "virtual_profile": "xboxOneS",
+    "preferred_backends": [
+      "driverKitHID",
+      "userSpaceHID"
+    ]
+  }
+}

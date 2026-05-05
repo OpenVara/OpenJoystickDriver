@@ -35,7 +35,10 @@ Commands:
 
   diagnose dext               Run dext diagnostics (activation, codesign, IORegistry, daemon connection)
   diagnose sdl3 [--seconds N] Run SDL3 probe against the virtual device
+  diagnose gamecontroller     Run GameController.framework probe
   diagnose pcsx2-latency      Compare native SDL3 vs PCSX2/Rosetta SDL3 input timing
+  diagnose backends           Run current backend acceptance loop
+  validate profiles           Validate bundled controller profiles
 
   notarize submit             Submit + poll + staple (release only)
   notarize status [id]        Show notarization status (release only)
@@ -150,11 +153,29 @@ case "$cmd" in
       sdl3)
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" sdl3 "$@"
         ;;
+      gamecontroller)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" gamecontroller "$@"
+        ;;
       pcsx2-latency)
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" pcsx2-latency "$@"
         ;;
+      backends)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" backends "$@"
+        ;;
       *)
-        die "Unknown: diagnose $sub (expected: dext | sdl3 | pcsx2-latency)"
+        die "Unknown: diagnose $sub (expected: dext | sdl3 | gamecontroller | pcsx2-latency | backends)"
+        ;;
+    esac
+    ;;
+
+  validate)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      profiles)
+        exec /usr/bin/env python3 "$SCRIPT_DIR/ojd-validate-profiles.py"
+        ;;
+      *)
+        die "Unknown: validate $sub (expected: profiles)"
         ;;
     esac
     ;;

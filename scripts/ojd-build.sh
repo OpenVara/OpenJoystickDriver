@@ -579,6 +579,34 @@ PY
   echo "  .dext: $DEXT_PRODUCT"
 }
 
+next_dext_bundle_version() {
+  local max_version=0
+  local candidate
+
+  candidate=$(plutil -extract CFBundleVersion raw "$PROJECT_DIR/DriverKitExtension/Info.plist" 2>/dev/null || echo "")
+  if [[ "$candidate" =~ ^[0-9]+$ && "$candidate" -gt "$max_version" ]]; then
+    max_version="$candidate"
+  fi
+
+  candidate=$(plutil -extract CFBundleVersion raw \
+    /Applications/OpenJoystickDriver.app/Contents/Library/SystemExtensions/com.openjoystickdriver.VirtualHIDDevice.dext/Info.plist \
+    2>/dev/null || echo "")
+  if [[ "$candidate" =~ ^[0-9]+$ && "$candidate" -gt "$max_version" ]]; then
+    max_version="$candidate"
+  fi
+
+  while IFS= read -r candidate; do
+    if [[ "$candidate" =~ ^[0-9]+$ && "$candidate" -gt "$max_version" ]]; then
+      max_version="$candidate"
+    fi
+  done < <(
+    systemextensionsctl list 2>/dev/null \
+      | sed -n 's/.*com\.openjoystickdriver\.VirtualHIDDevice (1\.0\/\([0-9][0-9]*\)).*/\1/p'
+  )
+
+  echo $((max_version + 1))
+}
+
 rebuild_fast() {
   local APP_DST="/Applications/OpenJoystickDriver.app"
   local APP_SRC="$PROJECT_DIR/.build/debug/OpenJoystickDriver.app"
@@ -648,7 +676,7 @@ rebuild_full() {
   echo ""
   echo "=== Step 3: Build dext ==="
   local DEXT_VER
-  DEXT_VER="$(date +%s)"
+  DEXT_VER="$(next_dext_bundle_version)"
   echo "  Using CFBundleVersion=$DEXT_VER"
   DEXT_BUNDLE_VERSION="$DEXT_VER" build_dext_bundle
 
@@ -668,15 +696,19 @@ rebuild_full() {
   fi
 
   echo ""
-  echo "=== Step 5: Launch app ==="
+  echo "=== Step 5: Submit sysext activation ==="
   : > /tmp/com.openjoystickdriver.daemon.out 2>/dev/null || true
   : > /tmp/com.openjoystickdriver.daemon.err 2>/dev/null || true
-  open /Applications/OpenJoystickDriver.app
-  echo "  Launched /Applications/OpenJoystickDriver.app"
+  local APP_BIN="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver"
+  if "$APP_BIN" --headless sysext install; then
+    echo "  ✓ Sysext activation request submitted"
+  else
+    echo "  ✗ Sysext activation request failed"
+    echo "    Fix: run: $APP_BIN --headless sysext install"
+  fi
 
   echo ""
   echo "=== Step 6: Wait for sysext activation ==="
-  echo "  Click 'Install Extension' in the app if prompted…"
   echo ""
 
   local NEW_VERSION

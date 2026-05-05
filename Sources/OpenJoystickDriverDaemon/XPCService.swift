@@ -109,12 +109,14 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       // If user-space creation fails, keep DriverKit enabled as a fallback but keep the
       // requested mode as Compatibility and show an explicit error string.
       if setUserSpaceVirtualDeviceEnabledInternal(true) {
-        dextDispatcher.setEnabled(false)
+        dextDispatcher.setEnabled(true)
         // Best-effort: seize the DriverKit virtual device so SDL/IOKit apps don't
-        // open the idle DriverKit device while Compatibility is active.
+        // prefer the user-space controller while Compatibility is active. Browsers
+        // may still enumerate DriverKit, so keep it live instead of creating a stale
+        // non-working first controller.
         dextDispatcher.setCompatibilitySeizeEnabled(true)
-        effectiveOutputMode = .secondaryOnly
-        dispatcher.setMode(.secondaryOnly)
+        effectiveOutputMode = .both
+        dispatcher.setMode(.both)
         UserDefaults.standard.set(
           CompositeOutputDispatcher.Mode.secondaryOnly.rawValue,
           forKey: Self.outputModeDefaultsKey
@@ -190,8 +192,16 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       let devices = await dm.connectedDeviceDescriptions()
       let strings = devices.map { d in
         let sn = d.serialNumber ?? "none"
+        let mappings = d.mappingFlags.isEmpty ? "none" : d.mappingFlags.joined(separator: ",")
+        let backends = d.preferredBackends.isEmpty ? "none" : d.preferredBackends.joined(separator: ",")
         return "\(d.name) (VID:\(d.vendorID)" + " PID:\(d.productID) \(d.parser)"
           + " [\(d.connection)] SN:\(sn))"
+          + " protocol=\(d.protocolVariant)"
+          + " endpoints=in:0x\(String(d.inputEndpoint, radix: 16)) out:0x\(String(d.outputEndpoint, radix: 16))"
+          + " setConfig=\(d.needsSetConfiguration)"
+          + " settleMs=\(d.postHandshakeSettleMs)"
+          + " mappings=\(mappings)"
+          + " backends=\(backends)"
       }
       callback.call(strings)
     }

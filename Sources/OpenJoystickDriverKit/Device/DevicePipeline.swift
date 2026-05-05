@@ -15,9 +15,6 @@ private let usbIOErrorReconnectThreshold = 10
 private let usbIOErrorBackoffBaseNs: UInt64 = 250_000_000  // 250ms
 private let usbIOErrorBackoffMaxNs: UInt64 = 2_000_000_000  // 2s
 private let usbIOErrorLogIntervalNs: UInt64 = 5_000_000_000  // 5s
-/// Post-handshake settling delay before first IN read.
-/// Some controllers (e.g. Vader 5S) need time to activate endpoints after init.
-private let usbPostHandshakeSettleNs: UInt64 = 200_000_000  // 200ms
 
 /// Manages full lifecycle of single connected controller.
 /// Each controller gets its own DevicePipeline actor - one
@@ -271,7 +268,9 @@ actor DevicePipeline {
     print("[DevicePipeline] Starting USB input loop:" + " \(identifier)"
           + " inEP=0x\(String(inEndpoint, radix: 16))")
 
-    try? await Task.sleep(nanoseconds: usbPostHandshakeSettleNs)
+    if endpointConfig.postHandshakeSettleNanoseconds > 0 {
+      try? await Task.sleep(nanoseconds: endpointConfig.postHandshakeSettleNanoseconds)
+    }
 
     while isActive {
       let loopStartNs = DispatchTime.now().uptimeNanoseconds

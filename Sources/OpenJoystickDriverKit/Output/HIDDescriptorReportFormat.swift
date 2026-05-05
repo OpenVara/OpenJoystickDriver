@@ -312,9 +312,12 @@ private enum HIDReportDescriptorParser {
             )
           }
         case .collection, .endCollection:
-          // Ignore.
-          // Local state is consumed only by main items that take it (Input/Output/Feature),
-          // but leaving it around across collections is harmless for our subset parser.
+          // Collection is a main item and consumes local usage state. If those usages
+          // leak into the next Input item, Xbox One descriptors parse stick axes as
+          // stale collection usages instead of X/Y/Rx/Ry.
+          localUsages.removeAll(keepingCapacity: true)
+          usageMin = nil
+          usageMax = nil
           break
         }
       case .reserved:
@@ -441,8 +444,8 @@ private struct HIDReportPacker: @unchecked Sendable {
       return UInt32(max(minV, min(maxV, idx + minV)))
     }
 
-    // Buttons: map our standardized bit positions to HID Button usages 1..15.
-    for usage in 1...15 {
+    // Buttons: normalized state bit 0 is HID Button usage 1, bit 1 is usage 2, etc.
+    for usage in 1...32 {
       guard let field = buttonFields[usage] else { continue }
       let bitIndex = usage - 1
       let pressed = ((state.buttons >> bitIndex) & 1) != 0

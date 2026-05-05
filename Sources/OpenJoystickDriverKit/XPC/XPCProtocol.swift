@@ -249,6 +249,20 @@ public struct XPCDeviceDescription: Codable, Sendable {
   public let connection: String
   /// USB serial number, or nil if not reported.
   public let serialNumber: String?
+  /// Source-backed protocol variant (for example, "xboxOne" or "dualShock4").
+  public let protocolVariant: String
+  /// Source-backed mapping quirks from the controller profile.
+  public let mappingFlags: [String]
+  /// Interrupt IN endpoint address used by USB transports.
+  public let inputEndpoint: UInt8
+  /// Interrupt OUT endpoint address used by USB transports.
+  public let outputEndpoint: UInt8
+  /// Whether the USB pipeline calls setConfiguration(1) before claiming.
+  public let needsSetConfiguration: Bool
+  /// Post-handshake settle delay in milliseconds.
+  public let postHandshakeSettleMs: Int
+  /// Preferred virtual output backends from the controller profile.
+  public let preferredBackends: [String]
 
   /// Creates a new XPCDeviceDescription.
   public init(
@@ -257,7 +271,14 @@ public struct XPCDeviceDescription: Codable, Sendable {
     productID: UInt16,
     parser: String,
     connection: String,
-    serialNumber: String?
+    serialNumber: String?,
+    protocolVariant: String = "unknown",
+    mappingFlags: [String] = [],
+    inputEndpoint: UInt8 = 0,
+    outputEndpoint: UInt8 = 0,
+    needsSetConfiguration: Bool = false,
+    postHandshakeSettleMs: Int = 0,
+    preferredBackends: [String] = []
   ) {
     self.name = name
     self.vendorID = vendorID
@@ -265,6 +286,13 @@ public struct XPCDeviceDescription: Codable, Sendable {
     self.parser = parser
     self.connection = connection
     self.serialNumber = serialNumber
+    self.protocolVariant = protocolVariant
+    self.mappingFlags = mappingFlags
+    self.inputEndpoint = inputEndpoint
+    self.outputEndpoint = outputEndpoint
+    self.needsSetConfiguration = needsSetConfiguration
+    self.postHandshakeSettleMs = postHandshakeSettleMs
+    self.preferredBackends = preferredBackends
   }
 }
 

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/controller-profile.schema.json",
+  "profile_version": "1.0.0",
+  "identity": {
+    "vendor_id": 13623,
+    "product_id": 4112,
+    "name": "GameSir-G7 SE Controller for Xbox",
+    "short_name": "G7SE"
+  },
+  "input": {
+    "transport": "usb",
+    "usb": {
+      "class": 255,
+      "interface": 0,
+      "endpoints": {
+        "in": 130,
+        "out": 2
+      }
+    }
+  },
+  "protocol": {
+    "driver": "GIP",
+    "variant": "xboxOne",
+    "mapping_flags": [
+      "shareButton"
+    ]
+  },
+  "output": {
+    "virtual_profile": "xboxOneS",
+    "preferred_backends": [
+      "driverKitHID",
+      "userSpaceHID"
+    ]
+  }
+}

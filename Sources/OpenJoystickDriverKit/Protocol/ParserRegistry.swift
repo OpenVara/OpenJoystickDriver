@@ -28,6 +28,16 @@ public final class ParserRegistry: Sendable {
     catalog.endpointConfig(for: identifier)
   }
 
+  /// Returns the physical transport profile for given device identifier.
+  public func transportProfile(for identifier: DeviceIdentifier) -> DeviceTransportProfile {
+    catalog.transportProfile(for: identifier)
+  }
+
+  /// Returns the complete runtime profile for a physical controller model.
+  public func runtimeProfile(for identifier: DeviceIdentifier) -> DeviceRuntimeProfile {
+    catalog.runtimeProfile(for: identifier)
+  }
+
   /// Returns the suggested virtual device identity for compatibility mode.
   ///
   /// Used only when the user explicitly opts into spoofing IDs for picky consumers.

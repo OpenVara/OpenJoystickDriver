@@ -15,29 +15,42 @@
 	],
 	"additionalProperties": false,
 	"properties": {
-		"$schema": { "type": "string" },
+		"$schema": {
+			"type": "string"
+		},
 		"vendor_id": {
 			"type": "integer",
 			"minimum": 1,
 			"maximum": 65535,
-			"description": "USB Vendor ID in decimal. Must match the corresponding entry in devices.json."
+			"description": "USB Vendor ID in decimal. Must match the corresponding controller profile."
 		},
 		"product_id": {
 			"type": "integer",
 			"minimum": 0,
 			"maximum": 65535,
-			"description": "USB Product ID in decimal. Must match devices.json."
+			"description": "USB Product ID in decimal. Must match the corresponding controller profile."
 		},
-		"name": { "type": "string", "description": "Human-readable device name." },
+		"name": {
+			"type": "string",
+			"description": "Human-readable device name."
+		},
 		"protocol": {
 			"type": "string",
-			"enum": ["GIP", "DS4", "GenericHID"],
+			"enum": [
+				"GIP",
+				"DS4",
+				"GenericHID"
+			],
 			"description": "Protocol parser used for this device."
 		},
 		"usb": {
 			"type": "object",
 			"description": "USB interface and endpoint configuration.",
-			"required": ["interface", "class", "endpoints"],
+			"required": [
+				"interface",
+				"class",
+				"endpoints"
+			],
 			"additionalProperties": false,
 			"properties": {
 				"interface": {
@@ -55,11 +68,18 @@
 				"endpoints": {
 					"type": "object",
 					"description": "Interrupt endpoints. 'out' sends commands to device; 'in' receives input reports.",
-					"required": ["out", "in"],
+					"required": [
+						"out",
+						"in"
+					],
 					"additionalProperties": false,
 					"properties": {
-						"out": { "$ref": "#/$defs/endpoint" },
-						"in": { "$ref": "#/$defs/endpoint" }
+						"out": {
+							"$ref": "#/$defs/endpoint"
+						},
+						"in": {
+							"$ref": "#/$defs/endpoint"
+						}
 					}
 				}
 			}
@@ -67,18 +87,26 @@
 		"init_sequence": {
 			"type": "array",
 			"description": "Ordered startup packets sent to the controller. The device will not send input reports until the sequence completes.",
-			"items": { "$ref": "#/$defs/init_step" }
+			"items": {
+				"$ref": "#/$defs/init_step"
+			}
 		},
 		"input_commands": {
 			"type": "object",
 			"description": "GIP command payloads that carry input data. Keyed by lowercase command name.",
-			"additionalProperties": { "$ref": "#/$defs/input_command" }
+			"additionalProperties": {
+				"$ref": "#/$defs/input_command"
+			}
 		}
 	},
 	"$defs": {
 		"endpoint": {
 			"type": "object",
-			"required": ["address", "type", "max_packet"],
+			"required": [
+				"address",
+				"type",
+				"max_packet"
+			],
 			"additionalProperties": false,
 			"properties": {
 				"address": {
@@ -87,7 +115,10 @@
 				},
 				"type": {
 					"type": "string",
-					"enum": ["interrupt", "bulk"],
+					"enum": [
+						"interrupt",
+						"bulk"
+					],
 					"description": "Transfer type."
 				},
 				"max_packet": {
@@ -98,7 +129,11 @@
 		},
 		"init_step": {
 			"type": "object",
-			"required": ["step", "packet", "timeout_ms"],
+			"required": [
+				"step",
+				"packet",
+				"timeout_ms"
+			],
 			"additionalProperties": false,
 			"properties": {
 				"step": {
@@ -108,7 +143,11 @@
 				},
 				"packet": {
 					"type": "array",
-					"items": { "type": "integer", "minimum": 0, "maximum": 255 },
+					"items": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 255
+					},
 					"description": "Raw bytes to write to the OUT endpoint. Format: [CMD, OPT, SEQ, LEN, PAYLOAD...]."
 				},
 				"timeout_ms": {
@@ -120,7 +159,9 @@
 		},
 		"input_command": {
 			"type": "object",
-			"required": ["cmd"],
+			"required": [
+				"cmd"
+			],
 			"additionalProperties": false,
 			"properties": {
 				"cmd": {
@@ -130,12 +171,16 @@
 				"payload_layout": {
 					"type": "object",
 					"description": "Byte layout of the payload (data after the 4-byte GIP header).",
-					"additionalProperties": { "$ref": "#/$defs/field" }
+					"additionalProperties": {
+						"$ref": "#/$defs/field"
+					}
 				},
 				"fields": {
 					"type": "object",
 					"description": "Named fields for simple commands (e.g. virtual_key).",
-					"additionalProperties": { "$ref": "#/$defs/field" }
+					"additionalProperties": {
+						"$ref": "#/$defs/field"
+					}
 				}
 			}
 		},
@@ -147,15 +192,24 @@
 					"type": "integer",
 					"description": "Byte offset into payload (0-based)."
 				},
-				"size": { "type": "integer", "description": "Field size in bytes." },
+				"size": {
+					"type": "integer",
+					"description": "Field size in bytes."
+				},
 				"type": {
 					"type": "string",
-					"enum": ["uint8", "uint16_le", "int16_le"],
+					"enum": [
+						"uint8",
+						"uint16_le",
+						"int16_le"
+					],
 					"description": "Data type. uint16_le and int16_le are little-endian 2-byte values."
 				},
 				"range": {
 					"type": "array",
-					"items": { "type": "integer" },
+					"items": {
+						"type": "integer"
+					},
 					"minItems": 2,
 					"maxItems": 2,
 					"description": "[min, max] value range."
@@ -175,7 +229,10 @@
 				"bits": {
 					"type": "object",
 					"description": "Named bitmask fields. Key = button name, value = bitmask in decimal.",
-					"additionalProperties": { "type": "integer", "minimum": 1 }
+					"additionalProperties": {
+						"type": "integer",
+						"minimum": 1
+					}
 				}
 			}
 		}

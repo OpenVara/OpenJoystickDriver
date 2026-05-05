@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/Protocols/generic-hid.schema.json",
+  "title": "OpenJoystickDriver Generic HID Protocol Profile",
+  "description": "Protocol-specific metadata for generic HID fallback controllers.",
+  "type": "object",
+  "required": [
+    "driver",
+    "variant"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "driver": {
+      "const": "GenericHID"
+    },
+    "variant": {
+      "const": "genericHID"
+    },
+    "mapping_flags": {
+      "type": "array",
+      "maxItems": 0,
+      "default": []
+    }
+  }
+}

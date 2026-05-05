@@ -16,23 +16,23 @@ OpenJoystickDriver is to gamepads what [OpenTabletDriver](https://opentabletdriv
 
 ## What works
 
-| Feature | Status |
-|---------|--------|
-| Xbox One / Series controllers (GIP protocol) | Working - hardware verified on Gamesir G7 SE, Flydigi Vader 5S |
-| GIP authentication (CMD 0x06 sub-protocol) | Working - state machine with dummy auth payloads |
-| Flydigi Vader 5S (USB, GIP) | Working - per-device endpoint config, setConfiguration quirk |
-| Virtual HID gamepad (DriverKit extension) | Working - production output path on macOS 13+ |
-| Virtual HID gamepad (IOHIDUserDevice user-space) | Working - optional compatibility mode (no reboot) |
-| DualShock 4 (USB) | Implemented, untested (no PS4 hardware) |
-| Generic USB HID gamepads | Basic fallback (standard HID usage page) |
-| Button remapping | Working - JSON profiles per VID/PID |
-| Stick → mouse, D-pad → arrow keys | Working |
-| Menu bar app (SwiftUI) | Working |
-| CLI (`--headless`) | Working |
-| LaunchAgent (auto-start on login) | Working |
-| Bluetooth | Not implemented |
-| DualSense (PS5) | Not implemented |
-| Switch Pro Controller | Not implemented |
+| Feature                                          | Status                                                         |
+| ------------------------------------------------ | -------------------------------------------------------------- |
+| Xbox One / Series controllers (GIP protocol)     | Working - hardware verified on Gamesir G7 SE, Flydigi Vader 5S |
+| GIP authentication (CMD 0x06 sub-protocol)       | Working - state machine with dummy auth payloads               |
+| Flydigi Vader 5S (USB, GIP)                      | Working - per-device endpoint config, setConfiguration quirk   |
+| Virtual HID gamepad (DriverKit extension)        | Working - production output path on macOS 13+                  |
+| Virtual HID gamepad (IOHIDUserDevice user-space) | Working - optional compatibility mode (no reboot)              |
+| DualShock 4 (USB)                                | Implemented, untested (no PS4 hardware)                        |
+| Generic USB HID gamepads                         | Basic fallback (standard HID usage page)                       |
+| Button remapping                                 | Working - JSON profiles per VID/PID                            |
+| Stick → mouse, D-pad → arrow keys                | Working                                                        |
+| Menu bar app (SwiftUI)                           | Working                                                        |
+| CLI (`--headless`)                               | Working                                                        |
+| LaunchAgent (auto-start on login)                | Working                                                        |
+| Bluetooth                                        | Not implemented                                                |
+| DualSense (PS5)                                  | Not implemented                                                |
+| Switch Pro Controller                            | Not implemented                                                |
 
 ---
 
@@ -40,10 +40,11 @@ OpenJoystickDriver is to gamepads what [OpenTabletDriver](https://opentabletdriv
 
 - macOS 13 (Ventura) or later
 - [libusb](https://libusb.info/) - required for Xbox/GIP controllers
-- Xcode Command Line Tools or a full Xcode installation (for `swift build`)
+- Xcode Command Line Tools or a full Xcode installation (for `swift build` and `swift test`)
 
 ```bash
 brew install libusb
+xcode-select --install
 ```
 
 ---
@@ -60,6 +61,10 @@ cd OpenJoystickDriver
 
 This builds a signed app bundle and installs it to `/Applications/OpenJoystickDriver.app`.
 The daemon is managed as a LaunchAgent via `SMAppService` from inside the app/CLI.
+
+SwiftPM tests use Swift Testing. On macOS, `Package.swift` adds the Command Line Tools
+`Testing.framework` and `lib_TestingInterop.dylib` search paths for test targets, so
+`swift test` works without opening Xcode.
 
 ---
 
@@ -81,7 +86,17 @@ If a game/emulator can *see* your controller but won’t react to inputs, enable
 - Open the OpenJoystickDriver menu bar item → `Mode` → `Compatibility`
 
 This uses a user-space virtual controller (IOHIDUserDevice). It does not require a reboot.
-When enabled, OpenJoystickDriver routes output to the user-space device (and disables DriverKit output).
+When enabled, OpenJoystickDriver routes output to the user-space device and keeps DriverKit output live.
+
+GameSir G7 SE is hardware-confirmed in Xbox One HID compatibility mode. Face buttons,
+shoulders, triggers, sticks, View/Menu, L3/R3, Xbox/Home, and D-pad report as a
+standard `Xbox Wireless Controller` (`VID 045e`, `PID 02ea`).
+
+If a browser page was already open before Compatibility mode was enabled, it may
+still need a reload to refresh controller ordering. Compatibility mode keeps
+retrying an exclusive open on the DriverKit virtual device so new consumer
+enumerations prefer the user-space controller, while still sending reports to
+DriverKit if a browser lists it.
 
 > **Note for development builds:** Ad-hoc signed binaries get a new code identity on every `swift build`. macOS ties TCC grants to **the** binary's code identity, so permissions reset after each rebuild. After rebuilding, re-grant both permissions and use `--headless restart` or the **Restart Daemon** button in the app. The Permissions view detects this state and shows a prompt automatically.
 >
@@ -146,6 +161,20 @@ OpenJoystickDriver --headless output both
 
 # Virtual device input self-test (press buttons while it runs)
 OpenJoystickDriver --headless selftest 5
+
+# DriverKit system extension lifecycle
+OpenJoystickDriver --headless sysext status
+OpenJoystickDriver --headless sysext install
+OpenJoystickDriver --headless sysext uninstall
+
+# Backend acceptance loop (DriverKit, user-space, SDL3, PCSX2/Rosetta)
+./scripts/ojd diagnose backends --seconds 5
+
+# GameController.framework consumer probe
+./scripts/ojd diagnose gamecontroller --seconds 5
+
+# Validate bundled controller profiles
+./scripts/ojd validate profiles
 ```
 
 ---
@@ -237,27 +266,44 @@ Profiles are stored at `~/Library/Application Support/OpenJoystickDriver/profile
 
 Device support lives in two places:
 
-- `Sources/OpenJoystickDriverKit/Resources/devices.json` - VID/PID catalog and parser assignment
+- `Sources/OpenJoystickDriverKit/Resources/Controllers/*.json` - one controller profile per model
 - `Resources/Schemas/Devices/` - per-device field layouts (for documentation and validation)
 
 To add a new controller:
 
-1. Add an entry to `devices.json` with the VID, PID, and parser type (`"gip"`, `"ds4"`, or `"generic_hid"`)
+1. Add a controller profile under `Resources/Controllers/` with identity, input transport, protocol driver, and output preference
 2. If it uses a non-standard protocol, implement a new `InputParser` conformance in `Sources/OpenJoystickDriverKit/Protocol/`
 3. Add a device schema file to `Resources/Schemas/Devices/` (optional but helpful for reviewers)
 4. Add tests in `Tests/OpenJoystickDriverKitTests/`
 
 VID and PID values in JSON must be **decimal** integers, not hex strings.
 
-Optional `devices.json` fields for USB quirks:
+Each controller profile uses `Resources/Schemas/controller-profile.schema.json`
+and has four sections:
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `input_endpoint` | int | 0x82 (130) | Interrupt IN endpoint address |
-| `output_endpoint` | int | 0x02 (2) | Interrupt OUT endpoint address |
-| `needs_set_configuration` | bool | false | Call `setConfiguration(1)` before claiming interface (for devices that enumerate unconfigured) |
+- `identity` - VID/PID and display names
+- `input` - USB/HID transport, interface, endpoint, configuration, and settle behavior
+- `protocol` - parser driver, protocol variant, and mapping quirks
+- `output` - virtual identity and preferred output backends
 
-Both `input_endpoint` and `output_endpoint` must be present together; if only one is set, the override is ignored and GIP defaults apply.
+USB endpoints are grouped under `input.usb.endpoints` as decimal `in` and `out`
+addresses. Device-specific configuration behavior, such as Vader 5S
+`setConfiguration(1)`, stays under `input.usb` instead of parser code.
+
+The `protocol.variant` and `protocol.mapping_flags` fields are compatibility metadata
+modeled after Linux `xpad.c` device types and mapping flags so new Xbox-class
+controllers can be added without baking quirks into parser code.
+
+### Virtual output backends
+
+Virtual controller output is modeled as backend capability, not as a parser detail:
+
+- `driverKitHID` - DriverKit virtual HID device, system-wide, entitlement-backed
+- `userSpaceHID` - IOHIDUserDevice compatibility path, system-wide, entitlement-backed
+- `gameControllerVirtual` - tracked as unsupported for system-wide output unless a probe proves otherwise
+
+Backends implement `VirtualControllerBackend`, which reports static capabilities and
+runtime status for diagnostics and acceptance loops.
 
 ---
 

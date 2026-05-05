@@ -200,23 +200,28 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
 
     guard let entry else { return }
 
-    let report = entry.lock.withLock { () -> [UInt8] in
+    let reports = entry.lock.withLock { () -> [[UInt8]] in
       for event in events { applyEvent(event, deadzone: 0.15, state: &entry.state) }
-      return format.buildInputReport(from: entry.state)
+      let secondaryReports = events.compactMap { xboxGuideReport(for: $0) }
+      return [format.buildInputReport(from: entry.state)] + secondaryReports
     }
 
-    let result = report.withUnsafeBytes { ptr -> IOReturn in
-      guard let base = ptr.baseAddress else { return kIOReturnBadArgument }
-      return IOHIDUserDeviceHandleReportWithTimeStamp(
-        entry.device,
-        mach_absolute_time(),
-        base.assumingMemoryBound(to: UInt8.self),
-        ptr.count
-      )
+    var lastResult: IOReturn = kIOReturnSuccess
+    for payload in reports {
+      let result = payload.withUnsafeBytes { ptr -> IOReturn in
+        guard let base = ptr.baseAddress else { return kIOReturnBadArgument }
+        return IOHIDUserDeviceHandleReportWithTimeStamp(
+          entry.device,
+          mach_absolute_time(),
+          base.assumingMemoryBound(to: UInt8.self),
+          ptr.count
+        )
+      }
+      if result != kIOReturnSuccess { lastResult = result }
     }
 
-    if result != kIOReturnSuccess {
-      status = "error: \(String(result, radix: 16))"
+    if lastResult != kIOReturnSuccess {
+      status = "error: \(String(lastResult, radix: 16))"
     } else if status.hasPrefix("error:") {
       status = "on"
     }
@@ -247,6 +252,17 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     }
   }
 
+  private func xboxGuideReport(for event: ControllerEvent) -> [UInt8]? {
+    switch event {
+    case .buttonPressed(let button) where button == .guide || button == .ps:
+      return [0x02, 0x01]
+    case .buttonReleased(let button) where button == .guide || button == .ps:
+      return [0x02, 0x00]
+    default:
+      return nil
+    }
+  }
+
   // MARK: - Button mapping (XInputHID order)
 
   private func buttonBit(for button: Button) -> UInt32? {
@@ -261,7 +277,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     case .rightStick: return 7
     case .start, .options: return 8
     case .back, .share: return 9
-    case .guide, .ps: return 10
+    case .guide, .ps: return nil
     case .dpadUp: return 11
     case .dpadDown: return 12
     case .dpadLeft: return 13

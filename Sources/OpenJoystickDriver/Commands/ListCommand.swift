@@ -54,13 +54,18 @@ struct ListCommand {
         )
         for await device in stream {
           let id = DeviceIdentifier(vendorID: device.idVendor, productID: device.idProduct)
-          let parser = ParserRegistry().parser(for: id)
-          let name = String(describing: type(of: parser))
+          let profile = ParserRegistry().runtimeProfile(for: id)
           let vid = String(format: "%04X", device.idVendor)
           let pid = String(format: "%04X", device.idProduct)
+          let mappings =
+            profile.mappingFlags.isEmpty ? "none" : profile.mappingFlags.joined(separator: ",")
           print(
             "  VID=0x\(vid)" + " PID=0x\(pid)" + " bus=\(device.bus)" + " addr=\(device.address)"
-              + " parser=\(name)"
+              + " parser=\(profile.parserName)"
+              + " protocol=\(profile.protocolVariant.rawValue)"
+              + " endpoints=in:0x\(String(profile.transportProfile.inputEndpoint, radix: 16))"
+              + " out:0x\(String(profile.transportProfile.outputEndpoint, radix: 16))"
+              + " mappings=\(mappings)"
           )
           found = true
         }

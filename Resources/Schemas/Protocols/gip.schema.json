@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/Protocols/gip.schema.json",
+  "title": "OpenJoystickDriver GIP Protocol Profile",
+  "description": "Protocol-specific metadata for Xbox Gaming Input Protocol controllers.",
+  "type": "object",
+  "required": [
+    "driver",
+    "variant"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "driver": {
+      "const": "GIP"
+    },
+    "variant": {
+      "type": "string",
+      "enum": [
+        "xboxOriginal",
+        "xbox360",
+        "xbox360Wireless",
+        "xboxOne",
+        "unknown"
+      ]
+    },
+    "mapping_flags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "dpadToButtons",
+          "triggersToButtons",
+          "sticksToNull",
+          "shareButton",
+          "paddles",
+          "profileButton",
+          "shareOffset"
+        ]
+      },
+      "default": []
+    }
+  }
+}

@@ -5,7 +5,7 @@ import IOKit.hid
 /// Sends HID reports to the DriverKit virtual gamepad via `IOHIDDeviceSetReport`.
 ///
 /// The daemon finds the virtual device by VID/PID through IOHIDManager,
-/// then sends 15-byte output reports. The dext's `setReport` override
+/// then sends output reports. The dext's `setReport` override
 /// relays them as input reports via `handleReport`.
 ///
 /// If ``connect()`` returns `false`, ``dispatch(events:from:)`` auto-retries
@@ -45,6 +45,8 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   private let seizeLock = NSLock()
   private var seizedDevice: IOHIDDevice?
   private var seizedManager: IOHIDManager?
+  private var compatibilitySeizeRequested = false
+  private var seizeRetryScheduled = false
 
   // MARK: - Stability tracking
 
@@ -72,18 +74,17 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   private var rightTrigger: Int16 = 0
   private var hat: GamepadHIDDescriptor.Hat = .neutral
 
+  private static let relayMagic: [UInt8] = [0x4F, 0x4A]  // "OJ"
+
   // MARK: - Init / deinit
 
   /// Creates a new DextOutputDispatcher.
   ///
   /// - Parameters:
   ///   - profile: Virtual device identity used for HID device matching.
-  public init(profile: VirtualDeviceProfile = .xboxOneS) {
+  public init(profile: VirtualDeviceProfile = .openJoystickDriver) {
     self.profile = profile
-    // DriverKit is presented as an Xbox controller for SDL/PCSX2 auto-mapping.
-    // Use the same descriptor/report packing as Compatibility's "Xbox One (HID)".
-    self.format = (try? HIDDescriptorReportFormat(descriptor: XboxOneBluetoothHIDDescriptor.descriptor))
-      ?? OJDGenericGamepadFormat()
+    self.format = OJDGenericGamepadFormat()
   }
 
   deinit { closeDevice() }
@@ -113,17 +114,15 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   /// This does not uninstall/disable the system extension; it only attempts exclusive open.
   public func setCompatibilitySeizeEnabled(_ enabled: Bool) {
     if enabled {
-      let already = seizeLock.withLock { seizedDevice != nil }
-      if already { return }
-      guard let (device, mgr) = findDevice(openOptions: IOOptionBits(kIOHIDOptionsTypeSeizeDevice)) else {
-        return
+      let shouldAttempt = seizeLock.withLock { () -> Bool in
+        compatibilitySeizeRequested = true
+        return seizedDevice == nil
       }
-      seizeLock.withLock {
-        seizedDevice = device
-        seizedManager = mgr
-      }
+      if shouldAttempt { attemptCompatibilitySeize() }
     } else {
       let (oldDevice, oldMgr) = seizeLock.withLock { () -> (IOHIDDevice?, IOHIDManager?) in
+        compatibilitySeizeRequested = false
+        seizeRetryScheduled = false
         let d = seizedDevice
         let m = seizedManager
         seizedDevice = nil
@@ -132,6 +131,35 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       }
       if let device = oldDevice { IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeSeizeDevice)) }
       if let mgr = oldMgr { IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone)) }
+    }
+  }
+
+  private func attemptCompatibilitySeize() {
+    let shouldTry = seizeLock.withLock { compatibilitySeizeRequested && seizedDevice == nil }
+    guard shouldTry else { return }
+
+    if let (device, mgr) = findDevice(openOptions: IOOptionBits(kIOHIDOptionsTypeSeizeDevice)) {
+      seizeLock.withLock {
+        seizedDevice = device
+        seizedManager = mgr
+        seizeRetryScheduled = false
+      }
+      return
+    }
+
+    let shouldSchedule = seizeLock.withLock { () -> Bool in
+      guard compatibilitySeizeRequested && seizedDevice == nil && !seizeRetryScheduled else {
+        return false
+      }
+      seizeRetryScheduled = true
+      return true
+    }
+    guard shouldSchedule else { return }
+
+    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1.0) { [weak self] in
+      guard let self else { return }
+      self.seizeLock.withLock { self.seizeRetryScheduled = false }
+      self.attemptCompatibilitySeize()
     }
   }
 
@@ -292,35 +320,27 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     }
     guard let device else { return }
 
-    var report = reportLock.withLock { () -> [UInt8] in
+    let reports = reportLock.withLock { () -> [(CFIndex, [UInt8])] in
       for event in events { applyEvent(event, deadzone: 0.15) }
-      return buildReport()
+      let secondaryReports = events.compactMap { xboxGuideReport(for: $0) }
+      return [primaryOutputReport()] + secondaryReports
     }
 
-    let reportID: CFIndex = {
-      if let rid = format.inputReportID, rid != 0 { return CFIndex(rid) }
-      return 0
-    }()
-
-    let result = report.withUnsafeMutableBytes { ptr -> IOReturn in
-      guard let base = ptr.baseAddress else { return kIOReturnBadArgument }
-      return IOHIDDeviceSetReport(
-        device,
-        kIOHIDReportTypeOutput,
-        reportID,
-        base.assumingMemoryBound(to: UInt8.self),
-        ptr.count
-      )
-    }
-
-    statsLock.withLock {
-      setReportAttempts += 1
-      if result == kIOReturnSuccess {
-        setReportSuccesses += 1
-      } else {
-        setReportFailures += 1
-        lastSetReportError = result
+    var lastResult: IOReturn = kIOReturnSuccess
+    for (reportID, payload) in reports {
+      var report = payload
+      let result = report.withUnsafeMutableBytes { ptr -> IOReturn in
+        guard let base = ptr.baseAddress else { return kIOReturnBadArgument }
+        return IOHIDDeviceSetReport(
+          device,
+          kIOHIDReportTypeOutput,
+          reportID,
+          base.assumingMemoryBound(to: UInt8.self),
+          ptr.count
+        )
       }
+      recordSetReportResult(result)
+      if result != kIOReturnSuccess { lastResult = result }
     }
 
     // Aborted (0xe00002eb): IOKit can abort in-flight operations during sysext replacement/upgrade.
@@ -330,8 +350,8 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     // kIOReturnNotOpen (0xe00002cd): device handle went stale during sysext replacement.
     // The dext process cycles through device instances on crash/rematch; reconnecting
     // picks up the latest instance.
-    if result == kIOReturnNotAttached || result == kIOReturnNoDevice
-      || result == IOReturn(bitPattern: 0xe000_02cd) || result == kIOReturnAbortedValue
+    if lastResult == kIOReturnNotAttached || lastResult == kIOReturnNoDevice
+      || lastResult == IOReturn(bitPattern: 0xe000_02cd) || lastResult == kIOReturnAbortedValue
     {
       let now = DispatchTime.now().uptimeNanoseconds
       let shouldLog = connectionLock.withLock { () -> Bool in
@@ -340,13 +360,13 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
         lastConnectionLostLogNs = now
         return true
       }
-      if shouldLog { print("[DextOutputDispatcher] Connection lost (\(result)); will reconnect") }
+      if shouldLog { print("[DextOutputDispatcher] Connection lost (\(lastResult)); will reconnect") }
       recordFailure(now: now)
       closeDevice()
       connectionLock.withLock {
         nextAutoRetryConnectNs = now &+ autoRetryBackoffNs
       }
-    } else if result != kIOReturnSuccess {
+    } else if lastResult != kIOReturnSuccess {
       // Keep this quiet; repeated failures are handled via stats + fallback mode.
     }
   }
@@ -389,6 +409,18 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     }
   }
 
+  private func recordSetReportResult(_ result: IOReturn) {
+    statsLock.withLock {
+      setReportAttempts += 1
+      if result == kIOReturnSuccess {
+        setReportSuccesses += 1
+      } else {
+        setReportFailures += 1
+        lastSetReportError = result
+      }
+    }
+  }
+
   // MARK: - Event application (called inside reportLock.withLock)
 
   private func applyEvent(_ event: ControllerEvent, deadzone: Float) {
@@ -413,7 +445,15 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   // MARK: - Report construction (called inside reportLock.withLock)
 
-  private func buildReport() -> [UInt8] {
+  private func primaryOutputReport() -> (CFIndex, [UInt8]) {
+    let reportID: CFIndex = {
+      if let rid = format.inputReportID, rid != 0 { return CFIndex(rid) }
+      return 0
+    }()
+    return (reportID, buildPrimaryReportPayload())
+  }
+
+  private func buildPrimaryReportPayload() -> [UInt8] {
     let state = VirtualGamepadState(
       buttons: buttons,
       leftStickX: leftStickX,
@@ -433,6 +473,21 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       return Array(full.dropFirst())
     }
     return full
+  }
+
+  private func xboxGuideReport(for event: ControllerEvent) -> (CFIndex, [UInt8])? {
+    switch event {
+    case .buttonPressed(let button) where button == .guide || button == .ps:
+      return framedInputReport(reportID: 2, payload: [0x01])
+    case .buttonReleased(let button) where button == .guide || button == .ps:
+      return framedInputReport(reportID: 2, payload: [0x00])
+    default:
+      return nil
+    }
+  }
+
+  private func framedInputReport(reportID: UInt8, payload: [UInt8]) -> (CFIndex, [UInt8]) {
+    (1, Self.relayMagic + [reportID] + payload)
   }
 
   // MARK: - Button mapping (XInputHID order)

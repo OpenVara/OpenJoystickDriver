@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/Protocols/ds4.schema.json",
+  "title": "OpenJoystickDriver DualShock Protocol Profile",
+  "description": "Protocol-specific metadata for DualShock-class HID controllers.",
+  "type": "object",
+  "required": [
+    "driver",
+    "variant"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "driver": {
+            "const": "DS3"
+          }
+        },
+        "required": [
+          "driver"
+        ]
+      },
+      "then": {
+        "properties": {
+          "variant": {
+            "enum": [
+              "dualShock3",
+              "unknown"
+            ]
+          },
+          "mapping_flags": {
+            "items": {
+              "enum": [
+                "gyro",
+                "accelerometer",
+                "battery"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "driver": {
+            "const": "DS4"
+          }
+        },
+        "required": [
+          "driver"
+        ]
+      },
+      "then": {
+        "properties": {
+          "variant": {
+            "enum": [
+              "dualShock4",
+              "unknown"
+            ]
+          },
+          "mapping_flags": {
+            "items": {
+              "enum": [
+                "touchpad",
+                "gyro",
+                "accelerometer",
+                "battery",
+                "lightbar"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "driver": {
+      "enum": [
+        "DS3",
+        "DS4"
+      ]
+    },
+    "variant": {
+      "type": "string",
+      "enum": [
+        "dualShock3",
+        "dualShock4",
+        "unknown"
+      ]
+    },
+    "mapping_flags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "touchpad",
+          "gyro",
+          "accelerometer",
+          "battery",
+          "lightbar"
+        ]
+      },
+      "default": []
+    }
+  }
+}

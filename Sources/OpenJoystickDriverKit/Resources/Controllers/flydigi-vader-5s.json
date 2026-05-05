@@ -1,0 +1,34 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/controller-profile.schema.json",
+  "profile_version": "1.0.0",
+  "identity": {
+    "vendor_id": 14295,
+    "product_id": 10241,
+    "name": "Flydigi Vader 5S",
+    "short_name": "Vader5S"
+  },
+  "input": {
+    "transport": "usb",
+    "usb": {
+      "class": 255,
+      "interface": 0,
+      "configuration": "set1BeforeClaim",
+      "post_handshake_settle_ms": 200,
+      "endpoints": {
+        "in": 129,
+        "out": 1
+      }
+    }
+  },
+  "protocol": {
+    "driver": "GIP",
+    "variant": "xboxOne"
+  },
+  "output": {
+    "virtual_profile": "xboxOneS",
+    "preferred_backends": [
+      "driverKitHID",
+      "userSpaceHID"
+    ]
+  }
+}

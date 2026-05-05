@@ -69,6 +69,17 @@ struct StatusCommand {
           "  \(dev.name)" + " (VID:\(vid) PID:\(pid)" + " \(dev.parser) [\(dev.connection)]"
             + " SN:\(sn))"
         )
+        let mappings = dev.mappingFlags.isEmpty ? "none" : dev.mappingFlags.joined(separator: ",")
+        let backends =
+          dev.preferredBackends.isEmpty ? "none" : dev.preferredBackends.joined(separator: ",")
+        print(
+          "    protocol=\(dev.protocolVariant)"
+            + " endpoints=in:0x\(String(dev.inputEndpoint, radix: 16))"
+            + " out:0x\(String(dev.outputEndpoint, radix: 16))"
+            + " setConfig=\(dev.needsSetConfiguration)"
+            + " settleMs=\(dev.postHandshakeSettleMs)"
+        )
+        print("    mappings=\(mappings) backends=\(backends)")
       }
     }
   }

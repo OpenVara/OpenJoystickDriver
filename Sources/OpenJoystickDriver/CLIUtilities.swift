@@ -33,6 +33,24 @@ func runSyncResult<T: Sendable>(_ block: @Sendable @escaping () async -> T) -> T
   return value
 }
 
+/// Blocks current thread until `block` completes or the timeout expires.
+///
+/// Returns nil on timeout. Safe for CLI status probes that must not hang when
+/// the daemon connection is invalidated without a reply.
+func runSyncResult<T: Sendable>(
+  timeout seconds: Double,
+  _ block: @Sendable @escaping () async -> T
+) -> T? {
+  let semaphore = DispatchSemaphore(value: 0)
+  nonisolated(unsafe) var result: T?
+  Task {
+    result = await block()
+    semaphore.signal()
+  }
+  guard semaphore.wait(timeout: .now() + seconds) == .success else { return nil }
+  return result
+}
+
 /// Ensures the CLI is executed from an app bundle installed under `/Applications`.
 ///
 /// This repo's LaunchAgent plist uses an absolute ProgramArguments path under

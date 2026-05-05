@@ -5,7 +5,7 @@
 #   ./scripts/ojd diagnose <subcommand>
 #
 # Subcommands:
-#   dext (default), sdl3, pcsx2-latency
+#   dext (default), sdl3, pcsx2-latency, backends
 #
 # Runs all checks regardless of individual failures.
 
@@ -22,7 +22,9 @@ if [[ "$cmd" == "-h" || "$cmd" == "--help" || "$cmd" == "help" ]]; then
 Usage:
   ./scripts/ojd diagnose dext
   ./scripts/ojd diagnose sdl3 [--seconds N] [other args]
+  ./scripts/ojd diagnose gamecontroller [--seconds N]
   ./scripts/ojd diagnose pcsx2-latency
+  ./scripts/ojd diagnose backends [--seconds N]
 TXT
   exit 0
 fi
@@ -32,13 +34,15 @@ run_sdl3_probe_native() {
   ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
   local SRC="$ROOT/tools/sdl3-gamepad-probe/main.c"
   local OUT="/tmp/ojd-sdl3-probe"
+  local SDKROOT
+  SDKROOT="$(select_macos_sdk)" || return $?
 
   command -v pkg-config >/dev/null 2>&1 || die "pkg-config not found (brew install pkg-config)"
   pkg-config --exists sdl3 || die "SDL3 not found (brew install sdl3)"
   [[ -f "$SRC" ]] || die "Missing probe source: $SRC"
 
   echo "Building SDL3 probe (native)..."
-  clang "$SRC" $(pkg-config --cflags --libs sdl3) -o "$OUT"
+  SDKROOT="$SDKROOT" clang -isysroot "$SDKROOT" "$SRC" $(pkg-config --cflags --libs sdl3) -o "$OUT"
 
   echo
   echo "Running: $OUT $*"
@@ -55,13 +59,16 @@ run_sdl3_probe_pcsx2_x86_64() {
   ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
   SRC="$ROOT/tools/sdl3-gamepad-probe/main.c"
   OUT="/tmp/ojd-sdl3-probe-pcsx2-x86_64"
+  local SDKROOT
+  SDKROOT="$(select_macos_sdk)" || return $?
 
   [[ -d "$PCSX2_APP" ]] || die "PCSX2 not found at: $PCSX2_APP"
   [[ -f "$PCSX2_SDL3" ]] || die "PCSX2 SDL3 dylib not found at: $PCSX2_SDL3"
   [[ -f "$SRC" ]] || die "Missing probe source: $SRC"
 
   echo "Building SDL3 probe (PCSX2/Rosetta x86_64)..."
-  clang -arch x86_64 "$SRC" -I/opt/homebrew/include -I/opt/homebrew/include/SDL3 \
+  SDKROOT="$SDKROOT" clang -arch x86_64 -isysroot "$SDKROOT" "$SRC" \
+    -I/opt/homebrew/include -I/opt/homebrew/include/SDL3 \
     -L"$PCSX2_APP/Contents/Frameworks" -lSDL3.0 \
     -Wl,-headerpad_max_install_names \
     -o "$OUT"
@@ -76,22 +83,72 @@ run_sdl3_probe_pcsx2_x86_64() {
   "$OUT" "$@"
 }
 
+select_macos_sdk() {
+  local sdk
+  sdk="$(xcrun --show-sdk-path 2>/dev/null || true)"
+  if [[ -f "$sdk/usr/include/AvailabilityMacros.h" ]]; then
+    echo "$sdk"
+    return 0
+  fi
+
+  local xcode_dev="/Applications/Xcode_26.3.app/Contents/Developer"
+  if [[ -d "$xcode_dev" ]]; then
+    sdk="$xcode_dev/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+    if [[ -f "$sdk/usr/include/AvailabilityMacros.h" ]]; then
+      echo "$sdk"
+      return 0
+    fi
+    sdk="$(DEVELOPER_DIR="$xcode_dev" xcrun --show-sdk-path 2>/dev/null || true)"
+    if [[ -f "$sdk/usr/include/AvailabilityMacros.h" ]]; then
+      echo "$sdk"
+      return 0
+    fi
+  fi
+
+  die "Could not find a macOS SDK with AvailabilityMacros.h"
+}
+
+run_limited_command() {
+  local limit="$1"
+  shift
+  "$@" &
+  local pid=$!
+  local elapsed=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if (( elapsed >= limit )); then
+      echo "WARN: timed out after ${limit}s: $*"
+      kill "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+      return 124
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  wait "$pid"
+}
+
 run_pcsx2_latency_triage() {
   local APP_BIN="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver"
+  local ROOT
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  local CLI_BIN="$ROOT/.build/debug/OpenJoystickDriver"
+  if [[ ! -x "$CLI_BIN" ]]; then
+    CLI_BIN="$APP_BIN"
+  fi
   local PCSX2_DB="/Applications/PCSX2.app/Contents/Resources/game_controller_db.txt"
 
   echo "=== OpenJoystickDriver vs SDL3 latency triage ==="
   echo
 
-  if [[ -x "$APP_BIN" ]]; then
+  if [[ -x "$CLI_BIN" ]]; then
     echo "0) OJD daemon status (shows mode/identity/output):"
-    "$APP_BIN" --headless status || true
+    run_limited_command 10 "$CLI_BIN" --headless status || true
     echo
     echo "1) Virtual device self-test (press buttons while it runs):"
-    "$APP_BIN" --headless selftest 5 || true
+    run_limited_command 10 "$CLI_BIN" --headless selftest 5 || true
     echo
   else
-    echo "1) SKIP: OpenJoystickDriver not installed at:"
+    echo "1) SKIP: OpenJoystickDriver CLI not found at:"
     echo "   $APP_BIN"
     echo "   Fix: build+install the app bundle, then re-run this script."
     echo
@@ -113,13 +170,117 @@ run_pcsx2_latency_triage() {
   fi
 }
 
+run_gamecontroller_probe() {
+  local seconds="${1:-5}"
+  local ROOT
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  local PROBE="$ROOT/.build/debug/OpenJoystickDriverGameControllerProbe"
+
+  if [[ ! -x "$PROBE" ]]; then
+    echo "Building GameController probe..."
+    (cd "$ROOT" && swift build --product OpenJoystickDriverGameControllerProbe)
+  fi
+
+  [[ -x "$PROBE" ]] || die "Missing probe binary: $PROBE"
+  "$PROBE" --seconds "$seconds"
+}
+
+run_backend_acceptance_loop() {
+  local APP_BIN="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver"
+  local ROOT
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  local CLI_BIN="$ROOT/.build/debug/OpenJoystickDriver"
+  if [[ ! -x "$CLI_BIN" ]]; then
+    CLI_BIN="$APP_BIN"
+  fi
+  local seconds="${1:-5}"
+  local step_timeout="$((seconds + 15))"
+
+  echo "=== OpenJoystickDriver backend acceptance loop ==="
+  echo
+
+  run_limited() {
+    local limit="$1"
+    shift
+    "$@" &
+    local pid=$!
+    local elapsed=0
+    while kill -0 "$pid" 2>/dev/null; do
+      if (( elapsed >= limit )); then
+        echo "WARN: timed out after ${limit}s: $*"
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+        return 124
+      fi
+      sleep 1
+      elapsed=$((elapsed + 1))
+    done
+    wait "$pid"
+  }
+
+  if [[ -x "$CLI_BIN" ]]; then
+    echo "0) CLI status:"
+    run_limited "$step_timeout" "$CLI_BIN" --headless status || true
+    echo
+
+    echo "1) Output mode:"
+    run_limited "$step_timeout" "$CLI_BIN" --headless output status || true
+    echo
+
+    echo "2) User-space backend status:"
+    run_limited "$step_timeout" "$CLI_BIN" --headless userspace status || true
+    echo
+  else
+    echo "0) SKIP: OpenJoystickDriver CLI not found at:"
+    echo "   $APP_BIN"
+    echo
+  fi
+
+  echo "3) DriverKit backend diagnostics:"
+  run_limited "$step_timeout" /usr/bin/env bash "$0" dext || true
+  echo
+
+  echo "4) SDL3 consumer probe:"
+  run_limited "$step_timeout" /usr/bin/env bash "$0" sdl3 --seconds "$seconds" || true
+  echo
+
+  echo "5) PCSX2/Rosetta consumer probe:"
+  if [[ -d "/Applications/PCSX2.app" ]]; then
+    run_limited "$step_timeout" run_sdl3_probe_pcsx2_x86_64 --seconds "$seconds" || true
+  else
+    echo "SKIP: PCSX2 not found at /Applications/PCSX2.app"
+  fi
+  echo
+
+  echo "6) GameController.framework consumer probe:"
+  run_limited "$step_timeout" /usr/bin/env bash "$0" gamecontroller --seconds "$seconds" || true
+}
+
 if [[ "$cmd" == "sdl3" ]]; then
   run_sdl3_probe_native "$@"
   exit 0
 fi
 
+if [[ "$cmd" == "gamecontroller" ]]; then
+  seconds="5"
+  if [[ "${1:-}" == "--seconds" && -n "${2:-}" ]]; then
+    seconds="$2"
+  fi
+  run_gamecontroller_probe "$seconds"
+  exit 0
+fi
+
 if [[ "$cmd" == "pcsx2-latency" ]]; then
   run_pcsx2_latency_triage
+  exit 0
+fi
+
+if [[ "$cmd" == "backends" ]]; then
+  seconds="5"
+  if [[ "${1:-}" == "--seconds" && -n "${2:-}" ]]; then
+    seconds="$2"
+  fi
+  run_backend_acceptance_loop "$seconds"
   exit 0
 fi
 
@@ -189,11 +350,13 @@ fi
 # --- 2. Installed binary exists ---
 INSTALLED_BINARY=""
 STALE_BINARIES=()
+EXECUTABLE_BINARIES=()
 for d in /Library/SystemExtensions/*/; do
   candidate="${d}${BUNDLE_ID}.dext/${DEXT_PROCESS}"
   if [[ -f "$candidate" ]]; then
     if [[ -x "$candidate" ]]; then
       INSTALLED_BINARY="$candidate"
+      EXECUTABLE_BINARIES+=("$candidate")
     else
       STALE_BINARIES+=("$candidate")
     fi
@@ -217,6 +380,10 @@ if [[ ${#STALE_BINARIES[@]} -gt 0 && -n "$INSTALLED_BINARY" ]]; then
   for stale in "${STALE_BINARIES[@]}"; do
     info "  stale: $stale"
   done
+fi
+
+if [[ ${#EXECUTABLE_BINARIES[@]} -gt 1 ]]; then
+  warn "${#EXECUTABLE_BINARIES[@]} executable sysext copies found"
 fi
 
 # --- 3. Installed binary executable ---
@@ -273,6 +440,15 @@ fi
 if pgrep -x "$DEXT_PROCESS" >/dev/null 2>&1; then
   pid=$(pgrep -x "$DEXT_PROCESS")
   pass "Dext process running (PID $pid)"
+  running_binary=$(ps -p "$pid" -o args= | awk '{print $1}' || true)
+  if [[ -n "$running_binary" ]]; then
+    info "process: $running_binary"
+    if [[ -n "$INSTALLED_BINARY" && "$running_binary" != "$INSTALLED_BINARY" ]]; then
+      fail "Dext process is still running from an older sysext copy"
+      info "expected: $INSTALLED_BINARY"
+      info "running:  $running_binary"
+    fi
+  fi
 else
   fail "Dext process not running"
 fi

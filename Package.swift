@@ -1,5 +1,41 @@
 // swift-tools-version:6.2
+import Foundation
 import PackageDescription
+
+let developerDir = ProcessInfo.processInfo.environment["DEVELOPER_DIR"]
+let appleDeveloperFrameworkCandidates = [
+  developerDir.map { "\($0)/Platforms/MacOSX.platform/Developer/Library/Frameworks" },
+  developerDir.map { "\($0)/Library/Developer/Frameworks" },
+  "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+].compactMap { $0 }
+let appleDeveloperLibCandidates = [
+  developerDir.map { "\($0)/Library/Developer/usr/lib" },
+  "/Library/Developer/CommandLineTools/Library/Developer/usr/lib",
+].compactMap { $0 }
+let appleDeveloperFrameworksPath =
+  appleDeveloperFrameworkCandidates.first {
+    FileManager.default.fileExists(atPath: "\($0)/Testing.framework")
+  } ?? appleDeveloperFrameworkCandidates[0]
+let appleDeveloperLibPath =
+  appleDeveloperLibCandidates.first {
+    FileManager.default.fileExists(atPath: "\($0)/lib_TestingInterop.dylib")
+  } ?? appleDeveloperLibCandidates[0]
+let appleTestingFrameworkSettings: [SwiftSetting] = [
+  .unsafeFlags(["-F", appleDeveloperFrameworksPath], .when(platforms: [.macOS]))
+]
+let appleTestingFrameworkLinkerSettings: [LinkerSetting] = [
+  .unsafeFlags(
+    [
+      "-F", appleDeveloperFrameworksPath,
+      "-framework", "Testing",
+      "-Xlinker", "-rpath",
+      "-Xlinker", appleDeveloperFrameworksPath,
+      "-Xlinker", "-rpath",
+      "-Xlinker", appleDeveloperLibPath,
+    ],
+    .when(platforms: [.macOS])
+  )
+]
 
 let package = Package(
   name: "OpenJoystickDriver",
@@ -61,22 +97,36 @@ let package = Package(
       path: "Sources/OpenJoystickDriverHIDTool"
     ),
 
+    .executableTarget(
+      name: "OpenJoystickDriverGameControllerProbe",
+      path: "Sources/OpenJoystickDriverGameControllerProbe",
+      linkerSettings: [
+        .linkedFramework("GameController")
+      ]
+    ),
+
     .testTarget(
       name: "SwiftUSBTests",
       dependencies: ["SwiftUSB"],
-      path: "Modules/SwiftUSB/Tests/SwiftUSBTests"
+      path: "Modules/SwiftUSB/Tests/SwiftUSBTests",
+      swiftSettings: appleTestingFrameworkSettings,
+      linkerSettings: appleTestingFrameworkLinkerSettings
     ),
 
     .testTarget(
       name: "HardwareTests",
       dependencies: ["SwiftUSB"],
-      path: "Modules/SwiftUSB/Tests/HardwareTests"
+      path: "Modules/SwiftUSB/Tests/HardwareTests",
+      swiftSettings: appleTestingFrameworkSettings,
+      linkerSettings: appleTestingFrameworkLinkerSettings
     ),
 
     .testTarget(
       name: "OpenJoystickDriverKitTests",
       dependencies: ["OpenJoystickDriverKit", "SwiftUSB"],
-      path: "Tests/OpenJoystickDriverKitTests"
+      path: "Tests/OpenJoystickDriverKitTests",
+      swiftSettings: appleTestingFrameworkSettings,
+      linkerSettings: appleTestingFrameworkLinkerSettings
     ),
   ]
 )
