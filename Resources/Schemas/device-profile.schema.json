@@ -61,6 +61,18 @@
 					"type": "integer",
 					"description": "USB bInterfaceClass in decimal (255 = vendor-specific)."
 				},
+				"configuration": {
+					"type": "string",
+					"enum": [
+						"set1BeforeClaim"
+					],
+					"description": "Optional USB configuration quirk. set1BeforeClaim means call setConfiguration(1) before claiming the interface."
+				},
+				"post_handshake_settle_ms": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Optional delay after GIP handshake before reading input reports."
+				},
 				"subclass": {
 					"type": "integer",
 					"description": "USB bInterfaceSubClass in decimal."

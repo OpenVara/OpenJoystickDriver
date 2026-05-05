@@ -1,0 +1,56 @@
+# OpenJoystickDriver
+
+OpenJoystickDriver is a macOS userspace gamepad driver. It reads physical
+controllers, parses their native reports, and publishes a virtual controller via
+DriverKit HID or IOHIDUserDevice compatibility mode.
+
+## Important Paths
+
+- `Package.swift`: SwiftPM package graph, Swift tools 6.2.
+- `Sources/OpenJoystickDriverKit/`: core daemon library, parsers, profiles,
+  virtual backends, XPC/service logic.
+- `Sources/OpenJoystickDriver/`: SwiftUI menu bar app and headless CLI.
+- `Sources/OpenJoystickDriverDaemon/`: LaunchAgent daemon executable.
+- `OpenJoystickVirtualHIDDevice/`: DriverKit virtual HID system extension.
+- `Sources/OpenJoystickDriverKit/Resources/Controllers/`: runtime controller
+  profiles.
+- `Resources/Schemas/`: JSON schemas and per-device schema documents.
+- `scripts/ojd`: supported developer command surface.
+- `scripts/README.md`: signing, provisioning, and notarization notes.
+
+## Current Device State
+
+- GameSir G7 SE: GIP USB path works; Xbox One HID compatibility reports are
+  hardware verified through browser Gamepad API.
+- Flydigi Vader 5S: GIP USB path supported with endpoint configuration,
+  `setConfiguration(1)` before claim, and post-handshake settle delay.
+- DualShock 4 v1/v2: USB HID parser profiles exist, not locally hardware
+  verified in this repo.
+- Generic USB HID gamepads: basic fallback.
+- Bluetooth, DualSense, and Switch Pro: not implemented.
+
+## Core Commands
+
+```bash
+brew install libusb
+./scripts/ojd signing install-profiles
+./scripts/ojd signing configure
+./scripts/ojd rebuild dev
+./scripts/ojd rebuild-fast dev
+./scripts/ojd validate profiles
+swift test
+```
+
+## Validation Rules
+
+- Controller JSON `$schema` values must use repo raw GitHub URLs, not local file
+  URLs.
+- GIP runtime profiles must have matching device schemas.
+- VID/PID and endpoint values are decimal integers.
+- Use `./scripts/ojd validate profiles` after profile or schema changes.
+- Use `swift test` for package-level validation.
+
+## Agent Instructions
+
+Read `AGENTS.md` before making changes. `CLAUDE.md`, `GEMINI.md`, and
+`.github/copilot-instructions.md` are symlinks to `AGENTS.md`.

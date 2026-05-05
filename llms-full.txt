@@ -1,0 +1,229 @@
+# OpenJoystickDriver Full LLM Context
+
+## Project Purpose
+
+OpenJoystickDriver is a macOS userspace gamepad driver. It exists because macOS
+does not provide a broad, xpad-like userspace-friendly controller stack for
+modern gamepads. The project reads physical USB controllers, normalizes reports,
+and exposes virtual controller output for games, emulators, browsers, and engine
+integration testing.
+
+Primary users:
+
+- macOS players using controllers unsupported or poorly handled by native stacks.
+- Emulator users, especially SDL/GameController.framework consumers.
+- Game studios and engine integrators that need predictable controller input.
+- Contributors adding controller profiles and protocol support.
+
+## High-Level Architecture
+
+Input:
+
+```text
+USB vendor-specific class 0xff -> LibUSB / SwiftUSB -> GIPParser
+USB HID class 0x03             -> IOHIDManager      -> DS4Parser or GenericHIDParser
+```
+
+Output:
+
+```text
+DriverKit HID backend       -> IOUserHIDDevice system extension
+IOHIDUserDevice backend     -> userspace compatibility virtual controller
+```
+
+Each controller is processed by an isolated `DevicePipeline` actor. One
+controller failing should not take down another controller pipeline. The daemon
+owns runtime input/output. The GUI and CLI communicate with the daemon through
+XPC status/control APIs.
+
+## Package and Runtime Surfaces
+
+- `Package.swift`: Swift tools version 6.2; macOS 13 minimum.
+- `Modules/SwiftUSB/`: libusb wrapper and tests.
+- `Sources/OpenJoystickDriverKit/`: parser, profile, virtual backend, service,
+  and shared daemon logic.
+- `Sources/OpenJoystickDriver/`: SwiftUI menu bar app plus `--headless` CLI.
+- `Sources/OpenJoystickDriverDaemon/`: LaunchAgent daemon.
+- `Sources/OpenJoystickDriverGameControllerProbe/`: GameController.framework
+  consumer probe.
+- `Sources/OpenJoystickDriverHIDTool/`: HID diagnostic tool.
+- `OpenJoystickVirtualHIDDevice/`: DriverKit virtual HID device.
+- `Tests/OpenJoystickDriverKitTests/`: package tests for core behavior.
+- `Modules/SwiftUSB/Tests/`: SwiftUSB and hardware integration test targets.
+
+## Controller and Schema Model
+
+Runtime controller profiles are stored in:
+
+```text
+Sources/OpenJoystickDriverKit/Resources/Controllers/
+```
+
+Device schemas are stored in:
+
+```text
+Resources/Schemas/Devices/
+```
+
+JSON schemas are stored in:
+
+```text
+Resources/Schemas/
+```
+
+Rules:
+
+- Use repo raw GitHub URLs for `$schema`, for example
+  `https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/controller-profile.schema.json`.
+- Do not commit local file URL schema references.
+- Use decimal integers for VID, PID, endpoint addresses, packet bytes, and USB
+  class values.
+- GIP controller profiles must have matching device schemas.
+- Device-specific USB behavior belongs in data, such as
+  `input.usb.configuration` or `input.usb.post_handshake_settle_ms`.
+- Protocol family and mapping differences should be represented as
+  `protocol.variant` and `protocol.mapping_flags` where possible, following the
+  Linux `xpad.c` style of data-driven device families.
+
+Validate profile/schema consistency with:
+
+```bash
+./scripts/ojd validate profiles
+```
+
+## Documentation and Agent Files
+
+- `README.md`: human entry point.
+- `llms.txt`: concise LLM context.
+- `llms-full.txt`: expanded LLM context.
+- `AGENTS.md`: authored coding-agent instructions.
+- `CLAUDE.md`: symlink to `AGENTS.md`.
+- `GEMINI.md`: symlink to `AGENTS.md`.
+- `.github/copilot-instructions.md`: symlink to `../AGENTS.md`.
+
+Edit `AGENTS.md` only for agent instructions. Keep the symlinks intact.
+
+## Current Devices
+
+| Device | VID | PID | Protocol | State |
+| --- | ---: | ---: | --- | --- |
+| GameSir G7 SE Controller for Xbox | 13623 | 4112 | GIP, xboxOne variant | Hardware verified |
+| Flydigi Vader 5S | 14295 | 10241 | GIP, xboxOne variant | Supported with device-specific USB config |
+| DualShock 4 v1 | 1356 | 1476 | DS4 USB HID | Implemented, not locally hardware verified |
+| DualShock 4 v2 | 1356 | 2508 | DS4 USB HID | Implemented, not locally hardware verified |
+
+GameSir G7 SE was manually verified through hardwaretester.com Gamepad API in
+Xbox One HID compatibility mode as a standard `Xbox Wireless Controller`
+(`VID 045e`, `PID 02ea`). Verified buttons:
+
+- `B0`: A
+- `B1`: B
+- `B2`: X
+- `B3`: Y
+- `B4`: LB
+- `B5`: RB
+- `B6`: LT
+- `B7`: RT
+- `B8`: View
+- `B9`: Menu
+- `B10`: L3
+- `B11`: R3
+- `B16`: Xbox/Home
+
+The D-pad is expected to report through the standard gamepad directional path in
+compatibility output. If D-pad is missing, inspect backend report generation and
+consumer mapping before changing the physical controller GIP profile.
+
+## Flydigi Vader 5S Notes
+
+The Vader 5S profile uses:
+
+- USB vendor-specific class `255`
+- interface `0`
+- IN endpoint `129`
+- OUT endpoint `1`
+- `setConfiguration(1)` before claim
+- `post_handshake_settle_ms` of `200`
+- GIP `xboxOne` variant
+
+Keep those details in the controller profile and device schema unless new
+hardware evidence contradicts them.
+
+## Build, Test, and Diagnostics
+
+Install prerequisites:
+
+```bash
+brew install libusb
+xcode-select --install
+```
+
+Developer setup:
+
+```bash
+./scripts/ojd signing install-profiles
+./scripts/ojd signing configure
+./scripts/ojd rebuild dev
+```
+
+Fast local rebuild without reinstalling the DriverKit extension:
+
+```bash
+./scripts/ojd rebuild-fast dev
+```
+
+Package tests:
+
+```bash
+swift test
+```
+
+Profile/schema validation:
+
+```bash
+./scripts/ojd validate profiles
+```
+
+Backend probes:
+
+```bash
+./scripts/ojd diagnose backends --seconds 5
+./scripts/ojd diagnose gamecontroller --seconds 5
+./scripts/ojd diagnose sdl3 --seconds 10
+./scripts/ojd diagnose pcsx2-latency
+```
+
+Shell syntax check for script changes:
+
+```bash
+bash -n scripts/ojd scripts/ojd-*.sh
+```
+
+## Signing and Release Context
+
+Development and release signing use `scripts/ojd` as the supported command
+surface. Detailed signing instructions are in `scripts/README.md`.
+
+Important constraints:
+
+- DriverKit and virtual HID entitlements require proper provisioning.
+- Development builds should use an Apple Development identity for stable TCC
+  permissions.
+- Release builds need a Developer ID Application identity and notarization
+  credentials.
+- CI can build and run SwiftPM tests, but cannot prove local DriverKit approval,
+  TCC permissions, physical controller behavior, or notarized install behavior
+  without configured secrets and macOS hardware validation.
+
+## CI Context
+
+The package requires Swift tools 6.2. CI should use a macOS image whose compiler
+and Apple `Testing.framework` SDK match.
+
+Run these checks before merging profile, schema, or package changes:
+
+```bash
+swift build
+swift test
+./scripts/ojd validate profiles
+```

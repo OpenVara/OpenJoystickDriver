@@ -11,9 +11,14 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PROFILE_DIR = ROOT / "Sources" / "OpenJoystickDriverKit" / "Resources" / "Controllers"
+DEVICE_SCHEMA_DIR = ROOT / "Resources" / "Schemas" / "Devices"
 SCHEMA_ID = (
     "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/"
     "Resources/Schemas/controller-profile.schema.json"
+)
+DEVICE_SCHEMA_ID = (
+    "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/"
+    "Resources/Schemas/device-profile.schema.json"
 )
 
 PROTOCOLS = {
@@ -83,7 +88,7 @@ def require_string_list(value: Any, path: str) -> list[str]:
     return result
 
 
-def validate_profile(path: pathlib.Path) -> tuple[int, int]:
+def validate_profile(path: pathlib.Path) -> tuple[int, int, str]:
     data = json.loads(path.read_text())
     root = require_object(data, "$")
     require(
@@ -135,6 +140,40 @@ def validate_profile(path: pathlib.Path) -> tuple[int, int]:
     invalid_backends = sorted(set(backends) - BACKENDS)
     require(not invalid_backends, f"output.preferred_backends invalid: {', '.join(invalid_backends)}")
 
+    return vid, pid, driver
+
+
+def validate_device_schema(path: pathlib.Path) -> tuple[int, int]:
+    data = json.loads(path.read_text())
+    root = require_object(data, "$")
+    require(root.get("$schema") == DEVICE_SCHEMA_ID, "$schema must reference device-profile.schema.json")
+    vid = require_int(root.get("vendor_id"), "vendor_id", 1, 65535)
+    pid = require_int(root.get("product_id"), "product_id", 0, 65535)
+    require_string(root.get("name"), "name")
+    protocol = require_string(root.get("protocol"), "protocol")
+    require(protocol in PROTOCOLS, f"protocol is unsupported: {protocol}")
+
+    usb = require_object(root.get("usb"), "usb")
+    require_int(usb.get("interface"), "usb.interface", 0)
+    usb_class = require_int(usb.get("class"), "usb.class", 0, 255)
+    require(usb_class in {3, 255}, "usb.class must be 3 or 255")
+    configuration = usb.get("configuration")
+    if configuration is not None:
+        require(configuration == "set1BeforeClaim", "usb.configuration is unknown")
+    settle_ms = usb.get("post_handshake_settle_ms", 0)
+    require_int(settle_ms, "usb.post_handshake_settle_ms", 0)
+    endpoints = require_object(usb.get("endpoints"), "usb.endpoints")
+    for direction in ("in", "out"):
+        endpoint = require_object(endpoints.get(direction), f"usb.endpoints.{direction}")
+        require_int(endpoint.get("address"), f"usb.endpoints.{direction}.address", 0, 255)
+        endpoint_type = require_string(endpoint.get("type"), f"usb.endpoints.{direction}.type")
+        require(endpoint_type in {"interrupt", "bulk"}, f"usb.endpoints.{direction}.type is unsupported")
+        require_int(endpoint.get("max_packet"), f"usb.endpoints.{direction}.max_packet", 1)
+
+    init_sequence = root.get("init_sequence")
+    require(isinstance(init_sequence, list) and init_sequence, "init_sequence must be a non-empty array")
+    input_commands = require_object(root.get("input_commands"), "input_commands")
+    require("input" in input_commands, "input_commands.input is required")
     return vid, pid
 
 
@@ -145,22 +184,49 @@ def main() -> int:
         return 1
 
     seen: dict[tuple[int, int], pathlib.Path] = {}
+    profile_protocols: dict[tuple[int, int], str] = {}
     failures = 0
     for profile in profiles:
         try:
-            key = validate_profile(profile)
+            vid, pid, driver = validate_profile(profile)
+            key = (vid, pid)
             if key in seen:
                 raise ValidationError(f"duplicate VID/PID also in {seen[key].name}")
             seen[key] = profile
+            profile_protocols[key] = driver
             print(f"[OK] {profile.relative_to(ROOT)}")
         except Exception as exc:
             failures += 1
             print(f"[FAIL] {profile.relative_to(ROOT)}: {exc}", file=sys.stderr)
 
+    device_schemas = sorted(DEVICE_SCHEMA_DIR.glob("*.json"))
+    device_schema_keys: dict[tuple[int, int], pathlib.Path] = {}
+    for schema in device_schemas:
+        try:
+            key = validate_device_schema(schema)
+            if key not in seen:
+                raise ValidationError("device schema VID/PID has no matching controller profile")
+            if key in device_schema_keys:
+                raise ValidationError(f"duplicate device schema also in {device_schema_keys[key].name}")
+            device_schema_keys[key] = schema
+            print(f"[OK] {schema.relative_to(ROOT)}")
+        except Exception as exc:
+            failures += 1
+            print(f"[FAIL] {schema.relative_to(ROOT)}: {exc}", file=sys.stderr)
+
+    for key, driver in sorted(profile_protocols.items()):
+        if driver == "GIP" and key not in device_schema_keys:
+            failures += 1
+            profile = seen[key]
+            print(
+                f"[FAIL] {profile.relative_to(ROOT)}: GIP controller is missing Resources/Schemas/Devices/*.json",
+                file=sys.stderr,
+            )
+
     if failures:
         print(f"FAILED: {failures} profile(s) invalid", file=sys.stderr)
         return 1
-    print(f"Validated {len(profiles)} controller profile(s).")
+    print(f"Validated {len(profiles)} controller profile(s) and {len(device_schemas)} device schema(s).")
     return 0
 
 
