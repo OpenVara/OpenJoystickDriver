@@ -19,6 +19,9 @@ jobs:
     name: macOS SwiftPM
     runs-on: macos-26
     timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Library/Developer/CommandLineTools
+      SDKROOT: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
 
     steps:
       - name: Checkout
@@ -27,8 +30,9 @@ jobs:
       - name: Toolchain
         run: |
           sw_vers
-          xcodebuild -version
+          xcrun --find swiftc
           swift --version
+          xcodebuild -version || true
 
       - name: Install dependencies
         run: |
