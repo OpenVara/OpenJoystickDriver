@@ -32,6 +32,8 @@ Commands:
   signing cert-info <cer>      Show safe-ish .cer info (Team ID = Subject OU)
   signing profile-info <pp>    Show safe-ish profile embedded cert info
   signing import-embedded <pp> Import embedded cert from a profile into Keychain
+  signing export-github-secrets
+                               Write/import GitHub Actions release secrets
 
   diagnose dext               Run dext diagnostics (activation, codesign, IORegistry, daemon connection)
   diagnose sdl3 [--seconds N] Run SDL3 probe against the virtual device
@@ -139,8 +141,11 @@ case "$cmd" in
       import-embedded)
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-signing.sh" import-embedded "$@"
         ;;
+      export-github-secrets)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-github-secrets.sh" "$@"
+        ;;
       *)
-        die "Unknown: signing $sub (expected: install-profiles | configure | doctor | audit | cert-info | profile-info | import-embedded)"
+        die "Unknown: signing $sub (expected: install-profiles | configure | doctor | audit | cert-info | profile-info | import-embedded | export-github-secrets)"
         ;;
     esac
     ;;

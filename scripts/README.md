@@ -230,3 +230,41 @@ Required repository secrets:
 
 The certificate payload secrets are base64-encoded certificate export files.
 The profile secrets are base64-encoded `.provisionprofile` files.
+
+### Generate GitHub secrets locally
+
+To collect all tester-release secrets in one local step:
+
+```bash
+./scripts/ojd signing export-github-secrets --repo xsyetopz/OpenJoystickDriver
+```
+
+If identity export paths are not supplied, the script exports signing identities
+from your login keychain into the private output directory. Keychain may prompt
+for permission. The script reads the three installed release provisioning
+profiles, prompts for the identity export password and notarization credentials,
+generates a temporary CI keychain password, then writes:
+
+```text
+.build/github-actions-secrets/
+  values/*.txt
+  apply-github-secrets.sh
+```
+
+To import them into GitHub with `gh`:
+
+```bash
+.build/github-actions-secrets/apply-github-secrets.sh --repo xsyetopz/OpenJoystickDriver
+```
+
+Or do both steps in one command:
+
+```bash
+./scripts/ojd signing export-github-secrets --repo xsyetopz/OpenJoystickDriver --apply
+```
+
+Keep `.build/github-actions-secrets/` private. It contains raw secret values.
+
+If you already exported separate signing identity files from Keychain Access,
+pass them explicitly with `--apple-development-identity` and
+`--developer-id-identity`.
