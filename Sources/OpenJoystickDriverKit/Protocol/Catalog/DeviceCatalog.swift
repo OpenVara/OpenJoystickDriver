@@ -273,6 +273,7 @@ struct DeviceCatalog: Sendable {
     switch parserName(for: identifier) {
     case "GIP": return .xboxOne
     case "DS4": return .dualShock4
+    case "Xbox360": return .xbox360
     case "GenericHID": return .genericHID
     default: return .unknown
     }
