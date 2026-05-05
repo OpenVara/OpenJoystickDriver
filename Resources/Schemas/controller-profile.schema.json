@@ -145,6 +145,9 @@
           "$ref": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/Protocols/gip.schema.json"
         },
         {
+          "$ref": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/Protocols/xbox360.schema.json"
+        },
+        {
           "$ref": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/Protocols/ds4.schema.json"
         },
         {

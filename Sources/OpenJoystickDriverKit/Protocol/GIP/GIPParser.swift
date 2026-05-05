@@ -136,6 +136,19 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     }
   }
 
+  /// Sends a GIP LED command (CMD=0x0A) to the physical controller.
+  ///
+  /// - Parameters:
+  ///   - handle: Active USB device handle for the physical controller.
+  ///   - mode: LED mode byte.
+  ///     `0x00` = off, `0x01` = on (steady), `0x02` = blink, `0x03` = pulse.
+  ///   - brightness: Brightness level (0x00–0x14; 0x14 = full).
+  public func sendLED(handle: USBDeviceHandle, mode: UInt8, brightness: UInt8 = 0x14) throws {
+    let seq = sequencer.next(for: GIPCommand.led)
+    let packet: [UInt8] = [GIPCommand.led, GIPOption.internal, seq, 3, mode, brightness, 0x14]
+    _ = try handle.interruptTransfer(endpoint: outEndpoint, data: packet, timeout: 2000)
+  }
+
   /// Sends a GIP rumble command (CMD=0x09) to the physical controller.
   ///
   /// - Parameters:

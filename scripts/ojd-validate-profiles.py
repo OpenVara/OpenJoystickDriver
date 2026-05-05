@@ -34,6 +34,10 @@ PROTOCOLS = {
             "shareOffset",
         },
     },
+    "Xbox360": {
+        "variants": {"xbox360", "unknown"},
+        "mapping_flags": {"dpadToButtons", "triggersToButtons", "sticksToNull"},
+    },
     "DS3": {
         "variants": {"dualShock3", "unknown"},
         "mapping_flags": {"gyro", "accelerometer", "battery"},

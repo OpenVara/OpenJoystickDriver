@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/controller-profile.schema.json",
+  "profile_version": "1.0.0",
+  "identity": {
+    "vendor_id": 1118,
+    "product_id": 654,
+    "name": "Microsoft Xbox 360 Controller",
+    "short_name": "Xbox360Wired"
+  },
+  "input": {
+    "transport": "usb",
+    "usb": {
+      "class": 255,
+      "interface": 0,
+      "endpoints": {
+        "in": 129,
+        "out": 1
+      }
+    }
+  },
+  "protocol": {
+    "driver": "Xbox360",
+    "variant": "xbox360"
+  },
+  "output": {
+    "virtual_profile": "xboxOneS",
+    "preferred_backends": [
+      "driverKitHID",
+      "userSpaceHID"
+    ]
+  }
+}

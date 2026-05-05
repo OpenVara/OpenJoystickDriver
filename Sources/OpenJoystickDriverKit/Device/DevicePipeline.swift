@@ -140,9 +140,13 @@ actor DevicePipeline {
 
   func sendRumble(left: UInt8, right: UInt8, lt: UInt8, rt: UInt8) {
     guard let handle = usbHandle else { return }
-    guard let gipParser = parser as? GIPParser else { return }
     do {
-      try gipParser.sendRumble(handle: handle, left: left, right: right, ltMotor: lt, rtMotor: rt)
+      if let gipParser = parser as? GIPParser {
+        try gipParser.sendRumble(handle: handle, left: left, right: right, ltMotor: lt, rtMotor: rt)
+      } else if let xbox360Parser = parser as? Xbox360Parser {
+        // Xbox 360 has left/right motors only; trigger motor values are ignored.
+        try xbox360Parser.sendRumble(handle: handle, left: left, right: right)
+      }
     } catch { print("[DevicePipeline] Rumble send failed for \(identifier): \(error)") }
   }
 
