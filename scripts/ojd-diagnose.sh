@@ -102,7 +102,12 @@ run_sdl3_probe_pcsx2_x86_64() {
   echo "Running: $OUT $*"
   echo "Tip: Input Monitoring must be granted to the terminal app you are using."
   echo
-  "$OUT" "$@"
+  SDL_JOYSTICK_HIDAPI_XBOX=0 \
+    SDL_JOYSTICK_HIDAPI_XBOX_360=0 \
+    SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS=0 \
+    SDL_JOYSTICK_HIDAPI_XBOX_ONE=0 \
+    SDL_JOYSTICK_HIDAPI_GIP=0 \
+    "$OUT" "$@"
 }
 
 select_macos_sdk() {

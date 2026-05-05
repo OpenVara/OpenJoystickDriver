@@ -27,10 +27,17 @@ fi
 
 export SDL_GAMECONTROLLERCONFIG="$mapping"
 export SDL_GAMECONTROLLERCONFIG_FILE="$OJD_DB"
+# PCSX2 should use the OJD SDL mapping via IOKit. Avoid SDL's Xbox HIDAPI
+# paths, which can block on virtual 045E devices after compatibility-mode tests.
+export SDL_JOYSTICK_HIDAPI_XBOX=0
+export SDL_JOYSTICK_HIDAPI_XBOX_360=0
+export SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS=0
+export SDL_JOYSTICK_HIDAPI_XBOX_ONE=0
+export SDL_JOYSTICK_HIDAPI_GIP=0
 
 if [[ "${OJD_SKIP_PCSX2_ROUTING:-0}" != "1" && -x "$OJD_CLI" ]]; then
 "$OJD_CLI" --headless compat sdl-macos >/dev/null || {
-    echo "WARN: could not set OpenJoystickDriver compatibility identity to generic" >&2
+    echo "WARN: could not set OpenJoystickDriver compatibility identity to sdl-macos" >&2
   }
   "$OJD_CLI" --headless output secondary >/dev/null || {
     echo "WARN: could not set OpenJoystickDriver output mode to secondary" >&2
