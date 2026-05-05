@@ -223,13 +223,9 @@ public final class Xbox360Parser: InputParser, @unchecked Sendable {
     var events: [ControllerEvent] = []
     if lsx != prevLSX || lsy != prevLSY {
       events.append(.leftStickChanged(x: normalizeStick(lsx), y: -normalizeStick(lsy)))
-      prevLSX = lsx
-      prevLSY = lsy
     }
     if rsx != prevRSX || rsy != prevRSY {
       events.append(.rightStickChanged(x: normalizeStick(rsx), y: -normalizeStick(rsy)))
-      prevRSX = rsx
-      prevRSY = rsy
     }
     return events
   }
