@@ -374,6 +374,11 @@ private struct InputTestWindowView: View {
   @State private var packetLog: [PacketLogEntry] = []
   @State private var rumbleRunning = false
   @State private var rumbleResult: String?
+  @State private var rumbleLeft = 180.0
+  @State private var rumbleRight = 180.0
+  @State private var rumbleLT = 0.0
+  @State private var rumbleRT = 0.0
+  @State private var rumbleDurationMs = 450.0
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -520,26 +525,61 @@ private struct InputTestWindowView: View {
     let canRumble = device.supportsPhysicalRumble
     return VStack(alignment: .leading, spacing: 8) {
       Text("Physical output").font(.headline)
-      HStack {
-        SwiftUI.Button(rumbleRunning ? "Rumbling..." : "Rumble pulse") {
-          rumbleRunning = true
-          rumbleResult = nil
-          Task {
-            let ok = await model.sendPhysicalRumble(
-              vendorID: device.vendorID,
-              productID: device.productID,
-              left: 180,
-              right: 180,
-              lt: 120,
-              rt: 120,
-              durationMs: 450
-            )
-            rumbleResult = ok ? "sent" : "not available"
-            rumbleRunning = false
-          }
+      Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+        GridRow {
+          RumbleSlider(label: "L", value: $rumbleLeft)
+          RumbleSlider(label: "R", value: $rumbleRight)
         }
-        .disabled(rumbleRunning || !canRumble)
-        .accessibilityLabel("Send physical rumble pulse")
+        GridRow {
+          RumbleSlider(label: "LT", value: $rumbleLT)
+          RumbleSlider(label: "RT", value: $rumbleRT)
+        }
+      }
+      VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 10) {
+          SwiftUI.Button(rumbleRunning ? "Sending..." : "Pulse") {
+            sendRumble(to: device, durationMs: Int(rumbleDurationMs))
+          }
+          .disabled(rumbleRunning || !canRumble)
+          SwiftUI.Button("Hold") {
+            sendRumble(to: device, durationMs: 0)
+          }
+          .disabled(!canRumble)
+          SwiftUI.Button("Stop") {
+            sendRumble(to: device, left: 0, right: 0, lt: 0, rt: 0, durationMs: 0)
+          }
+          .disabled(!canRumble)
+          SwiftUI.Button("Left only") {
+            sendRumble(to: device, left: UInt8(clamping: Int(rumbleLeft)), right: 0, lt: 0, rt: 0)
+          }
+          .disabled(rumbleRunning || !canRumble)
+          SwiftUI.Button("Right only") {
+            sendRumble(to: device, left: 0, right: UInt8(clamping: Int(rumbleRight)), lt: 0, rt: 0)
+          }
+          .disabled(rumbleRunning || !canRumble)
+          Stepper("Duration \(Int(rumbleDurationMs)) ms", value: $rumbleDurationMs, in: 50...5000, step: 50)
+            .font(.caption)
+            .frame(width: 170)
+        }
+        HStack(spacing: 10) {
+          SwiftUI.Button("Low") {
+            setRumbleValues(left: 32, right: 32, lt: 32, rt: 32)
+          }
+          SwiftUI.Button("Mid") {
+            setRumbleValues(left: 128, right: 128, lt: 128, rt: 128)
+          }
+          SwiftUI.Button("Max") {
+            setRumbleValues(left: 255, right: 255, lt: 255, rt: 255)
+          }
+          SwiftUI.Button("Zero") {
+            setRumbleValues(left: 0, right: 0, lt: 0, rt: 0)
+          }
+          Divider().frame(height: 16)
+          Text("Range: 0...255")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        HStack(spacing: 10) {
         Text("Rumble: \(canRumble ? "supported" : "not supported")")
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -549,11 +589,44 @@ private struct InputTestWindowView: View {
         if let rumbleResult {
           Text("Rumble: \(rumbleResult)").font(.caption).foregroundStyle(.secondary)
         }
+        }
       }
       Text("LED needs a verified per-protocol command surface before it becomes a live control.")
         .font(.caption2)
         .foregroundStyle(.secondary)
     }
+  }
+
+  private func sendRumble(
+    to device: DeviceViewModel,
+    left: UInt8? = nil,
+    right: UInt8? = nil,
+    lt: UInt8? = nil,
+    rt: UInt8? = nil,
+    durationMs: Int? = nil
+  ) {
+    rumbleRunning = true
+    rumbleResult = nil
+    Task {
+      let ok = await model.sendPhysicalRumble(
+        vendorID: device.vendorID,
+        productID: device.productID,
+        left: left ?? UInt8(clamping: Int(rumbleLeft)),
+        right: right ?? UInt8(clamping: Int(rumbleRight)),
+        lt: lt ?? UInt8(clamping: Int(rumbleLT)),
+        rt: rt ?? UInt8(clamping: Int(rumbleRT)),
+        durationMs: durationMs ?? Int(rumbleDurationMs)
+      )
+      rumbleResult = ok ? "sent" : "not available"
+      rumbleRunning = false
+    }
+  }
+
+  private func setRumbleValues(left: Double, right: Double, lt: Double, rt: Double) {
+    rumbleLeft = left
+    rumbleRight = right
+    rumbleLT = lt
+    rumbleRT = rt
   }
 
   private var packetLogView: some View {
@@ -586,6 +659,27 @@ private struct InputTestWindowView: View {
       return
     }
     packetLog = await model.packetLog(vendorID: device.vendorID, productID: device.productID)
+  }
+}
+
+private struct RumbleSlider: View {
+  let label: String
+  @Binding var value: Double
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Text(label)
+        .font(.caption.weight(.semibold))
+        .frame(width: 24, alignment: .leading)
+      Slider(value: $value, in: 0...255, step: 1)
+        .frame(width: 220)
+      Text("\(Int(value))")
+        .font(.system(.caption, design: .monospaced))
+        .frame(width: 34, alignment: .trailing)
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(label) rumble")
+    .accessibilityValue("\(Int(value))")
   }
 }
 
