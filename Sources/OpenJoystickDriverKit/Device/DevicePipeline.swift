@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUSB
 
-private let gipInputEndpointAddress: UInt8 = 0x82
 private let gipReadPacketLength = 64
 private let gipReadTimeoutMs: UInt32 = 100
 private let usbOpenRetryDelays: [UInt64] = [1_000_000_000, 2_000_000_000, 4_000_000_000]
@@ -16,6 +15,9 @@ private let usbIOErrorReconnectThreshold = 10
 private let usbIOErrorBackoffBaseNs: UInt64 = 250_000_000  // 250ms
 private let usbIOErrorBackoffMaxNs: UInt64 = 2_000_000_000  // 2s
 private let usbIOErrorLogIntervalNs: UInt64 = 5_000_000_000  // 5s
+/// Post-handshake settling delay before first IN read.
+/// Some controllers (e.g. Vader 5S) need time to activate endpoints after init.
+private let usbPostHandshakeSettleNs: UInt64 = 200_000_000  // 200ms
 
 /// Manages full lifecycle of single connected controller.
 /// Each controller gets its own DevicePipeline actor - one
@@ -33,6 +35,7 @@ actor DevicePipeline {
   private let parser: any InputParser
   private let dispatcher: any OutputDispatcher
   private let usbContext: USBContext?
+  private let endpointConfig: USBEndpointConfig
   private var isActive = false
   private var usbHandle: USBDeviceHandle?
   private var currentInputState: DeviceInputState
@@ -46,13 +49,15 @@ actor DevicePipeline {
     transport: Transport,
     parser: any InputParser,
     dispatcher: any OutputDispatcher,
-    usbContext: USBContext?
+    usbContext: USBContext?,
+    endpointConfig: USBEndpointConfig = .gipDefault
   ) {
     self.identifier = identifier
     self.transport = transport
     self.parser = parser
     self.dispatcher = dispatcher
     self.usbContext = usbContext
+    self.endpointConfig = endpointConfig
     self.currentInputState = DeviceInputState(
       vendorID: identifier.vendorID,
       productID: identifier.productID
@@ -242,6 +247,12 @@ actor DevicePipeline {
 
   private func openAndClaimDevice(_ device: USBDevice) throws -> USBDeviceHandle {
     let handle = try device.open()
+    if endpointConfig.needsSetConfiguration {
+      let cfg = (try? handle.getConfiguration()) ?? 0
+      if cfg != 1 {
+        try handle.setConfiguration(1)
+      }
+    }
     try handle.claimInterface(0)
     return handle
   }
@@ -255,9 +266,12 @@ actor DevicePipeline {
   }
 
   private func runUSBInputLoop(handle: USBDeviceHandle) async {
-    let inEndpoint = gipInputEndpointAddress
+    let inEndpoint = endpointConfig.inputEndpoint
     var keepAliveCycle: UInt = 0
-    print("[DevicePipeline] Starting USB input loop:" + " \(identifier)")
+    print("[DevicePipeline] Starting USB input loop:" + " \(identifier)"
+          + " inEP=0x\(String(inEndpoint, radix: 16))")
+
+    try? await Task.sleep(nanoseconds: usbPostHandshakeSettleNs)
 
     while isActive {
       let loopStartNs = DispatchTime.now().uptimeNanoseconds

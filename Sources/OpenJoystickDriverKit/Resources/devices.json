@@ -28,6 +28,18 @@
 			"parser": "DS4",
 			"usb_class": 3,
 			"virtual_profile": "xboxOneS"
+		},
+		{
+			"vendor_id": 14295,
+			"product_id": 10241,
+			"name": "Flydigi Vader 5S",
+			"short_name": "Vader5S",
+			"parser": "GIP",
+			"usb_class": 255,
+			"virtual_profile": "xboxOneS",
+			"input_endpoint": 129,
+			"output_endpoint": 1,
+			"needs_set_configuration": true
 		}
 	]
 }

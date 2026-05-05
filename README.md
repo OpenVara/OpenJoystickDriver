@@ -18,8 +18,9 @@ OpenJoystickDriver is to gamepads what [OpenTabletDriver](https://opentabletdriv
 
 | Feature | Status |
 |---------|--------|
-| Xbox One / Series controllers (GIP protocol) | Working - hardware verified on Gamesir G7 SE |
+| Xbox One / Series controllers (GIP protocol) | Working - hardware verified on Gamesir G7 SE, Flydigi Vader 5S |
 | GIP authentication (CMD 0x06 sub-protocol) | Working - state machine with dummy auth payloads |
+| Flydigi Vader 5S (USB, GIP) | Working - per-device endpoint config, setConfiguration quirk |
 | Virtual HID gamepad (DriverKit extension) | Working - production output path on macOS 13+ |
 | Virtual HID gamepad (IOHIDUserDevice user-space) | Working - optional compatibility mode (no reboot) |
 | DualShock 4 (USB) | Implemented, untested (no PS4 hardware) |
@@ -247,6 +248,16 @@ To add a new controller:
 4. Add tests in `Tests/OpenJoystickDriverKitTests/`
 
 VID and PID values in JSON must be **decimal** integers, not hex strings.
+
+Optional `devices.json` fields for USB quirks:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `input_endpoint` | int | 0x82 (130) | Interrupt IN endpoint address |
+| `output_endpoint` | int | 0x02 (2) | Interrupt OUT endpoint address |
+| `needs_set_configuration` | bool | false | Call `setConfiguration(1)` before claiming interface (for devices that enumerate unconfigured) |
+
+Both `input_endpoint` and `output_endpoint` must be present together; if only one is set, the override is ignored and GIP defaults apply.
 
 ---
 
