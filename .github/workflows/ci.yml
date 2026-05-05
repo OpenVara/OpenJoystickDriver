@@ -17,7 +17,7 @@ concurrency:
 jobs:
   macos-swiftpm:
     name: macOS SwiftPM
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 45
 
     steps:
