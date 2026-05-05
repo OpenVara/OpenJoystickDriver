@@ -59,6 +59,26 @@
 			"target": "OpenJoystickDriverHIDTool",
 			"configuration": "release",
 			"preLaunchTask": "swift: Build Release OpenJoystickDriverHIDTool"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:OpenJoystickDriver}",
+			"name": "Debug OpenJoystickDriverGameControllerProbe",
+			"target": "OpenJoystickDriverGameControllerProbe",
+			"configuration": "debug",
+			"preLaunchTask": "swift: Build Debug OpenJoystickDriverGameControllerProbe"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:OpenJoystickDriver}",
+			"name": "Release OpenJoystickDriverGameControllerProbe",
+			"target": "OpenJoystickDriverGameControllerProbe",
+			"configuration": "release",
+			"preLaunchTask": "swift: Build Release OpenJoystickDriverGameControllerProbe"
 		}
 	]
 }
