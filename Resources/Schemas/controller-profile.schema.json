@@ -31,9 +31,32 @@
     },
     "output": {
       "$ref": "#/$defs/output"
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
     }
   },
   "$defs": {
+    "provenance": {
+      "type": "object",
+      "required": [
+        "source",
+        "hardware_verified"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "local-hardware",
+            "linux-xpad.c"
+          ]
+        },
+        "hardware_verified": {
+          "type": "boolean"
+        }
+      }
+    },
     "identity": {
       "type": "object",
       "required": [

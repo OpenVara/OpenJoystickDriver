@@ -74,6 +74,7 @@ public struct DeviceRuntimeProfile: Sendable {
   public let mappingFlags: [String]
   public let mappingOptions: ControllerMappingOptions
   public let preferredBackends: [VirtualControllerBackendID]
+  public let gipStartupPackets: [GIPStartupPacket]
 }
 
 /// Loads and caches VID:PID -> runtime profiles from bundled controller profiles.
@@ -99,6 +100,9 @@ struct DeviceCatalog: Sendable {
   /// Maps "VID:PID" strings to preferred output backends.
   let backendPreferences: [String: [VirtualControllerBackendID]]
 
+  /// Maps "VID:PID" strings to ordered GIP startup packets.
+  let gipStartupPackets: [String: [GIPStartupPacket]]
+
   init() {
     let loadedEntries = Self.loadProfileEntries()
     if !loadedEntries.isEmpty {
@@ -109,6 +113,7 @@ struct DeviceCatalog: Sendable {
       var mappings: [String: ControllerMappingOptions] = [:]
       var flags: [String: [String]] = [:]
       var backends: [String: [VirtualControllerBackendID]] = [:]
+      var startupPackets: [String: [GIPStartupPacket]] = [:]
       for entry in loadedEntries {
         let key = "\(entry.vendorId):\(entry.productId)"
         map[key] = entry.parser
@@ -118,6 +123,7 @@ struct DeviceCatalog: Sendable {
         mappings[key] = entry.mappingOptions
         flags[key] = entry.mappingFlags
         backends[key] = entry.preferredBackends
+        startupPackets[key] = entry.gipStartupPackets
       }
       entries = map
       profileEntries = profiles
@@ -126,6 +132,7 @@ struct DeviceCatalog: Sendable {
       mappingOptions = mappings
       mappingFlags = flags
       backendPreferences = backends
+      gipStartupPackets = startupPackets
     } else {
       print("[DeviceCatalog] Could not load controller profiles - using built-in fallbacks")
       entries = ["13623:4112": "GIP", "1356:1476": "DS4", "1356:2508": "DS4"]
@@ -135,6 +142,7 @@ struct DeviceCatalog: Sendable {
       mappingOptions = [:]
       mappingFlags = [:]
       backendPreferences = [:]
+      gipStartupPackets = [:]
     }
   }
 
@@ -171,7 +179,8 @@ struct DeviceCatalog: Sendable {
       protocolVariant: protocolVariants[key] ?? defaultProtocolVariant(for: identifier),
       mappingFlags: mappingFlags[key] ?? mappingOptions[key]?.names ?? [],
       mappingOptions: mappingOptions[key] ?? [],
-      preferredBackends: backendPreferences[key] ?? [.driverKitHID, .userSpaceHID]
+      preferredBackends: backendPreferences[key] ?? [.driverKitHID, .userSpaceHID],
+      gipStartupPackets: gipStartupPackets[key] ?? GIPStartupPacket.defaultSequence
     )
   }
 
@@ -231,6 +240,7 @@ struct DeviceCatalog: Sendable {
     let mappingFlags: [String]
     let mappingOptions: ControllerMappingOptions
     let preferredBackends: [VirtualControllerBackendID]
+    let gipStartupPackets: [GIPStartupPacket]
 
     init?(profile: ProfileDeviceEntry) {
       vendorId = profile.identity.vendorId
@@ -241,6 +251,11 @@ struct DeviceCatalog: Sendable {
         ControllerProtocolVariant(rawValue: profile.protocolConfig.variant) ?? .unknown
       mappingFlags = profile.protocolConfig.mappingFlags ?? []
       mappingOptions = DeviceCatalog.mappingOptions(from: mappingFlags)
+      let packetNames = profile.protocolConfig.startupPackets ?? []
+      let decodedStartupPackets = packetNames.compactMap(GIPStartupPacket.init(rawValue:))
+      guard decodedStartupPackets.count == packetNames.count else { return nil }
+      gipStartupPackets =
+        decodedStartupPackets.isEmpty ? GIPStartupPacket.defaultSequence : decodedStartupPackets
       preferredBackends = profile.output.preferredBackends.compactMap(
         VirtualControllerBackendID.init(rawValue:)
       )
@@ -319,11 +334,13 @@ struct DeviceCatalog: Sendable {
       let driver: String
       let variant: String
       let mappingFlags: [String]?
+      let startupPackets: [String]?
 
       enum CodingKeys: String, CodingKey {
         case driver
         case variant
         case mappingFlags = "mapping_flags"
+        case startupPackets = "startup_packets"
       }
     }
 

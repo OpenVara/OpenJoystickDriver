@@ -43,6 +43,7 @@ Device-specific USB behavior belongs in data:
 - post-handshake settle delay
 - protocol variant
 - mapping flags
+- GIP startup packet sequence
 - preferred virtual output backends
 
 Parser code should only carry behavior required by a protocol family.
@@ -91,9 +92,10 @@ Windows XInput or XUSB emulation on macOS.
 To add a controller:
 
 1. Add a controller profile under `Sources/OpenJoystickDriverKit/Resources/Controllers/`.
-2. Add a matching `Resources/Schemas/Devices/*.json` file for GIP devices.
+2. Add a matching `Resources/Schemas/Devices/*.json` file for locally verified
+   GIP devices.
 3. Keep protocol quirks in `protocol.variant`, `protocol.mapping_flags`, and
-   transport data unless parser behavior truly changes.
+   transport/startup data unless parser behavior truly changes.
 4. Add parser tests or report-format tests for any new protocol behavior.
 5. Validate with `./scripts/ojd validate profiles` and `swift test`.
 

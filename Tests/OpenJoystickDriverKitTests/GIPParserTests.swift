@@ -30,6 +30,31 @@ import Testing
     #expect(seq.next(for: 5) == 0)
   }
 
+  @Test("default GIP startup sequence matches current G7 SE handshake") func defaultStartupSequence() {
+    #expect(GIPStartupPacket.defaultSequence == [.powerOn, .ledOn, .authDone])
+    #expect(GIPStartupPacket.powerOn.packet(sequence: 0) == [5, 32, 0, 1, 0])
+    #expect(GIPStartupPacket.ledOn.packet(sequence: 0) == [10, 32, 0, 3, 0, 1, 20])
+    #expect(GIPStartupPacket.authDone.packet(sequence: 0) == [6, 32, 0, 2, 1, 0])
+  }
+
+  @Test("xpad.c Xbox One startup packet bytes are modeled by name")
+  func xpadXboxOneStartupPackets() {
+    #expect(GIPStartupPacket.xboxOneSInit.packet(sequence: 0) == [5, 32, 0, 15, 6])
+    #expect(GIPStartupPacket.extraInput.packet(sequence: 1) == [77, 16, 1, 2, 7, 0])
+    #expect(
+      GIPStartupPacket.horiAck.packet(sequence: 2)
+        == [1, 32, 2, 9, 0, 4, 32, 58, 0, 0, 0, 128, 0]
+    )
+    #expect(
+      GIPStartupPacket.rumbleBegin.packet(sequence: 3)
+        == [9, 0, 3, 9, 0, 15, 0, 0, 29, 29, 255, 0, 0]
+    )
+    #expect(
+      GIPStartupPacket.rumbleEnd.packet(sequence: 4)
+        == [9, 0, 4, 9, 0, 15, 0, 0, 0, 0, 0, 0, 0]
+    )
+  }
+
   @Test func parseMainInputAllZero() throws {
     let parser = GIPParser()
     var packet = Data([0x20, 32, 0, 14])

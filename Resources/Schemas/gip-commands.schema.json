@@ -1,65 +1,81 @@
 {
-	"$schema": "https://json-schema.org/draft/2020-12/schema",
-	"$id": "gip-commands.schema.json",
-	"title": "GIP Command Registry",
-	"description": "Xbox Gaming Input Protocol (GIP) command codes and option flags. Used for documentation and future runtime protocol negotiation. All values are decimal.",
-	"type": "object",
-	"required": ["version", "commands", "option_flags"],
-	"additionalProperties": false,
-	"properties": {
-		"$schema": { "type": "string" },
-		"version": {
-			"type": "string",
-			"pattern": "^\\d+\\.\\d+\\.\\d+$",
-			"description": "Registry format version."
-		},
-		"commands": {
-			"type": "array",
-			"description": "GIP command codes. The 'code' field is the first byte of every GIP packet (data[0]). Only a subset of the full GIP spec is implemented - add new entries as commands are supported.",
-			"items": { "$ref": "#/$defs/command" }
-		},
-		"option_flags": {
-			"type": "array",
-			"description": "GIP option byte bitmasks (data[1]). Multiple flags can be OR'd together.",
-			"items": { "$ref": "#/$defs/option_flag" }
-		}
-	},
-	"$defs": {
-		"command": {
-			"type": "object",
-			"required": ["code", "name"],
-			"additionalProperties": false,
-			"properties": {
-				"code": {
-					"type": "integer",
-					"minimum": 0,
-					"maximum": 255,
-					"description": "Decimal command code (data[0] in GIP packet). Example: 32 = 0x20 = INPUT."
-				},
-				"name": {
-					"type": "string",
-					"pattern": "^[A-Z_]+$",
-					"description": "UPPER_SNAKE_CASE identifier matching the Swift CMD enum constant. Example: 'INPUT' maps to CMD.input = 0x20."
-				}
-			}
-		},
-		"option_flag": {
-			"type": "object",
-			"required": ["value", "name"],
-			"additionalProperties": false,
-			"properties": {
-				"value": {
-					"type": "integer",
-					"minimum": 1,
-					"maximum": 255,
-					"description": "Decimal bitmask value (data[1] bit). Example: 32 = 0x20 = INTERNAL (wired mode)."
-				},
-				"name": {
-					"type": "string",
-					"pattern": "^[A-Z_]+$",
-					"description": "UPPER_SNAKE_CASE flag name. Example: 'INTERNAL'."
-				}
-			}
-		}
-	}
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gip-commands.schema.json",
+  "title": "GIP Command Registry",
+  "description": "Xbox Gaming Input Protocol (GIP) command codes and option flags. Used for documentation and future runtime protocol negotiation. All values are decimal.",
+  "type": "object",
+  "required": [
+    "version",
+    "commands",
+    "option_flags"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Registry format version."
+    },
+    "commands": {
+      "type": "array",
+      "description": "GIP command codes. The 'code' field is the first byte of every GIP packet (data[0]). Only a subset of the full GIP spec is implemented - add new entries as commands are supported.",
+      "items": {
+        "$ref": "#/$defs/command"
+      }
+    },
+    "option_flags": {
+      "type": "array",
+      "description": "GIP option byte bitmasks (data[1]). Multiple flags can be OR'd together.",
+      "items": {
+        "$ref": "#/$defs/option_flag"
+      }
+    }
+  },
+  "$defs": {
+    "command": {
+      "type": "object",
+      "required": [
+        "code",
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255,
+          "description": "Decimal command code (data[0] in GIP packet). Example: 32 = 0x20 = INPUT."
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Z_]+$",
+          "description": "UPPER_SNAKE_CASE identifier matching the Swift CMD enum constant. Example: 'INPUT' maps to CMD.input = 0x20."
+        }
+      }
+    },
+    "option_flag": {
+      "type": "object",
+      "required": [
+        "value",
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 255,
+          "description": "Decimal bitmask value (data[1] bit). Example: 32 = 0x20 = INTERNAL (wired mode)."
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Z_]+$",
+          "description": "UPPER_SNAKE_CASE flag name. Example: 'INTERNAL'."
+        }
+      }
+    }
+  }
 }

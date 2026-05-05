@@ -37,6 +37,7 @@ public final class GIPParser: InputParser, PhysicalRumbleOutput, @unchecked Send
   //   feedHIDData/feedUSBData methods — no concurrent access occurs
 
   private let outEndpoint: UInt8
+  private let startupPackets: [GIPStartupPacket]
 
   private var sequencer = GIPSequencer()
   private let authHandler: GIPAuthHandler
@@ -56,8 +57,12 @@ public final class GIPParser: InputParser, PhysicalRumbleOutput, @unchecked Send
   private var prevRSY: Int16?
 
   /// Creates a new GIPParser with the given endpoint configuration.
-  public init(transportProfile: DeviceTransportProfile = .gipDefault) {
+  public init(
+    transportProfile: DeviceTransportProfile = .gipDefault,
+    startupPackets: [GIPStartupPacket] = GIPStartupPacket.defaultSequence
+  ) {
     self.outEndpoint = transportProfile.outputEndpoint
+    self.startupPackets = startupPackets
     self.authHandler = GIPAuthHandler(outEndpoint: transportProfile.outputEndpoint)
   }
 
@@ -172,37 +177,21 @@ public final class GIPParser: InputParser, PhysicalRumbleOutput, @unchecked Send
 
   // MARK: - Private
 
-  /// Send full 3-packet GIP init sequence:
-  /// power-on, LED init, auth/announce init.
-  /// 50ms delay between packets per GIP spec.
+  /// Send the profile-selected GIP init sequence with a short delay between packets.
   private func sendInitSequence(handle: USBDeviceHandle) async throws {
     let initDelay = gipInitDelayNanoseconds
 
-    try sendPowerOnPacket(handle: handle)
-    try await Task.sleep(nanoseconds: initDelay)
-
-    try sendLedInitPacket(handle: handle)
-    try await Task.sleep(nanoseconds: initDelay)
-
-    try sendAuthInitPacket(handle: handle)
-  }
-
-  private func sendPowerOnPacket(handle: USBDeviceHandle) throws {
-    let powerSeq = sequencer.next(for: GIPCommand.power)
-    let powerPacket: [UInt8] = [GIPCommand.power, GIPOption.internal, powerSeq, 1, 0]
-    _ = try handle.interruptTransfer(endpoint: outEndpoint, data: powerPacket, timeout: 2000)
-  }
-
-  private func sendLedInitPacket(handle: USBDeviceHandle) throws {
-    let ledSeq = sequencer.next(for: GIPCommand.led)
-    let ledPacket: [UInt8] = [GIPCommand.led, GIPOption.internal, ledSeq, 3, 0x00, 0x01, 0x14]
-    _ = try handle.interruptTransfer(endpoint: outEndpoint, data: ledPacket, timeout: 2000)
-  }
-
-  private func sendAuthInitPacket(handle: USBDeviceHandle) throws {
-    let authSeq = sequencer.next(for: GIPCommand.authenticate)
-    let authPacket: [UInt8] = [GIPCommand.authenticate, GIPOption.internal, authSeq, 2, 0x01, 0x00]
-    _ = try handle.interruptTransfer(endpoint: outEndpoint, data: authPacket, timeout: 2000)
+    for (index, startupPacket) in startupPackets.enumerated() {
+      let seq = sequencer.next(for: startupPacket.command)
+      _ = try handle.interruptTransfer(
+        endpoint: outEndpoint,
+        data: startupPacket.packet(sequence: seq),
+        timeout: 2000
+      )
+      if index < startupPackets.count - 1 {
+        try await Task.sleep(nanoseconds: initDelay)
+      }
+    }
   }
 
   private func parseMainInput(payload: Data) -> [ControllerEvent] {

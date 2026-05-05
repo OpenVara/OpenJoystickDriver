@@ -10,20 +10,20 @@ new controller profiles.
 
 ## Status
 
-| Area                                    | Current state                                                                        |
-| --------------------------------------- | ------------------------------------------------------------------------------------ |
-| macOS support                           | macOS 13 or later                                                                    |
-| Xbox One / Series class USB controllers | Working through the GIP protocol                                                     |
-| GameSir G7 SE                           | Hardware verified, including Xbox One HID compatibility reports                      |
-| Flydigi Vader 5S                        | Supported with a per-device schema, endpoint config, and `setConfiguration(1)` quirk |
-| xpad.c Xbox 360 controller batch        | Profiled through the Xbox 360 wired parser, not locally hardware verified            |
-| DualShock 4 USB                         | Implemented, not hardware verified in this repo                                      |
-| Generic USB HID gamepads                | Basic fallback                                                                       |
-| Virtual output                          | DriverKit HID and IOHIDUserDevice compatibility mode                                 |
-| GUI                                     | SwiftUI menu bar app                                                                 |
-| CLI                                     | `--headless` daemon and diagnostics commands                                         |
-| Bluetooth                               | Not implemented                                                                      |
-| DualSense / Switch Pro                  | Not implemented                                                                      |
+| Area                                    | Current state                                                                             |
+| --------------------------------------- | ----------------------------------------------------------------------------------------- |
+| macOS support                           | macOS 13 or later                                                                         |
+| Xbox One / Series class USB controllers | Working through the GIP protocol                                                          |
+| GameSir G7 SE                           | Hardware verified, including Xbox One HID compatibility reports                           |
+| Flydigi Vader 5S                        | Supported with a per-device schema, endpoint config, and `setConfiguration(1)` quirk      |
+| xpad.c Xbox controller batches          | Xbox 360 parser profiles and Xbox One GIP startup profiles, not locally hardware verified |
+| DualShock 4 USB                         | Implemented, not hardware verified in this repo                                           |
+| Generic USB HID gamepads                | Basic fallback                                                                            |
+| Virtual output                          | DriverKit HID and IOHIDUserDevice compatibility mode                                      |
+| GUI                                     | SwiftUI menu bar app                                                                      |
+| CLI                                     | `--headless` daemon and diagnostics commands                                              |
+| Bluetooth                               | Not implemented                                                                           |
+| DualSense / Switch Pro                  | Not implemented                                                                           |
 
 GameSir G7 SE was manually verified in browser Gamepad API Xbox One HID
 compatibility mode as a standard `Xbox Wireless Controller` (`VID 045e`,
@@ -142,10 +142,10 @@ Controller profiles use decimal VID/PID and endpoint values. Protocol metadata
 such as `variant` and mapping flags follows the xpad-style device family model so
 new Xbox-class devices can be added without hardcoding parser quirks.
 
-The initial xpad.c expansion is intentionally limited to Xbox 360 wired-style
-profiles that use the existing `Xbox360` parser and standard `0x81`/`0x01`
-interrupt endpoints. Xbox One third-party profiles that need extra startup
-packets should wait for protocol support before being added as runtime profiles.
+xpad.c-derived Xbox One profiles use named GIP startup packet sequences in
+profile data. That keeps device-specific init needs such as Xbox One S power
+init, Elite Series 2 extra input, HORI ACK, and PowerA rumble kick/stop packets
+out of parser VID/PID branches.
 
 ## Architecture
 
@@ -248,14 +248,15 @@ This repo includes dedicated context files for coding agents and LLM tooling:
 
 ## Attributions
 
-The Xbox 360 controller profile batch derived from Linux `xpad.c` uses upstream
-Linux controller metadata for VID/PID pairs, device names, and xpad device-family
-classification. The source file is
+The Xbox controller profile batches derived from Linux `xpad.c` use upstream
+Linux controller metadata for VID/PID pairs, device names, xpad device-family
+classification, and Xbox One startup-packet selection. The source file is
 [`drivers/input/joystick/xpad.c`](https://raw.githubusercontent.com/torvalds/linux/refs/heads/master/drivers/input/joystick/xpad.c)
 from the Linux kernel tree, marked `SPDX-License-Identifier: GPL-2.0-or-later`
 and copyrighted by Linux kernel contributors. OpenJoystickDriver does not copy
 Linux driver implementation code for these profiles; it expresses controller
-metadata as OpenJoystickDriver JSON profiles for the existing parser surfaces.
+metadata and named GIP startup packet selections as OpenJoystickDriver JSON
+profiles for the existing parser surfaces.
 
 ## Star History
 

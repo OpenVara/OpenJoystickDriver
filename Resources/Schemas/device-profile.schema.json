@@ -1,252 +1,252 @@
 {
-	"$schema": "https://json-schema.org/draft/2020-12/schema",
-	"$id": "device-profile.schema.json",
-	"title": "Device Hardware Profile",
-	"description": "Hardware-verified specification for a specific USB game controller. Documents USB endpoints, protocol init sequence, and input report layout. These files are reference documentation - they are NOT loaded at runtime. All numeric values are decimal (no hex).",
-	"type": "object",
-	"required": [
-		"vendor_id",
-		"product_id",
-		"name",
-		"protocol",
-		"usb",
-		"init_sequence",
-		"input_commands"
-	],
-	"additionalProperties": false,
-	"properties": {
-		"$schema": {
-			"type": "string"
-		},
-		"vendor_id": {
-			"type": "integer",
-			"minimum": 1,
-			"maximum": 65535,
-			"description": "USB Vendor ID in decimal. Must match the corresponding controller profile."
-		},
-		"product_id": {
-			"type": "integer",
-			"minimum": 0,
-			"maximum": 65535,
-			"description": "USB Product ID in decimal. Must match the corresponding controller profile."
-		},
-		"name": {
-			"type": "string",
-			"description": "Human-readable device name."
-		},
-		"protocol": {
-			"type": "string",
-			"enum": [
-				"GIP",
-				"DS4",
-				"GenericHID"
-			],
-			"description": "Protocol parser used for this device."
-		},
-		"usb": {
-			"type": "object",
-			"description": "USB interface and endpoint configuration.",
-			"required": [
-				"interface",
-				"class",
-				"endpoints"
-			],
-			"additionalProperties": false,
-			"properties": {
-				"interface": {
-					"type": "integer",
-					"description": "USB interface number (usually 0)."
-				},
-				"class": {
-					"type": "integer",
-					"description": "USB bInterfaceClass in decimal (255 = vendor-specific)."
-				},
-				"configuration": {
-					"type": "string",
-					"enum": [
-						"set1BeforeClaim"
-					],
-					"description": "Optional USB configuration quirk. set1BeforeClaim means call setConfiguration(1) before claiming the interface."
-				},
-				"post_handshake_settle_ms": {
-					"type": "integer",
-					"minimum": 0,
-					"description": "Optional delay after GIP handshake before reading input reports."
-				},
-				"subclass": {
-					"type": "integer",
-					"description": "USB bInterfaceSubClass in decimal."
-				},
-				"endpoints": {
-					"type": "object",
-					"description": "Interrupt endpoints. 'out' sends commands to device; 'in' receives input reports.",
-					"required": [
-						"out",
-						"in"
-					],
-					"additionalProperties": false,
-					"properties": {
-						"out": {
-							"$ref": "#/$defs/endpoint"
-						},
-						"in": {
-							"$ref": "#/$defs/endpoint"
-						}
-					}
-				}
-			}
-		},
-		"init_sequence": {
-			"type": "array",
-			"description": "Ordered startup packets sent to the controller. The device will not send input reports until the sequence completes.",
-			"items": {
-				"$ref": "#/$defs/init_step"
-			}
-		},
-		"input_commands": {
-			"type": "object",
-			"description": "GIP command payloads that carry input data. Keyed by lowercase command name.",
-			"additionalProperties": {
-				"$ref": "#/$defs/input_command"
-			}
-		}
-	},
-	"$defs": {
-		"endpoint": {
-			"type": "object",
-			"required": [
-				"address",
-				"type",
-				"max_packet"
-			],
-			"additionalProperties": false,
-			"properties": {
-				"address": {
-					"type": "integer",
-					"description": "USB endpoint address in decimal. Example: 130 = 0x82 (IN endpoint 2)."
-				},
-				"type": {
-					"type": "string",
-					"enum": [
-						"interrupt",
-						"bulk"
-					],
-					"description": "Transfer type."
-				},
-				"max_packet": {
-					"type": "integer",
-					"description": "Maximum packet size in bytes."
-				}
-			}
-		},
-		"init_step": {
-			"type": "object",
-			"required": [
-				"step",
-				"packet",
-				"timeout_ms"
-			],
-			"additionalProperties": false,
-			"properties": {
-				"step": {
-					"type": "integer",
-					"minimum": 1,
-					"description": "1-based step index."
-				},
-				"packet": {
-					"type": "array",
-					"items": {
-						"type": "integer",
-						"minimum": 0,
-						"maximum": 255
-					},
-					"description": "Raw bytes to write to the OUT endpoint. Format: [CMD, OPT, SEQ, LEN, PAYLOAD...]."
-				},
-				"timeout_ms": {
-					"type": "integer",
-					"minimum": 0,
-					"description": "Write timeout in milliseconds."
-				}
-			}
-		},
-		"input_command": {
-			"type": "object",
-			"required": [
-				"cmd"
-			],
-			"additionalProperties": false,
-			"properties": {
-				"cmd": {
-					"type": "integer",
-					"description": "GIP CMD byte value in decimal."
-				},
-				"payload_layout": {
-					"type": "object",
-					"description": "Byte layout of the payload (data after the 4-byte GIP header).",
-					"additionalProperties": {
-						"$ref": "#/$defs/field"
-					}
-				},
-				"fields": {
-					"type": "object",
-					"description": "Named fields for simple commands (e.g. virtual_key).",
-					"additionalProperties": {
-						"$ref": "#/$defs/field"
-					}
-				}
-			}
-		},
-		"field": {
-			"type": "object",
-			"additionalProperties": false,
-			"properties": {
-				"offset": {
-					"type": "integer",
-					"description": "Byte offset into payload (0-based)."
-				},
-				"size": {
-					"type": "integer",
-					"description": "Field size in bytes."
-				},
-				"type": {
-					"type": "string",
-					"enum": [
-						"uint8",
-						"uint16_le",
-						"int16_le"
-					],
-					"description": "Data type. uint16_le and int16_le are little-endian 2-byte values."
-				},
-				"range": {
-					"type": "array",
-					"items": {
-						"type": "integer"
-					},
-					"minItems": 2,
-					"maxItems": 2,
-					"description": "[min, max] value range."
-				},
-				"center": {
-					"type": "integer",
-					"description": "Rest/center value (for analog axes)."
-				},
-				"inverted": {
-					"type": "boolean",
-					"description": "If true, negate value after reading (Y-axis inversion)."
-				},
-				"mask": {
-					"type": "integer",
-					"description": "Bitmask to apply before reading (e.g. 3 = 0x03)."
-				},
-				"bits": {
-					"type": "object",
-					"description": "Named bitmask fields. Key = button name, value = bitmask in decimal.",
-					"additionalProperties": {
-						"type": "integer",
-						"minimum": 1
-					}
-				}
-			}
-		}
-	}
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "device-profile.schema.json",
+  "title": "Device Hardware Profile",
+  "description": "Hardware-verified specification for a specific USB game controller. Documents USB endpoints, protocol init sequence, and input report layout. These files are reference documentation - they are NOT loaded at runtime. All numeric values are decimal (no hex).",
+  "type": "object",
+  "required": [
+    "vendor_id",
+    "product_id",
+    "name",
+    "protocol",
+    "usb",
+    "init_sequence",
+    "input_commands"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "vendor_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "USB Vendor ID in decimal. Must match the corresponding controller profile."
+    },
+    "product_id": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535,
+      "description": "USB Product ID in decimal. Must match the corresponding controller profile."
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable device name."
+    },
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "GIP",
+        "DS4",
+        "GenericHID"
+      ],
+      "description": "Protocol parser used for this device."
+    },
+    "usb": {
+      "type": "object",
+      "description": "USB interface and endpoint configuration.",
+      "required": [
+        "interface",
+        "class",
+        "endpoints"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "interface": {
+          "type": "integer",
+          "description": "USB interface number (usually 0)."
+        },
+        "class": {
+          "type": "integer",
+          "description": "USB bInterfaceClass in decimal (255 = vendor-specific)."
+        },
+        "configuration": {
+          "type": "string",
+          "enum": [
+            "set1BeforeClaim"
+          ],
+          "description": "Optional USB configuration quirk. set1BeforeClaim means call setConfiguration(1) before claiming the interface."
+        },
+        "post_handshake_settle_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Optional delay after GIP handshake before reading input reports."
+        },
+        "subclass": {
+          "type": "integer",
+          "description": "USB bInterfaceSubClass in decimal."
+        },
+        "endpoints": {
+          "type": "object",
+          "description": "Interrupt endpoints. 'out' sends commands to device; 'in' receives input reports.",
+          "required": [
+            "out",
+            "in"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "out": {
+              "$ref": "#/$defs/endpoint"
+            },
+            "in": {
+              "$ref": "#/$defs/endpoint"
+            }
+          }
+        }
+      }
+    },
+    "init_sequence": {
+      "type": "array",
+      "description": "Ordered startup packets sent to the controller. The device will not send input reports until the sequence completes.",
+      "items": {
+        "$ref": "#/$defs/init_step"
+      }
+    },
+    "input_commands": {
+      "type": "object",
+      "description": "GIP command payloads that carry input data. Keyed by lowercase command name.",
+      "additionalProperties": {
+        "$ref": "#/$defs/input_command"
+      }
+    }
+  },
+  "$defs": {
+    "endpoint": {
+      "type": "object",
+      "required": [
+        "address",
+        "type",
+        "max_packet"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "type": "integer",
+          "description": "USB endpoint address in decimal. Example: 130 = 0x82 (IN endpoint 2)."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "interrupt",
+            "bulk"
+          ],
+          "description": "Transfer type."
+        },
+        "max_packet": {
+          "type": "integer",
+          "description": "Maximum packet size in bytes."
+        }
+      }
+    },
+    "init_step": {
+      "type": "object",
+      "required": [
+        "step",
+        "packet",
+        "timeout_ms"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "step": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based step index."
+        },
+        "packet": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "description": "Raw bytes to write to the OUT endpoint. Format: [CMD, OPT, SEQ, LEN, PAYLOAD...]."
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Write timeout in milliseconds."
+        }
+      }
+    },
+    "input_command": {
+      "type": "object",
+      "required": [
+        "cmd"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "cmd": {
+          "type": "integer",
+          "description": "GIP CMD byte value in decimal."
+        },
+        "payload_layout": {
+          "type": "object",
+          "description": "Byte layout of the payload (data after the 4-byte GIP header).",
+          "additionalProperties": {
+            "$ref": "#/$defs/field"
+          }
+        },
+        "fields": {
+          "type": "object",
+          "description": "Named fields for simple commands (e.g. virtual_key).",
+          "additionalProperties": {
+            "$ref": "#/$defs/field"
+          }
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "offset": {
+          "type": "integer",
+          "description": "Byte offset into payload (0-based)."
+        },
+        "size": {
+          "type": "integer",
+          "description": "Field size in bytes."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "uint8",
+            "uint16_le",
+            "int16_le"
+          ],
+          "description": "Data type. uint16_le and int16_le are little-endian 2-byte values."
+        },
+        "range": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[min, max] value range."
+        },
+        "center": {
+          "type": "integer",
+          "description": "Rest/center value (for analog axes)."
+        },
+        "inverted": {
+          "type": "boolean",
+          "description": "If true, negate value after reading (Y-axis inversion)."
+        },
+        "mask": {
+          "type": "integer",
+          "description": "Bitmask to apply before reading (e.g. 3 = 0x03)."
+        },
+        "bits": {
+          "type": "object",
+          "description": "Named bitmask fields. Key = button name, value = bitmask in decimal.",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  }
 }

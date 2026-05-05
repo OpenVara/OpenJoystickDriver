@@ -1,0 +1,44 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/controller-profile.schema.json",
+  "profile_version": "1.0.0",
+  "identity": {
+    "vendor_id": 9414,
+    "product_id": 21546,
+    "name": "PowerA Xbox One Controller",
+    "short_name": "PowerA542A"
+  },
+  "input": {
+    "transport": "usb",
+    "usb": {
+      "class": 255,
+      "interface": 0,
+      "endpoints": {
+        "in": 130,
+        "out": 2
+      }
+    }
+  },
+  "protocol": {
+    "driver": "GIP",
+    "variant": "xboxOne",
+    "startup_packets": [
+      "powerOn",
+      "ledOn",
+      "authDone",
+      "rumbleBegin",
+      "rumbleEnd"
+    ],
+    "mapping_flags": []
+  },
+  "output": {
+    "virtual_profile": "xboxOneS",
+    "preferred_backends": [
+      "driverKitHID",
+      "userSpaceHID"
+    ]
+  },
+  "provenance": {
+    "source": "linux-xpad.c",
+    "hardware_verified": false
+  }
+}

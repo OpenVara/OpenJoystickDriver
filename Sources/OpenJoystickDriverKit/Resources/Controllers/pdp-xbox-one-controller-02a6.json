@@ -1,0 +1,37 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/controller-profile.schema.json",
+  "profile_version": "1.0.0",
+  "identity": {
+    "vendor_id": 3695,
+    "product_id": 678,
+    "name": "PDP Xbox One Controller",
+    "short_name": "PDPXB1A6"
+  },
+  "input": {
+    "transport": "usb",
+    "usb": {
+      "class": 255,
+      "interface": 0,
+      "endpoints": {
+        "in": 130,
+        "out": 2
+      }
+    }
+  },
+  "protocol": {
+    "driver": "GIP",
+    "variant": "xboxOne",
+    "mapping_flags": []
+  },
+  "output": {
+    "virtual_profile": "xboxOneS",
+    "preferred_backends": [
+      "driverKitHID",
+      "userSpaceHID"
+    ]
+  },
+  "provenance": {
+    "source": "linux-xpad.c",
+    "hardware_verified": false
+  }
+}

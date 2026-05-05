@@ -62,4 +62,55 @@ import Testing
       #expect(registry.transportProfile(for: identifier).outputEndpoint == 0x01)
     }
   }
+
+  @Test("xpad.c Xbox One profile batch uses GIP startup packet metadata")
+  func xpadXboxOneProfileBatch() {
+    let registry = ParserRegistry()
+    let defaultSequence = GIPStartupPacket.defaultSequence
+    let cases: [(DeviceIdentifier, [GIPStartupPacket], [String])] = [
+      (
+        DeviceIdentifier(vendorID: 1118, productID: 746),
+        [.powerOn, .xboxOneSInit, .ledOn, .authDone],
+        ["shareButton"]
+      ),
+      (
+        DeviceIdentifier(vendorID: 1118, productID: 2816),
+        [.powerOn, .xboxOneSInit, .extraInput, .ledOn, .authDone],
+        ["shareButton", "paddles", "profileButton"]
+      ),
+      (
+        DeviceIdentifier(vendorID: 3853, productID: 103),
+        [.horiAck, .powerOn, .ledOn, .authDone],
+        []
+      ),
+      (DeviceIdentifier(vendorID: 3695, productID: 676), defaultSequence, []),
+      (DeviceIdentifier(vendorID: 3695, productID: 678), defaultSequence, []),
+      (DeviceIdentifier(vendorID: 3695, productID: 683), defaultSequence, []),
+      (
+        DeviceIdentifier(vendorID: 9414, productID: 21530),
+        [.powerOn, .ledOn, .authDone, .rumbleBegin, .rumbleEnd],
+        []
+      ),
+      (
+        DeviceIdentifier(vendorID: 9414, productID: 21546),
+        [.powerOn, .ledOn, .authDone, .rumbleBegin, .rumbleEnd],
+        []
+      ),
+      (
+        DeviceIdentifier(vendorID: 9414, productID: 21562),
+        [.powerOn, .ledOn, .authDone, .rumbleBegin, .rumbleEnd],
+        []
+      )
+    ]
+
+    for (identifier, startupPackets, mappingFlags) in cases {
+      let profile = registry.runtimeProfile(for: identifier)
+      #expect(registry.parserName(for: identifier) == "GIP")
+      #expect(profile.protocolVariant == .xboxOne)
+      #expect(profile.gipStartupPackets == startupPackets)
+      #expect(profile.mappingFlags == mappingFlags)
+      #expect(registry.transportProfile(for: identifier).inputEndpoint == 0x82)
+      #expect(registry.transportProfile(for: identifier).outputEndpoint == 0x02)
+    }
+  }
 }

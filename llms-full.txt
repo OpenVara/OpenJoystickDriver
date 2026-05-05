@@ -81,12 +81,15 @@ Rules:
 - Do not commit local file URL schema references.
 - Use decimal integers for VID, PID, endpoint addresses, packet bytes, and USB
   class values.
-- GIP controller profiles must have matching device schemas.
+- GIP controller profiles for locally verified hardware must have matching
+  device schemas.
 - Device-specific USB behavior belongs in data, such as
   `input.usb.configuration` or `input.usb.post_handshake_settle_ms`.
 - Protocol family and mapping differences should be represented as
   `protocol.variant` and `protocol.mapping_flags` where possible, following the
   Linux `xpad.c` style of data-driven device families.
+- GIP startup differences belong in `protocol.startup_packets`, not parser
+  VID/PID branches.
 
 Validate profile/schema consistency with:
 
@@ -114,12 +117,13 @@ Edit `AGENTS.md` only for agent instructions. Keep the symlinks intact.
 | GameSir G7 SE Controller for Xbox | 13623 | 4112 | GIP, xboxOne variant | Hardware verified |
 | Flydigi Vader 5S | 14295 | 10241 | GIP, xboxOne variant | Supported with device-specific USB config |
 | xpad.c Xbox 360 batch | varies | varies | Xbox360 | Profiled, not locally hardware verified |
+| xpad.c Xbox One batch | varies | varies | GIP, xboxOne variant | Profiled with source-backed startup packets, not locally hardware verified |
 | DualShock 4 v1 | 1356 | 1476 | DS4 USB HID | Implemented, not locally hardware verified |
 | DualShock 4 v2 | 1356 | 2508 | DS4 USB HID | Implemented, not locally hardware verified |
 
-The xpad.c Xbox 360 batch is attributed in README.md to Linux
+The xpad.c Xbox batches are attributed in README.md to Linux
 `drivers/input/joystick/xpad.c`; preserve that attribution when adding more
-xpad-derived controller metadata.
+xpad-derived controller metadata or GIP startup-packet selections.
 
 Compatibility profiles are `sdl-macos`, `generic-hid`, `x360-hid`, and
 `xone-hid`. `sdl-macos` is the default OJD-owned identity for macOS SDL

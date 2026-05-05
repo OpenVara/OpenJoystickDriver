@@ -39,6 +39,29 @@
         ]
       },
       "default": []
+    },
+    "startup_packets": {
+      "type": "array",
+      "description": "Ordered named GIP init packets sent during startup. Omitted means the default powerOn, ledOn, authDone sequence.",
+      "uniqueItems": false,
+      "items": {
+        "type": "string",
+        "enum": [
+          "powerOn",
+          "xboxOneSInit",
+          "extraInput",
+          "horiAck",
+          "ledOn",
+          "authDone",
+          "rumbleBegin",
+          "rumbleEnd"
+        ]
+      },
+      "default": [
+        "powerOn",
+        "ledOn",
+        "authDone"
+      ]
     }
   }
 }

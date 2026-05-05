@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/controller-profile.schema.json",
+  "profile_version": "1.0.0",
+  "identity": {
+    "vendor_id": 1118,
+    "product_id": 746,
+    "name": "Microsoft Xbox One S Controller",
+    "short_name": "XboxOneS"
+  },
+  "input": {
+    "transport": "usb",
+    "usb": {
+      "class": 255,
+      "interface": 0,
+      "endpoints": {
+        "in": 130,
+        "out": 2
+      }
+    }
+  },
+  "protocol": {
+    "driver": "GIP",
+    "variant": "xboxOne",
+    "startup_packets": [
+      "powerOn",
+      "xboxOneSInit",
+      "ledOn",
+      "authDone"
+    ],
+    "mapping_flags": [
+      "shareButton"
+    ]
+  },
+  "output": {
+    "virtual_profile": "xboxOneS",
+    "preferred_backends": [
+      "driverKitHID",
+      "userSpaceHID"
+    ]
+  },
+  "provenance": {
+    "source": "linux-xpad.c",
+    "hardware_verified": false
+  }
+}

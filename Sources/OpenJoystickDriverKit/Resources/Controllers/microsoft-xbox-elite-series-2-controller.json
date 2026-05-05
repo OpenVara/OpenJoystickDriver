@@ -1,0 +1,48 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/controller-profile.schema.json",
+  "profile_version": "1.0.0",
+  "identity": {
+    "vendor_id": 1118,
+    "product_id": 2816,
+    "name": "Microsoft Xbox Elite Wireless Controller Series 2",
+    "short_name": "XboxElite2"
+  },
+  "input": {
+    "transport": "usb",
+    "usb": {
+      "class": 255,
+      "interface": 0,
+      "endpoints": {
+        "in": 130,
+        "out": 2
+      }
+    }
+  },
+  "protocol": {
+    "driver": "GIP",
+    "variant": "xboxOne",
+    "startup_packets": [
+      "powerOn",
+      "xboxOneSInit",
+      "extraInput",
+      "ledOn",
+      "authDone"
+    ],
+    "mapping_flags": [
+      "shareButton",
+      "paddles",
+      "profileButton"
+    ]
+  },
+  "output": {
+    "virtual_profile": "xboxOneS",
+    "preferred_backends": [
+      "driverKitHID",
+      "userSpaceHID"
+    ]
+  },
+  "provenance": {
+    "source": "linux-xpad.c",
+    "hardware_verified": false
+  }
+}

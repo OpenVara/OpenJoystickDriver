@@ -54,6 +54,17 @@ PROTOCOLS = {
 
 BACKENDS = {"driverKitHID", "userSpaceHID", "gameControllerVirtual"}
 VIRTUAL_PROFILES = {"xboxOneS"}
+PROFILE_SOURCES = {"local-hardware", "linux-xpad.c"}
+GIP_STARTUP_PACKETS = {
+    "powerOn",
+    "xboxOneSInit",
+    "extraInput",
+    "horiAck",
+    "ledOn",
+    "authDone",
+    "rumbleBegin",
+    "rumbleEnd",
+}
 
 
 class ValidationError(Exception):
@@ -92,7 +103,7 @@ def require_string_list(value: Any, path: str) -> list[str]:
     return result
 
 
-def validate_profile(path: pathlib.Path) -> tuple[int, int, str]:
+def validate_profile(path: pathlib.Path) -> tuple[int, int, str, bool]:
     data = json.loads(path.read_text())
     root = require_object(data, "$")
     require(
@@ -135,6 +146,11 @@ def validate_profile(path: pathlib.Path) -> tuple[int, int, str]:
     flags = require_string_list(protocol.get("mapping_flags", []), "protocol.mapping_flags")
     invalid_flags = sorted(set(flags) - PROTOCOLS[driver]["mapping_flags"])
     require(not invalid_flags, f"protocol.mapping_flags invalid for {driver}: {', '.join(invalid_flags)}")
+    startup_packets = require_string_list(protocol.get("startup_packets", []), "protocol.startup_packets")
+    if startup_packets:
+        require(driver == "GIP", "protocol.startup_packets is only valid for GIP")
+        invalid_packets = sorted(set(startup_packets) - GIP_STARTUP_PACKETS)
+        require(not invalid_packets, f"protocol.startup_packets invalid: {', '.join(invalid_packets)}")
 
     output = require_object(root.get("output"), "output")
     virtual_profile = require_string(output.get("virtual_profile"), "output.virtual_profile")
@@ -144,7 +160,16 @@ def validate_profile(path: pathlib.Path) -> tuple[int, int, str]:
     invalid_backends = sorted(set(backends) - BACKENDS)
     require(not invalid_backends, f"output.preferred_backends invalid: {', '.join(invalid_backends)}")
 
-    return vid, pid, driver
+    provenance = root.get("provenance")
+    hardware_verified = True
+    if provenance is not None:
+        provenance_obj = require_object(provenance, "provenance")
+        source = require_string(provenance_obj.get("source"), "provenance.source")
+        require(source in PROFILE_SOURCES, f"provenance.source is unsupported: {source}")
+        require(isinstance(provenance_obj.get("hardware_verified"), bool), "provenance.hardware_verified must be a boolean")
+        hardware_verified = provenance_obj["hardware_verified"]
+
+    return vid, pid, driver, hardware_verified
 
 
 def validate_device_schema(path: pathlib.Path) -> tuple[int, int]:
@@ -188,16 +213,16 @@ def main() -> int:
         return 1
 
     seen: dict[tuple[int, int], pathlib.Path] = {}
-    profile_protocols: dict[tuple[int, int], str] = {}
+    profile_protocols: dict[tuple[int, int], tuple[str, bool]] = {}
     failures = 0
     for profile in profiles:
         try:
-            vid, pid, driver = validate_profile(profile)
+            vid, pid, driver, hardware_verified = validate_profile(profile)
             key = (vid, pid)
             if key in seen:
                 raise ValidationError(f"duplicate VID/PID also in {seen[key].name}")
             seen[key] = profile
-            profile_protocols[key] = driver
+            profile_protocols[key] = (driver, hardware_verified)
             print(f"[OK] {profile.relative_to(ROOT)}")
         except Exception as exc:
             failures += 1
@@ -218,8 +243,8 @@ def main() -> int:
             failures += 1
             print(f"[FAIL] {schema.relative_to(ROOT)}: {exc}", file=sys.stderr)
 
-    for key, driver in sorted(profile_protocols.items()):
-        if driver == "GIP" and key not in device_schema_keys:
+    for key, (driver, hardware_verified) in sorted(profile_protocols.items()):
+        if driver == "GIP" and hardware_verified and key not in device_schema_keys:
             failures += 1
             profile = seen[key]
             print(
