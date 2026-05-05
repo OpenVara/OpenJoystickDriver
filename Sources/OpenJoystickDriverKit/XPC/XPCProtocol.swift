@@ -5,16 +5,74 @@ import Foundation
 /// Both sides must use the same name to establish a connection.
 public let xpcServiceName = "com.openjoystickdriver.xpc"
 
-/// Which identity/protocol the user-space Compatibility virtual device should emulate.
+/// Which identity/protocol the user-space Compatibility virtual device should publish.
 ///
 /// IMPORTANT:
-/// - `generic` is a standard HID GamePad (most correct, most predictable).
-/// - `xboxOne` and `xbox360` are for picky apps that only auto-map known devices (often SDL-based).
-///   These modes must match descriptor + report bytes, not just VID/PID.
-public enum CompatibilityIdentity: String, Codable, CaseIterable, Sendable {
-  case generic
-  case xboxOne
-  case xbox360
+/// - `sdl-macos` is the mature macOS SDL/Steam/PCSX2 path: OJD-owned identity plus
+///   an explicit SDL mapping.
+/// - `generic-hid` is a plain OJD HID GamePad for consumers that inspect descriptors directly.
+/// - `xone-hid` and `x360-hid` are hardware-spoof profiles. They are only correct for
+///   consumers whose expected descriptor/report layout exactly matches the selected profile.
+public enum CompatibilityIdentity: Codable, CaseIterable, Sendable, Equatable {
+  case genericHID
+  case sdlMacOS
+  case x360HID
+  case xoneHID
+
+  public static let allCases: [CompatibilityIdentity] = [
+    .genericHID,
+    .sdlMacOS,
+    .x360HID,
+    .xoneHID,
+  ]
+
+  public init?(rawValue: String) {
+    switch rawValue {
+    case "generic-hid":
+      self = .genericHID
+    case "sdl-macos":
+      self = .sdlMacOS
+    case "x360-hid":
+      self = .x360HID
+    case "xone-hid":
+      self = .xoneHID
+    default:
+      return nil
+    }
+  }
+
+  public var rawValue: String {
+    switch self {
+    case .genericHID: "generic-hid"
+    case .sdlMacOS: "sdl-macos"
+    case .x360HID: "x360-hid"
+    case .xoneHID: "xone-hid"
+    }
+  }
+
+  public init(from decoder: Decoder) throws {
+    let raw = try decoder.singleValueContainer().decode(String.self)
+    guard let value = Self(rawValue: raw) else {
+      throw DecodingError.dataCorrupted(
+        .init(codingPath: decoder.codingPath, debugDescription: "Unknown compatibility identity: \(raw)")
+      )
+    }
+    self = value
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(rawValue)
+  }
+
+  public var disablesDriverKitMirror: Bool {
+    switch self {
+    case .genericHID, .sdlMacOS:
+      true
+    case .xoneHID, .x360HID:
+      false
+    }
+  }
 }
 
 /// Which virtual device output path the daemon should actively drive.
@@ -87,7 +145,7 @@ public enum VirtualDeviceMode: String, Codable, CaseIterable, Sendable {
 
   /// Sets which identity/protocol to emulate in Compatibility mode (user-space IOHIDUserDevice).
   ///
-  /// Values: "generic", "xboxOne", "xbox360".
+  /// Values: "generic-hid", "sdl-macos", "x360-hid", "xone-hid".
   @objc func setCompatibilityIdentity(_ raw: String, reply: @escaping (Bool) -> Void)
 
   /// Gets which identity/protocol is configured for Compatibility mode.
@@ -193,12 +251,32 @@ public struct XPCDriverKitOutputStats: Codable, Sendable {
   public let failures: Int
   /// Last IOKit error as hex string (e.g. "0xe00002cd"), or nil if none.
   public let lastErrorHex: String?
+  public let connectionAttempts: Int
+  public let connectionSuccesses: Int
+  public let connectionFailures: Int
+  public let lastConnectionErrorHex: String?
+  public let lastDiscoverySummary: String?
 
-  public init(attempts: Int, successes: Int, failures: Int, lastErrorHex: String?) {
+  public init(
+    attempts: Int,
+    successes: Int,
+    failures: Int,
+    lastErrorHex: String?,
+    connectionAttempts: Int = 0,
+    connectionSuccesses: Int = 0,
+    connectionFailures: Int = 0,
+    lastConnectionErrorHex: String? = nil,
+    lastDiscoverySummary: String? = nil
+  ) {
     self.attempts = attempts
     self.successes = successes
     self.failures = failures
     self.lastErrorHex = lastErrorHex
+    self.connectionAttempts = connectionAttempts
+    self.connectionSuccesses = connectionSuccesses
+    self.connectionFailures = connectionFailures
+    self.lastConnectionErrorHex = lastConnectionErrorHex
+    self.lastDiscoverySummary = lastDiscoverySummary
   }
 }
 
@@ -215,6 +293,17 @@ public struct XPCVirtualDeviceSelfTestPayload: Codable, Sendable {
   ///
   /// This is reliable even when IOHID input callbacks are flaky during sysext replacement/upgrade.
   public let driverKitSetReportSuccessDelta: Int?
+  /// Number of IOHIDDeviceSetReport attempts made by the daemon during the self-test.
+  public let driverKitSetReportAttemptDelta: Int?
+  /// Number of IOHIDDeviceSetReport failures made by the daemon during the self-test.
+  public let driverKitSetReportFailureDelta: Int?
+  /// Last IOHIDDeviceSetReport error observed by the daemon, if any.
+  public let driverKitSetReportLastErrorHex: String?
+  public let driverKitConnectionAttemptDelta: Int?
+  public let driverKitConnectionSuccessDelta: Int?
+  public let driverKitConnectionFailureDelta: Int?
+  public let driverKitLastConnectionErrorHex: String?
+  public let driverKitDiscoverySummary: String?
 
   public init(
     seconds: Int,
@@ -223,7 +312,15 @@ public struct XPCVirtualDeviceSelfTestPayload: Codable, Sendable {
     userSpaceValueEvents: Int,
     userSpaceReportEvents: Int,
     driverKitInputReportDelta: Int? = nil,
-    driverKitSetReportSuccessDelta: Int? = nil
+    driverKitSetReportSuccessDelta: Int? = nil,
+    driverKitSetReportAttemptDelta: Int? = nil,
+    driverKitSetReportFailureDelta: Int? = nil,
+    driverKitSetReportLastErrorHex: String? = nil,
+    driverKitConnectionAttemptDelta: Int? = nil,
+    driverKitConnectionSuccessDelta: Int? = nil,
+    driverKitConnectionFailureDelta: Int? = nil,
+    driverKitLastConnectionErrorHex: String? = nil,
+    driverKitDiscoverySummary: String? = nil
   ) {
     self.seconds = seconds
     self.driverKitValueEvents = driverKitValueEvents
@@ -232,6 +329,14 @@ public struct XPCVirtualDeviceSelfTestPayload: Codable, Sendable {
     self.userSpaceReportEvents = userSpaceReportEvents
     self.driverKitInputReportDelta = driverKitInputReportDelta
     self.driverKitSetReportSuccessDelta = driverKitSetReportSuccessDelta
+    self.driverKitSetReportAttemptDelta = driverKitSetReportAttemptDelta
+    self.driverKitSetReportFailureDelta = driverKitSetReportFailureDelta
+    self.driverKitSetReportLastErrorHex = driverKitSetReportLastErrorHex
+    self.driverKitConnectionAttemptDelta = driverKitConnectionAttemptDelta
+    self.driverKitConnectionSuccessDelta = driverKitConnectionSuccessDelta
+    self.driverKitConnectionFailureDelta = driverKitConnectionFailureDelta
+    self.driverKitLastConnectionErrorHex = driverKitLastConnectionErrorHex
+    self.driverKitDiscoverySummary = driverKitDiscoverySummary
   }
 }
 
@@ -315,7 +420,7 @@ public struct XPCStatusPayload: Codable, Sendable {
   ///
   /// This can differ from `virtualDeviceMode` when the daemon is in `auto` mode.
   public let effectiveOutputMode: String?
-  /// Compatibility mode identity/protocol selection ("generic", "xboxOne", "xbox360").
+  /// Compatibility mode identity/protocol selection.
   public let compatibilityIdentity: String?
 
   /// Creates a new XPCStatusPayload.

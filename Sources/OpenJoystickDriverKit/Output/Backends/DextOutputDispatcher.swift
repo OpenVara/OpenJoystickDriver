@@ -61,6 +61,11 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   private var setReportSuccesses: Int = 0
   private var setReportFailures: Int = 0
   private var lastSetReportError: IOReturn?
+  private var connectionAttempts: Int = 0
+  private var connectionSuccesses: Int = 0
+  private var connectionFailures: Int = 0
+  private var lastConnectionError: IOReturn?
+  private var lastDiscoverySummary: String?
 
   // MARK: - Report state
 
@@ -75,7 +80,6 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   private var hat: GamepadHIDDescriptor.Hat = .neutral
 
   private static let relayMagic: [UInt8] = [0x4F, 0x4A]  // "OJ"
-
   // MARK: - Init / deinit
 
   /// Creates a new DextOutputDispatcher.
@@ -192,17 +196,14 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   }
 
   private func findDevice(openOptions: IOOptionBits) -> (IOHIDDevice, IOHIDManager)? {
+    recordConnectionAttempt()
     // Do NOT match by VID/PID.
     //
     // During development and during sysext replacement/upgrade, the installed dext may be an
     // older build with a different VID/PID than the Swift layer expects. Also, our virtual
     // identity is intentionally not tied to any real controller's VID/PID.
     //
-    // Instead, find by "GamePad" usage and then identify the dext via IOUserClass / serial.
-    let matching: [String: Any] = [
-      kIOHIDDeviceUsagePageKey as String: kHIDPage_GenericDesktop,
-      kIOHIDDeviceUsageKey as String: kHIDUsage_GD_GamePad,
-    ]
+    // Instead, broadly enumerate HID devices and identify the dext via IOUserClass / serial.
     func openManager(_ matching: CFDictionary?) -> IOHIDManager {
       let mgr = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
       IOHIDManagerSetDeviceMatching(mgr, matching)
@@ -213,24 +214,115 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       return mgr
     }
 
-    func copyDevices(_ mgr: IOHIDManager) -> Set<IOHIDDevice> {
-      (IOHIDManagerCopyDevices(mgr) as? Set<IOHIDDevice>) ?? []
+    func copyDevices(_ mgr: IOHIDManager) -> [IOHIDDevice] {
+      guard let rawDevices = IOHIDManagerCopyDevices(mgr) else { return [] }
+      let count = CFSetGetCount(rawDevices)
+      guard count > 0 else { return [] }
+      var values = [UnsafeRawPointer?](repeating: nil, count: count)
+      CFSetGetValues(rawDevices, &values)
+      return values.compactMap { raw in
+        guard let raw else { return nil }
+        return unsafeBitCast(raw, to: IOHIDDevice.self)
+      }
     }
 
-    // Pass 1: fast path (GamePad usage match).
-    var mgr = openManager(matching as CFDictionary)
-    var devices = copyDevices(mgr)
+    func copyServiceDevices() -> [IOHIDDevice] {
+      var iterator: io_iterator_t = 0
+      let kr = IOServiceGetMatchingServices(
+        kIOMainPortDefault,
+        IOServiceMatching("AppleUserHIDDevice"),
+        &iterator
+      )
+      guard kr == KERN_SUCCESS else { return [] }
+      defer { IOObjectRelease(iterator) }
 
-    // Pass 2: broad match fallback. Some installed dext builds may not match under usage filtering
-    // during replacement/upgrade or when app/dext identities are temporarily out of sync.
-    if devices.isEmpty {
-      IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
-      mgr = openManager(nil)
-      devices = copyDevices(mgr)
+      var result: [IOHIDDevice] = []
+      while true {
+        let service = IOIteratorNext(iterator)
+        if service == 0 { break }
+        defer { IOObjectRelease(service) }
+        if let device = IOHIDDeviceCreate(kCFAllocatorDefault, service) {
+          result.append(device)
+        }
+      }
+      return result
     }
+
+    func registryString(_ service: io_object_t, _ key: String) -> String? {
+      let value = IORegistryEntryCreateCFProperty(
+        service,
+        key as CFString,
+        kCFAllocatorDefault,
+        0
+      )?.takeRetainedValue()
+      return value as? String
+    }
+
+    func registryInt(_ service: io_object_t, _ key: String) -> Int {
+      let value = IORegistryEntryCreateCFProperty(
+        service,
+        key as CFString,
+        kCFAllocatorDefault,
+        0
+      )?.takeRetainedValue()
+      return value as? Int ?? 0
+    }
+
+    func findServiceDevice(openOptions: IOOptionBits) -> (IOHIDDevice, IOReturn)? {
+      var iterator: io_iterator_t = 0
+      let kr = IOServiceGetMatchingServices(
+        kIOMainPortDefault,
+        IOServiceMatching("AppleUserHIDDevice"),
+        &iterator
+      )
+      guard kr == KERN_SUCCESS else { return nil }
+      defer { IOObjectRelease(iterator) }
+
+      while true {
+        let service = IOIteratorNext(iterator)
+        if service == 0 { break }
+        defer { IOObjectRelease(service) }
+
+        let serial = registryString(service, kIOHIDSerialNumberKey as String)
+        if UserSpaceVirtualDeviceConstants.isOJDUserSpaceSerial(serial) { continue }
+
+        let ioUserClass = registryString(service, "IOUserClass")
+        let vendorID = registryInt(service, kIOHIDVendorIDKey as String)
+        let productID = registryInt(service, kIOHIDProductIDKey as String)
+        let productName = registryString(service, kIOHIDProductKey as String)
+        let manufacturer = registryString(service, kIOHIDManufacturerKey as String)
+        let location = registryInt(service, kIOHIDLocationIDKey as String)
+
+        var score = 0
+        if ioUserClass == "OpenJoystickVirtualHIDDevice" { score += 1_000_000 }
+        if serial == VirtualDeviceIdentityConstants.driverKitSerialNumber { score += 100_000 }
+        if location == Int(VirtualDeviceIdentityConstants.driverKitLocationID) { score += 10_000 }
+        if vendorID == profile.vendorID && productID == profile.productID { score += 50_000 }
+        if productName == profile.productName { score += 5_000 }
+        if manufacturer == profile.manufacturer { score += 1_000 }
+        guard score > 0, let device = IOHIDDeviceCreate(kCFAllocatorDefault, service) else {
+          continue
+        }
+
+        let ret = IOHIDDeviceOpen(device, openOptions)
+        recordDiscoverySummary(
+          "service-open \(productName ?? "?")|\(serial ?? "?")|\(ioUserClass ?? "?")|\(vendorID):\(productID)|score=\(score) ret=\(String(format: "0x%08x", UInt32(bitPattern: ret)))"
+        )
+        return (device, ret)
+      }
+      return nil
+    }
+
+    // Broad match first. On recent macOS/Swift toolchains the usage-filtered
+    // IOHIDManager query can omit the DriverKit HID service even though a broad
+    // query exposes it with the expected serial, VID/PID, product, and IOUserClass.
+    let mgr = openManager(nil)
+    let managerDevices = copyDevices(mgr)
+    let devices = managerDevices.isEmpty ? copyServiceDevices() : managerDevices
 
     guard !devices.isEmpty else {
       IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+      recordConnectionResult(kIOReturnNotFound)
       return nil
     }
 
@@ -248,6 +340,10 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       let ioUserClass = strProp(device, "IOUserClass")
       let serial = strProp(device, kIOHIDSerialNumberKey as String)
       let location = intProp(device, kIOHIDLocationIDKey as String)
+      let vendorID = intProp(device, kIOHIDVendorIDKey as String)
+      let productID = intProp(device, kIOHIDProductIDKey as String)
+      let productName = strProp(device, kIOHIDProductKey as String)
+      let manufacturer = strProp(device, kIOHIDManufacturerKey as String)
 
       if UserSpaceVirtualDeviceConstants.isOJDUserSpaceSerial(serial) {
         return Int.min / 2
@@ -256,7 +352,9 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
         return Int.min / 2
       }
       // Extra guard: our user-space devices live in the OJ namespace.
-      if (UInt32(truncatingIfNeeded: location) & 0xFFFF_0000) == VirtualDeviceIdentityConstants.userSpaceLocationIDNamespace
+      let rawLocation = UInt32(truncatingIfNeeded: location)
+      if rawLocation != VirtualDeviceIdentityConstants.driverKitLocationID
+        && (rawLocation & 0xFFFF_0000) == VirtualDeviceIdentityConstants.userSpaceLocationIDNamespace
       {
         return Int.min / 2
       }
@@ -265,6 +363,9 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       if ioUserClass == "OpenJoystickVirtualHIDDevice" { s += 1_000_000 }
       if serial == VirtualDeviceIdentityConstants.driverKitSerialNumber { s += 100_000 }
       if location == Int(VirtualDeviceIdentityConstants.driverKitLocationID) { s += 10_000 }
+      if vendorID == profile.vendorID && productID == profile.productID { s += 50_000 }
+      if productName == profile.productName { s += 5_000 }
+      if manufacturer == profile.manufacturer { s += 1_000 }
 
       // If we don't have any strong indicator that this is our dext device,
       // do not treat it as a candidate. Otherwise we risk opening a real controller
@@ -279,13 +380,32 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       .map { ($0, score($0)) }
       .sorted { a, b in a.1 > b.1 }
 
+    let summary = candidates.prefix(6).map { device, score in
+      let product = strProp(device, kIOHIDProductKey as String) ?? "?"
+      let serial = strProp(device, kIOHIDSerialNumberKey as String) ?? "?"
+      let ioUserClass = strProp(device, "IOUserClass") ?? "?"
+      let vendorID = intProp(device, kIOHIDVendorIDKey as String)
+      let productID = intProp(device, kIOHIDProductIDKey as String)
+      return "\(product)|\(serial)|\(ioUserClass)|\(vendorID):\(productID)|score=\(score)"
+    }.joined(separator: "; ")
+    recordDiscoverySummary("devices=\(devices.count), candidates=\(candidates.count), top=[\(summary)]")
+
+    var lastOpenResult: IOReturn = kIOReturnNotFound
     for (device, s) in candidates {
       if s <= Int.min / 4 { continue }  // filtered (likely our user-space device)
       let ret = IOHIDDeviceOpen(device, openOptions)
-      if ret == kIOReturnSuccess { return (device, mgr) }
+      recordDiscoverySummary(
+        "open \(strProp(device, kIOHIDProductKey as String) ?? "?") score=\(s) ret=\(String(format: "0x%08x", UInt32(bitPattern: ret)))"
+      )
+      lastOpenResult = ret
+      if ret == kIOReturnSuccess {
+        recordConnectionResult(kIOReturnSuccess)
+        return (device, mgr)
+      }
     }
 
     IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+    recordConnectionResult(lastOpenResult)
     return nil
   }
 
@@ -343,15 +463,11 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       if result != kIOReturnSuccess { lastResult = result }
     }
 
-    // Aborted (0xe00002eb): IOKit can abort in-flight operations during sysext replacement/upgrade.
-    // Treat it the same as a stale handle and reconnect on the next dispatch.
-    let kIOReturnAbortedValue: IOReturn = IOReturn(bitPattern: 0xe000_02eb)
-
     // kIOReturnNotOpen (0xe00002cd): device handle went stale during sysext replacement.
     // The dext process cycles through device instances on crash/rematch; reconnecting
     // picks up the latest instance.
     if lastResult == kIOReturnNotAttached || lastResult == kIOReturnNoDevice
-      || lastResult == IOReturn(bitPattern: 0xe000_02cd) || lastResult == kIOReturnAbortedValue
+      || lastResult == IOReturn(bitPattern: 0xe000_02cd)
     {
       let now = DispatchTime.now().uptimeNanoseconds
       let shouldLog = connectionLock.withLock { () -> Bool in
@@ -378,8 +494,38 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
         attempts: setReportAttempts,
         successes: setReportSuccesses,
         failures: setReportFailures,
-        lastErrorHex: err
+        lastErrorHex: err,
+        connectionAttempts: connectionAttempts,
+        connectionSuccesses: connectionSuccesses,
+        connectionFailures: connectionFailures,
+        lastConnectionErrorHex: lastConnectionError.map {
+          String(format: "0x%08x", UInt32(bitPattern: $0))
+        },
+        lastDiscoverySummary: lastDiscoverySummary
       )
+    }
+  }
+
+  private func recordDiscoverySummary(_ summary: String) {
+    statsLock.withLock {
+      lastDiscoverySummary = String(summary.prefix(500))
+    }
+  }
+
+  private func recordConnectionAttempt() {
+    statsLock.withLock {
+      connectionAttempts += 1
+    }
+  }
+
+  private func recordConnectionResult(_ result: IOReturn) {
+    statsLock.withLock {
+      if result == kIOReturnSuccess {
+        connectionSuccesses += 1
+      } else {
+        connectionFailures += 1
+        lastConnectionError = result
+      }
     }
   }
 
@@ -410,9 +556,13 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
   }
 
   private func recordSetReportResult(_ result: IOReturn) {
+    // DriverKit's HID relay can return kIOReturnAborted after delivering the input report
+    // through handleReport(). Self-test verifies delivery via input value/report deltas, so
+    // count this as accepted for UI health instead of surfacing a false failure.
+    let accepted = result == kIOReturnSuccess || result == kIOReturnAborted
     statsLock.withLock {
       setReportAttempts += 1
-      if result == kIOReturnSuccess {
+      if accepted {
         setReportSuccesses += 1
       } else {
         setReportFailures += 1
@@ -503,12 +653,13 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     case .leftStick: return 6
     case .rightStick: return 7
     case .start, .options: return 8
-    case .back, .share: return 9
+    case .back: return 9
     case .guide, .ps: return 10
     case .dpadUp: return 11
     case .dpadDown: return 12
     case .dpadLeft: return 13
     case .dpadRight: return 14
+    case .share: return 15
     case .l2Digital, .r2Digital: return nil  // triggers are analog only in XInputHID
     case .touchpad: return nil
     case .genericButton1, .genericButton2: return nil

@@ -34,6 +34,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
 
   private let profile: VirtualDeviceProfile
   private let format: any VirtualGamepadReportFormat
+  private let emitsXboxGuideReport: Bool
   private let registryLock = NSLock()
 
   private final class Entry {
@@ -56,10 +57,12 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
 
   public init(
     profile: VirtualDeviceProfile = .default,
-    format: any VirtualGamepadReportFormat = OJDGenericGamepadFormat()
+    format: any VirtualGamepadReportFormat = OJDGenericGamepadFormat(),
+    emitsXboxGuideReport: Bool = false
   ) throws {
     self.profile = profile
     self.format = format
+    self.emitsXboxGuideReport = emitsXboxGuideReport
     // Device(s) are created lazily on first dispatch for each physical controller.
   }
 
@@ -202,7 +205,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
 
     let reports = entry.lock.withLock { () -> [[UInt8]] in
       for event in events { applyEvent(event, deadzone: 0.15, state: &entry.state) }
-      let secondaryReports = events.compactMap { xboxGuideReport(for: $0) }
+      let secondaryReports = emitsXboxGuideReport ? events.compactMap { xboxGuideReport(for: $0) } : []
       return [format.buildInputReport(from: entry.state)] + secondaryReports
     }
 
@@ -276,12 +279,13 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     case .leftStick: return 6
     case .rightStick: return 7
     case .start, .options: return 8
-    case .back, .share: return 9
-    case .guide, .ps: return nil
+    case .back: return 9
+    case .guide, .ps: return emitsXboxGuideReport ? nil : 10
     case .dpadUp: return 11
     case .dpadDown: return 12
     case .dpadLeft: return 13
     case .dpadRight: return 14
+    case .share: return 15
     case .l2Digital, .r2Digital: return nil
     case .touchpad: return nil
     case .genericButton1, .genericButton2: return nil

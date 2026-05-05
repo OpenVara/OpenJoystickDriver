@@ -33,12 +33,12 @@
 			<key>IOUserServerName</key>
 			<string>com.openjoystickdriver.VirtualHIDDevice</string>
 			<key>PrimaryUsage</key>
-			<integer>5</integer>
-			<key>PrimaryUsagePage</key>
 			<integer>1</integer>
+			<key>PrimaryUsagePage</key>
+			<integer>65280</integer>
 		</dict>
 	</dict>
 	<key>OSBundleUsageDescription</key>
-	<string>OpenJoystickDriver uses this extension to present physical controllers as a standard virtual HID gamepad to games and applications, without requiring Accessibility permission.</string>
+	<string>OpenJoystickDriver uses this extension as a private DriverKit HID relay. Consumer-facing virtual gamepads are published by the user-space compatibility backend.</string>
 </dict>
 </plist>

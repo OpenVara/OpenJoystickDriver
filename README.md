@@ -153,9 +153,72 @@ USB HID devices             -> IOHIDManager      -> DS4Parser or GenericHIDParse
 Output paths:
 
 ```text
-DriverKit HID backend       -> system extension virtual HID device
-IOHIDUserDevice backend     -> userspace compatibility virtual controller
+DriverKit HID backend       -> private OJD relay / fallback diagnostics
+IOHIDUserDevice backend     -> consumer-facing virtual controller profiles
 ```
+
+If macOS keeps an old DriverKit process alive after a dext upgrade, browser and
+SDL consumers can see a stale extra virtual controller. Repair that state with:
+
+```bash
+./scripts/ojd repair stale-dext
+```
+
+The repair command only kills `OpenJoystickVirtualHID` processes whose executable
+path does not match the newest installed `com.openjoystickdriver.VirtualHIDDevice`
+copy under `/Library/SystemExtensions`.
+
+Compatibility mode has four first-class user-space HID profiles:
+
+- `sdl-macos`: default for macOS SDL consumers such as Steam and PCSX2. It uses
+  an OJD-owned identity plus an explicit SDL mapping.
+- `generic-hid`: OJD-owned HID GamePad identity for apps that inspect the HID
+  descriptor directly.
+- `x360-hid`: experimental Xbox 360 HID hardware-spoof profile.
+- `xone-hid`: experimental Xbox One HID hardware-spoof profile.
+
+SDL consumers need a game controller mapping for the SDL macOS user-space identity.
+The repo ships the known-good mapping at
+`Resources/SDL/openjoystickdriver.gamecontrollerdb.txt`. Use `platform:macOS`
+for SDL3 consumers such as current PCSX2 builds; older `platform:Mac OS X`
+mapping lines can be ignored by SDL 3.2.x.
+
+For PCSX2, use SDL macOS Compatibility with user-space-only output.
+The SDL mapping targets the user-space PID `0x4448`, not the DriverKit PID `0x4447`.
+Do not spoof an SDL-known third-party controller VID/PID for this path: on macOS,
+GameController.framework can claim those identities before SDL's IOKit backend
+can enumerate them. The custom OJD PID plus explicit SDL mapping is intentional.
+Xbox 360 compatibility is exposed as an experimental user-space HID identity
+using Microsoft's XUSB-to-DirectInput HID mapping. It is descriptor-backed, but
+it is not true Windows XInput/XUSB emulation: macOS cannot publish XUSB device
+interfaces or XInput IOCTLs through IOHIDUserDevice. The DirectInput-style
+surface has combined triggers, hat-only D-pad, and no Guide/vibration/headset
+semantics, so validate it per app.
+
+If PCSX2's bundled SDL database does not include the OJD mapping, launch PCSX2
+with the repo mapping override:
+
+```bash
+./scripts/ojd launch pcsx2
+```
+
+This sets `SDL_GAMECONTROLLERCONFIG` and `SDL_GAMECONTROLLERCONFIG_FILE` for
+PCSX2 without modifying the signed app bundle. It also sets the installed daemon
+to the known-good PCSX2 routing (`compat sdl-macos`, `output secondary`) before launch.
+For normal PCSX2 launches, install the merged user-data SDL database and the
+stale-index-tolerant input profile:
+
+```bash
+./scripts/ojd install pcsx2-sdl-db
+./scripts/ojd install pcsx2-profile
+```
+
+PCSX2 checks `~/Library/Application Support/PCSX2/game_controller_db.txt` before
+its bundled resources. The `OpenJoystickDriver` input profile binds both `SDL-0`
+and `SDL-1` so it still works while an old DriverKit device occupies one SDL slot.
+`scripts/ojd-install-pcsx2-mapping.sh` can append the mapping to PCSX2's bundled
+database when macOS allows app-bundle writes, but recent macOS builds may block
+that even with administrator rights.
 
 Each connected controller runs through an isolated `DevicePipeline` actor. The
 daemon exposes XPC status/control APIs to the GUI and CLI. The GUI is not the

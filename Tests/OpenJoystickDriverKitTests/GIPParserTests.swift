@@ -52,6 +52,22 @@ import Testing
     #expect(events.contains(.buttonPressed(.a)))
   }
 
+  @Test func parseMainInputShareButton() throws {
+    let parser = GIPParser()
+    var payload = Data(repeating: 0, count: 15)
+    payload[14] = 1
+    var packet = Data([0x20, 32, 0, 15])
+    packet += payload
+    let events = try parser.parse(data: packet)
+    #expect(events.contains(.buttonPressed(.share)))
+
+    payload[14] = 0
+    packet = Data([0x20, 32, 1, 15])
+    packet += payload
+    let releaseEvents = try parser.parse(data: packet)
+    #expect(releaseEvents.contains(.buttonReleased(.share)))
+  }
+
   @Test func parseMainInputMultipleButtons() throws {
     let parser = GIPParser()
     var payload = Data(repeating: 0, count: 14)

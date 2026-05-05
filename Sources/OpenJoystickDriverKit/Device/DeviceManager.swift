@@ -110,6 +110,11 @@ public actor DeviceManager {
     }
   }
 
+  /// Returns live identifiers for connected controller pipelines.
+  public func connectedDeviceIdentifiers() -> [DeviceIdentifier] {
+    Array(pipelines.keys)
+  }
+
   /// Stop all detection and pipelines.
   public func stop() async {
     for task in detectionTasks { task.cancel() }
@@ -239,6 +244,7 @@ public actor DeviceManager {
     )
     pipelines[identifier] = pipeline
     Task { await pipeline.start() }
+    Task { await dispatcher.dispatch(events: [], from: identifier) }
     return identifier
   }
 
@@ -292,6 +298,7 @@ public actor DeviceManager {
     )
     pipelines[identifier] = pipeline
     Task { await pipeline.start() }
+    Task { await dispatcher.dispatch(events: [], from: identifier) }
   }
 
   private func handleHIDDeviceDisconnected(vendorID: UInt16, productID: UInt16, locationID: UInt32)

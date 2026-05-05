@@ -3,8 +3,9 @@ import OpenJoystickDriverKit
 
 struct CompatibilityCommand {
   func run(arguments: [String]) {
+    let usage = "Usage: OpenJoystickDriver --headless compat generic-hid|sdl-macos|x360-hid|xone-hid|status"
     guard let sub = arguments.first else {
-      print("Usage: OpenJoystickDriver --headless compat generic|xboxOne|xbox360|status")
+      print(usage)
       return
     }
 
@@ -22,7 +23,7 @@ struct CompatibilityCommand {
     }
 
     guard CompatibilityIdentity(rawValue: sub) != nil else {
-      print("Usage: OpenJoystickDriver --headless compat generic|xboxOne|xbox360|status")
+      print(usage)
       exit(1)
     }
 
@@ -47,4 +48,3 @@ struct CompatibilityCommand {
     }
   }
 }
-

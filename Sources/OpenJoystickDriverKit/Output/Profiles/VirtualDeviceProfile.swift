@@ -2,7 +2,7 @@
 ///
 /// All input protocols normalize to XInputHID layout; the profile
 /// only controls how the virtual device identifies itself to consumers.
-public struct VirtualDeviceProfile: Sendable {
+public struct VirtualDeviceProfile: Equatable, Sendable {
   public let vendorID: Int
   public let productID: Int
   /// Value used for `kIOHIDVersionNumberKey` / SDL "product version".
@@ -21,6 +21,22 @@ public struct VirtualDeviceProfile: Sendable {
     productID: 0x4447,  // "DG" (arbitrary, stable)
     versionNumber: 0x0408,
     productName: "OpenJoystickDriver Virtual Gamepad",
+    manufacturer: "OpenJoystickDriver"
+  )
+
+  public static let openJoystickDriverSDLMacOS = VirtualDeviceProfile(
+    vendorID: 0x4F4A,
+    productID: 0x4448,
+    versionNumber: 0x0408,
+    productName: "OpenJoystickDriver Virtual Gamepad",
+    manufacturer: "OpenJoystickDriver"
+  )
+
+  public static let openJoystickDriverGenericHID = VirtualDeviceProfile(
+    vendorID: 0x4F4A,
+    productID: 0x4449,
+    versionNumber: 0x0408,
+    productName: "OpenJoystickDriver Generic HID Gamepad",
     manufacturer: "OpenJoystickDriver"
   )
 
@@ -44,8 +60,22 @@ public struct VirtualDeviceProfile: Sendable {
     vendorID: 0x045E,
     productID: 0x028E,
     versionNumber: 0x0000,
-    productName: "Xbox 360 Controller",
+    productName: "Xbox 360 Wired Controller",
     manufacturer: "Microsoft"
+  )
+
+  /// SDL macOS compatibility identity.
+  ///
+  /// This profile is intentionally not exposed in the Compatibility UI. macOS GameController
+  /// claims SDL-known third-party controller identities before SDL's IOKit backend can use
+  /// them, so the generic OpenJoystickDriver user-space identity is the consumer-facing
+  /// SDL/PCSX2 path.
+  public static let sdlMacGamepad = VirtualDeviceProfile(
+    vendorID: 0x1BAD,
+    productID: 0xF901,
+    versionNumber: 0x0000,
+    productName: "Gamestop BB070 X360 Controller",
+    manufacturer: "GameStop"
   )
 
   /// Default profile used when no protocol-specific profile is configured.

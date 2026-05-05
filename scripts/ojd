@@ -37,10 +37,18 @@ Commands:
 
   diagnose dext               Run dext diagnostics (activation, codesign, IORegistry, daemon connection)
   diagnose sdl3 [--seconds N] Run SDL3 probe against the virtual device
+  diagnose pcsx2-sdl3 [--seconds N]
+                              Run SDL3 probe with PCSX2's bundled SDL3
+  diagnose pcsx2-live [--seconds N]
+                              Run PCSX2 SDL3 probe for live input events
   diagnose gamecontroller     Run GameController.framework probe
   diagnose pcsx2-latency      Compare native SDL3 vs PCSX2/Rosetta SDL3 input timing
   diagnose backends           Run current backend acceptance loop
+  repair stale-dext           Kill stale DriverKit process copies after upgrade
   validate profiles           Validate bundled controller profiles
+  launch pcsx2                Launch PCSX2 with the OpenJoystickDriver SDL mapping override
+  install pcsx2-sdl-db        Install merged PCSX2 SDL DB in user data dir
+  install pcsx2-profile       Install the PCSX2 SDL-0/SDL-1 input profile
 
   notarize submit             Submit + poll + staple (release only)
   notarize status [id]        Show notarization status (release only)
@@ -159,6 +167,12 @@ case "$cmd" in
       sdl3)
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" sdl3 "$@"
         ;;
+      pcsx2-sdl3)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" pcsx2-sdl3 "$@"
+        ;;
+      pcsx2-live)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" pcsx2-live "$@"
+        ;;
       gamecontroller)
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" gamecontroller "$@"
         ;;
@@ -169,7 +183,7 @@ case "$cmd" in
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" backends "$@"
         ;;
       *)
-        die "Unknown: diagnose $sub (expected: dext | sdl3 | gamecontroller | pcsx2-latency | backends)"
+        die "Unknown: diagnose $sub (expected: dext | sdl3 | pcsx2-sdl3 | pcsx2-live | gamecontroller | pcsx2-latency | backends)"
         ;;
     esac
     ;;
@@ -182,6 +196,45 @@ case "$cmd" in
         ;;
       *)
         die "Unknown: validate $sub (expected: profiles)"
+        ;;
+    esac
+    ;;
+
+  repair)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      stale-dext)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-repair-stale-dext.sh" "$@"
+        ;;
+      *)
+        die "Unknown: repair $sub (expected: stale-dext)"
+        ;;
+    esac
+    ;;
+
+  launch)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      pcsx2)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-launch-pcsx2.sh" "$@"
+        ;;
+      *)
+        die "Unknown: launch $sub (expected: pcsx2)"
+        ;;
+    esac
+    ;;
+
+  install)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      pcsx2-sdl-db)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-install-pcsx2-sdl-db.sh" "$@"
+        ;;
+      pcsx2-profile)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-install-pcsx2-profile.sh" "$@"
+        ;;
+      *)
+        die "Unknown: install $sub (expected: pcsx2-sdl-db | pcsx2-profile)"
         ;;
     esac
     ;;

@@ -47,12 +47,13 @@ public final class GIPParser: InputParser, @unchecked Sendable {
 
   private var prevButtons0: UInt8 = 0
   private var prevButtons1: UInt8 = 0
-  private var prevLT: UInt16 = 0
-  private var prevRT: UInt16 = 0
-  private var prevLSX: Int16 = 0
-  private var prevLSY: Int16 = 0
-  private var prevRSX: Int16 = 0
-  private var prevRSY: Int16 = 0
+  private var prevButtons2: UInt8 = 0
+  private var prevLT: UInt16?
+  private var prevRT: UInt16?
+  private var prevLSX: Int16?
+  private var prevLSY: Int16?
+  private var prevRSX: Int16?
+  private var prevRSY: Int16?
 
   /// Creates a new GIPParser with the given endpoint configuration.
   public init(endpointConfig: USBEndpointConfig = .gipDefault) {
@@ -203,6 +204,7 @@ public final class GIPParser: InputParser, @unchecked Sendable {
 
     let buttons0 = bytes[0]
     let buttons1 = bytes[1]
+    let buttons2 = payload.count > 14 ? bytes[14] : 0
     let lt = parseLT(from: bytes)
     let rt = parseRT(from: bytes)
     let (lsx, lsy, rsx, rsy) = parseSticks(from: bytes)
@@ -210,12 +212,14 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     var events: [ControllerEvent] = []
     events += parseFaceButtons(curr: buttons0)
     events += parseShoulderButtons(curr: buttons1)
+    events += parseExtendedButtons(curr: buttons2)
     events += parseDpad(curr: buttons1)
     events += parseSticksEvents(lsx: lsx, lsy: lsy, rsx: rsx, rsy: rsy)
     events += parseTriggers(lt: lt, rt: rt)
 
     prevButtons0 = buttons0
     prevButtons1 = buttons1
+    prevButtons2 = buttons2
     prevLT = lt
     prevRT = rt
 
@@ -250,6 +254,10 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     )
   }
 
+  private func parseExtendedButtons(curr: UInt8) -> [ControllerEvent] {
+    diffButtons(prev: prevButtons2, curr: curr, mapping: [(1, .share)])
+  }
+
   private func parseDpad(curr: UInt8) -> [ControllerEvent] {
     let dpad = curr & gipDpadMask
     let prevDpad = prevButtons1 & gipDpadMask
@@ -282,6 +290,8 @@ public final class GIPParser: InputParser, @unchecked Sendable {
     var events: [ControllerEvent] = []
     if lt != prevLT { events.append(.leftTriggerChanged(Float(lt) / gipTriggerMax)) }
     if rt != prevRT { events.append(.rightTriggerChanged(Float(rt) / gipTriggerMax)) }
+    prevLT = lt
+    prevRT = rt
     return events
   }
 

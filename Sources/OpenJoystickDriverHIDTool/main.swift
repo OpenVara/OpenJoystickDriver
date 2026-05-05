@@ -37,6 +37,33 @@ private func enumerateDevices(matching: [String: Any]?) -> [IOHIDDevice] {
   })
 }
 
+private func managerDevices(_ mgr: IOHIDManager) -> [IOHIDDevice] {
+  guard let rawDevices = IOHIDManagerCopyDevices(mgr) else { return [] }
+  let count = CFSetGetCount(rawDevices)
+  guard count > 0 else { return [] }
+  let values = UnsafeMutablePointer<UnsafeRawPointer?>.allocate(capacity: count)
+  defer { values.deallocate() }
+  CFSetGetValues(rawDevices, values)
+  return (0..<count).compactMap { idx in
+    guard let value = values[idx] else { return nil }
+    return unsafeBitCast(value, to: IOHIDDevice.self)
+  }.sorted {
+    let a = intProp($0, kIOHIDVendorIDKey as String) * 0x1_0000 + intProp($0, kIOHIDProductIDKey as String)
+    let b = intProp($1, kIOHIDVendorIDKey as String) * 0x1_0000 + intProp($1, kIOHIDProductIDKey as String)
+    return a < b
+  }
+}
+
+private func inputElements(_ dev: IOHIDDevice) -> [IOHIDElement] {
+  guard let rawElements = IOHIDDeviceCopyMatchingElements(dev, nil, IOOptionBits(kIOHIDOptionsTypeNone)) as? [IOHIDElement] else {
+    return []
+  }
+  return rawElements.filter { element in
+    let type = IOHIDElementGetType(element)
+    return type == kIOHIDElementTypeInput_Misc || type == kIOHIDElementTypeInput_Button || type == kIOHIDElementTypeInput_Axis
+  }
+}
+
 private func printUsageAndExit(_ code: Int32) -> Never {
   fputs(
     """
@@ -45,12 +72,15 @@ private func printUsageAndExit(_ code: Int32) -> Never {
     Usage:
       OpenJoystickDriverHIDTool --list
       OpenJoystickDriverHIDTool --dump --vid 0x045e --pid 0x02ea
+      OpenJoystickDriverHIDTool --monitor [--vid 0x4f4a --pid 0x4447] [--seconds 10]
 
     Options:
       --list           List HID devices (vid/pid/product/transport + report sizes).
       --dump           Dump the report descriptor for one device (as hex and Swift [UInt8]).
+      --monitor        Open matching HID devices and print input value/report callbacks.
       --vid <int>      Vendor ID (decimal or 0x... hex).
       --pid <int>      Product ID (decimal or 0x... hex).
+      --seconds <int>  Monitor duration in seconds (default: 10, max: 60).
       --help           Show this help.
 
     """,
@@ -64,10 +94,123 @@ if args.contains("--help") { printUsageAndExit(0) }
 
 let list = args.contains("--list")
 let dump = args.contains("--dump")
+let monitor = args.contains("--monitor")
 
 func argValue(_ name: String) -> String? {
   guard let idx = args.firstIndex(of: name), idx + 1 < args.count else { return nil }
   return args[idx + 1]
+}
+
+func intArg(_ name: String, default defaultValue: Int) -> Int {
+  guard let raw = argValue(name), let parsed = parseInt(raw) else { return defaultValue }
+  return parsed
+}
+
+if monitor {
+  let vid = intArg("--vid", default: 0x4F4A)
+  let pid = intArg("--pid", default: 0x4447)
+  let seconds = min(max(intArg("--seconds", default: 10), 1), 60)
+
+  final class MonitorCounter {
+    private let lock = NSLock()
+    private(set) var values = 0
+    private(set) var reports = 0
+
+    func value(_ device: IOHIDDevice, _ value: IOHIDValue) {
+      let element = IOHIDValueGetElement(value)
+      let page = IOHIDElementGetUsagePage(element)
+      let usage = IOHIDElementGetUsage(element)
+      let intValue = IOHIDValueGetIntegerValue(value)
+      lock.withLock { values += 1 }
+      print("VALUE page=0x\(String(page, radix: 16)) usage=0x\(String(usage, radix: 16)) value=\(intValue)")
+      fflush(stdout)
+    }
+
+    func report(_ type: IOHIDReportType, _ reportID: UInt32, _ reportLength: CFIndex) {
+      lock.withLock { reports += 1 }
+      print("REPORT type=\(type.rawValue) id=\(reportID) len=\(reportLength)")
+      fflush(stdout)
+    }
+
+    func snapshot() -> (Int, Int) {
+      lock.withLock { (values, reports) }
+    }
+  }
+
+  let counter = MonitorCounter()
+  let counterPtr = Unmanaged.passRetained(counter).toOpaque()
+  defer { Unmanaged<MonitorCounter>.fromOpaque(counterPtr).release() }
+
+  let mgr = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+  IOHIDManagerSetDeviceMatching(mgr, [
+    kIOHIDVendorIDKey as String: vid,
+    kIOHIDProductIDKey as String: pid,
+  ] as CFDictionary)
+
+  let valueCallback: IOHIDValueCallback = { context, _, sender, value in
+    guard let context, let sender else { return }
+    let counter = Unmanaged<MonitorCounter>.fromOpaque(context).takeUnretainedValue()
+    let device = Unmanaged<IOHIDDevice>.fromOpaque(sender).takeUnretainedValue()
+    counter.value(device, value)
+  }
+  IOHIDManagerRegisterInputValueCallback(mgr, valueCallback, counterPtr)
+
+  let reportCallback: IOHIDReportCallback = { context, _, _, type, reportID, _, reportLength in
+    guard let context else { return }
+    let counter = Unmanaged<MonitorCounter>.fromOpaque(context).takeUnretainedValue()
+    counter.report(type, reportID, reportLength)
+  }
+  IOHIDManagerRegisterInputReportCallback(mgr, reportCallback, counterPtr)
+  IOHIDManagerScheduleWithRunLoop(mgr, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
+
+  let openResult = IOHIDManagerOpen(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+  guard openResult == kIOReturnSuccess else {
+    fputs("ERROR: IOHIDManagerOpen failed: 0x\(String(UInt32(bitPattern: openResult), radix: 16))\n", stderr)
+    IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+    exit(1)
+  }
+
+  let devices = managerDevices(mgr)
+  let elementsByDevice = devices.map { inputElements($0) }
+  var lastPolledValues: [String: Int] = [:]
+
+  print("Monitoring \(devices.count) device(s), VID:0x\(String(vid, radix: 16)) PID:0x\(String(pid, radix: 16)), \(seconds)s")
+  for (idx, dev) in devices.enumerated() {
+    print(
+      "  product=\"\(strProp(dev, kIOHIDProductKey as String) ?? "(unknown)")\""
+        + " transport=\(strProp(dev, kIOHIDTransportKey as String) ?? "(null)")"
+        + " elements=\(elementsByDevice[idx].count)"
+    )
+  }
+  fflush(stdout)
+
+  let end = Date().addingTimeInterval(TimeInterval(seconds))
+  while Date() < end {
+    CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0.05, false)
+    for (deviceIndex, dev) in devices.enumerated() {
+      for element in elementsByDevice[deviceIndex] {
+        var value = unsafeBitCast(0, to: Unmanaged<IOHIDValue>.self)
+        let result = IOHIDDeviceGetValue(dev, element, &value)
+        guard result == kIOReturnSuccess else { continue }
+        let intValue = IOHIDValueGetIntegerValue(value.takeUnretainedValue())
+        let page = IOHIDElementGetUsagePage(element)
+        let usage = IOHIDElementGetUsage(element)
+        let cookie = IOHIDElementGetCookie(element)
+        let key = "\(deviceIndex):\(cookie)"
+        if lastPolledValues[key] != intValue {
+          lastPolledValues[key] = intValue
+          print("POLL page=0x\(String(page, radix: 16)) usage=0x\(String(usage, radix: 16)) value=\(intValue)")
+          fflush(stdout)
+        }
+      }
+    }
+  }
+
+  let (values, reports) = counter.snapshot()
+  IOHIDManagerUnscheduleFromRunLoop(mgr, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
+  IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
+  print("SUMMARY values=\(values) reports=\(reports)")
+  exit(values > 0 || reports > 0 ? 0 : 3)
 }
 
 if list {
@@ -134,4 +277,3 @@ if dump {
 }
 
 printUsageAndExit(2)
-

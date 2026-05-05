@@ -6,7 +6,7 @@ import Foundation
 /// Do not assume consumers will apply device-specific parsing based on VID/PID.
 ///
 /// Report layout (15 bytes total):
-///   Bytes 0–1  : Button bitmask, buttons 1–15 + 1-bit pad (LSB = button 1)
+///   Bytes 0–1  : Button bitmask, buttons 1–16 (LSB = button 1)
 ///   Bytes 2–3  : Left Stick X  (Int16 LE, –32767…32767) — Usage: X  (0x30)
 ///   Bytes 4–5  : Left Stick Y  (Int16 LE, –32767…32767) — Usage: Y  (0x31)
 ///   Bytes 6–7  : Left Trigger  (Int16 LE, 0…32767)      — Usage: Z  (0x32)
@@ -29,22 +29,18 @@ public enum GamepadHIDDescriptor {
     // Collection: Physical
     0xA1, 0x00,
 
-    // --- 15 digital buttons (Xbox One S BT order, Button page, usages 1–15) ---
+    // --- 16 digital buttons (Xbox One S BT order, Button page, usages 1–16) ---
     // b0=A, b1=B, b2=X, b3=Y, b4=LB, b5=RB, b6=L3, b7=R3,
-    // b8=Menu, b9=View, b10=Guide, b11=DUp, b12=DDn, b13=DLt, b14=DRt
+    // b8=Menu, b9=View, b10=Guide, b11=DUp, b12=DDn, b13=DLt, b14=DRt,
+    // b15=Share/Capture.
     0x05, 0x09,  // Usage Page: Button
     0x19, 0x01,  // Usage Minimum: 1
-    0x29, 0x0F,  // Usage Maximum: 15
+    0x29, 0x10,  // Usage Maximum: 16
     0x15, 0x00,  // Logical Minimum: 0
     0x25, 0x01,  // Logical Maximum: 1
     0x75, 0x01,  // Report Size: 1
-    0x95, 0x0F,  // Report Count: 15
+    0x95, 0x10,  // Report Count: 16
     0x81, 0x02,  // Input: Data, Variable, Absolute
-
-    // --- 1-bit pad to round buttons to 16 bits ---
-    0x75, 0x01,  // Report Size: 1
-    0x95, 0x01,  // Report Count: 1
-    0x81, 0x03,  // Input: Constant
 
     // --- All 6 axes on Generic Desktop page ---
     // macOS sorts HID elements by (usage_page, usage_id), so all axes
@@ -146,7 +142,7 @@ public enum GamepadHIDDescriptor {
   /// SDL macOS mapping for 045E:02EA:
   /// a:b0, b:b1, x:b2, y:b3, leftshoulder:b4, rightshoulder:b5,
   /// leftstick:b6, rightstick:b7, start:b8, back:b9, guide:b10,
-  /// dpup:b11, dpdown:b12, dpleft:b13, dpright:b14
+  /// dpup:b11, dpdown:b12, dpleft:b13, dpright:b14, misc1:b15
   public enum ButtonBit: Int {
     case a = 0  // Xbox A
     case b = 1  // Xbox B
@@ -162,7 +158,8 @@ public enum GamepadHIDDescriptor {
     case dpadUp = 11
     case dpadDown = 12
     case dpadLeft = 13
-    case dpadRight = 14  // Bit 15: padding (15 buttons + 1 pad bit)
+    case dpadRight = 14
+    case share = 15
   }
 
   // MARK: - D-pad button bitmask helper
@@ -183,3 +180,4 @@ public enum GamepadHIDDescriptor {
     }
   }
 }
+

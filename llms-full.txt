@@ -27,8 +27,8 @@ USB HID class 0x03             -> IOHIDManager      -> DS4Parser or GenericHIDPa
 Output:
 
 ```text
-DriverKit HID backend       -> IOUserHIDDevice system extension
-IOHIDUserDevice backend     -> userspace compatibility virtual controller
+DriverKit HID backend       -> private OJD relay / fallback diagnostics
+IOHIDUserDevice backend     -> consumer-facing virtual controller profiles
 ```
 
 Each controller is processed by an isolated `DevicePipeline` actor. One
@@ -47,7 +47,10 @@ XPC status/control APIs.
 - `Sources/OpenJoystickDriverGameControllerProbe/`: GameController.framework
   consumer probe.
 - `Sources/OpenJoystickDriverHIDTool/`: HID diagnostic tool.
-- `OpenJoystickVirtualHIDDevice/`: DriverKit virtual HID device.
+- `DriverKitExtension/`: DriverKit virtual HID device.
+- `Resources/SDL/openjoystickdriver.gamecontrollerdb.txt`: SDL gamepad mapping
+  for the generic user-space OJD device. SDL3/PCSX2 needs `platform:macOS`;
+  `platform:Mac OS X` is SDL2-era and can be ignored by SDL 3.2.x.
 - `Tests/OpenJoystickDriverKitTests/`: package tests for core behavior.
 - `Modules/SwiftUSB/Tests/`: SwiftUSB and hardware integration test targets.
 
@@ -111,6 +114,31 @@ Edit `AGENTS.md` only for agent instructions. Keep the symlinks intact.
 | Flydigi Vader 5S | 14295 | 10241 | GIP, xboxOne variant | Supported with device-specific USB config |
 | DualShock 4 v1 | 1356 | 1476 | DS4 USB HID | Implemented, not locally hardware verified |
 | DualShock 4 v2 | 1356 | 2508 | DS4 USB HID | Implemented, not locally hardware verified |
+
+Compatibility profiles are `sdl-macos`, `generic-hid`, `x360-hid`, and
+`xone-hid`. `sdl-macos` is the default OJD-owned identity for macOS SDL
+consumers such as Steam and PCSX2. `generic-hid` is for descriptor-driven apps.
+`x360-hid` and `xone-hid` are experimental hardware-spoof profiles.
+PCSX2 should use SDL macOS Compatibility with user-space-only output. The mapped
+user-space PID differs from DriverKit so stale dext copies stay unmapped.
+Do not replace this with an SDL-known third-party VID/PID: macOS
+GameController.framework can claim those virtual identities before SDL's IOKit
+backend enumerates them.
+If a stale DriverKit process remains after sysext upgrade, run
+`./scripts/ojd repair stale-dext`; it kills only OJD dext processes whose
+executable path does not match the newest installed system-extension copy.
+Xbox 360 compatibility is exposed as an experimental user-space HID identity
+using Microsoft's XUSB-to-DirectInput HID mapping. It is descriptor-backed, but
+it is not true Windows XInput/XUSB emulation. Expect combined triggers,
+hat-only D-pad, and no Guide/vibration/headset semantics.
+If the PCSX2 app bundle database lacks the OJD mapping, launch it through
+`./scripts/ojd launch pcsx2`; this sets `SDL_GAMECONTROLLERCONFIG` and
+`SDL_GAMECONTROLLERCONFIG_FILE` without modifying the signed app bundle, and
+best-effort applies `compat sdl-macos` plus `output secondary` before launch.
+For normal PCSX2 launches, `./scripts/ojd install pcsx2-sdl-db` installs a
+merged user-data SDL database at `~/Library/Application Support/PCSX2`, and
+`./scripts/ojd install pcsx2-profile` installs an `OpenJoystickDriver` input
+profile that binds both `SDL-0` and `SDL-1`.
 
 GameSir G7 SE was manually verified through hardwaretester.com Gamepad API in
 Xbox One HID compatibility mode as a standard `Xbox Wireless Controller`

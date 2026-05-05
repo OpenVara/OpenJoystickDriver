@@ -236,14 +236,15 @@ struct MenuBarPopoverView: View {
           set: { v in Task { await model.setCompatibilityIdentity(v) } }
         )
       ) {
-        Text("Generic (HID GamePad)").tag(CompatibilityIdentity.generic.rawValue)
-        Text("Xbox One (HID)").tag(CompatibilityIdentity.xboxOne.rawValue)
-        Text("Xbox 360 (experimental)").tag(CompatibilityIdentity.xbox360.rawValue)
+        Text("SDL macOS").tag(CompatibilityIdentity.sdlMacOS.rawValue)
+        Text("Generic HID").tag(CompatibilityIdentity.genericHID.rawValue)
+        Text("Xbox 360 HID").tag(CompatibilityIdentity.x360HID.rawValue)
+        Text("Xbox One HID").tag(CompatibilityIdentity.xoneHID.rawValue)
       }
       .pickerStyle(.menu)
       .disabled(!model.daemonConnected || !compatSelected)
 
-      Text("Used only in Compatibility mode. If inputs stop working, set this back to Generic.")
+      Text("Used only in Compatibility mode. SDL macOS is the default for Steam, PCSX2, and SDL apps.")
         .font(.caption2)
         .foregroundStyle(.secondary)
 

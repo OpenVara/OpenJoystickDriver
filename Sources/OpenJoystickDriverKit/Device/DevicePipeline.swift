@@ -4,13 +4,12 @@ import SwiftUSB
 private let gipReadPacketLength = 64
 private let gipReadTimeoutMs: UInt32 = 100
 private let usbOpenRetryDelays: [UInt64] = [1_000_000_000, 2_000_000_000, 4_000_000_000]
-/// Send keep-alive every 40 read cycles × 100 ms timeout ≈ 4 seconds.
-private let keepAliveCycleInterval: UInt = 40
+private let keepAliveIntervalNs: UInt64 = 4_000_000_000
 /// Target input loop cadence in nanoseconds.
 ///
 /// If libusb returns timeouts immediately (instead of waiting for timeout),
 /// this prevents a hot loop that can trigger launchd "inefficient" kills.
-private let usbInputLoopCadenceNs: UInt64 = UInt64(gipReadTimeoutMs) * 1_000_000
+private let usbIdleLoopCadenceNs: UInt64 = UInt64(gipReadTimeoutMs) * 1_000_000
 private let usbIOErrorReconnectThreshold = 10
 private let usbIOErrorBackoffBaseNs: UInt64 = 250_000_000  // 250ms
 private let usbIOErrorBackoffMaxNs: UInt64 = 2_000_000_000  // 2s
@@ -264,7 +263,7 @@ actor DevicePipeline {
 
   private func runUSBInputLoop(handle: USBDeviceHandle) async {
     let inEndpoint = endpointConfig.inputEndpoint
-    var keepAliveCycle: UInt = 0
+    var lastKeepAliveNs = DispatchTime.now().uptimeNanoseconds
     print("[DevicePipeline] Starting USB input loop:" + " \(identifier)"
           + " inEP=0x\(String(inEndpoint, radix: 16))")
 
@@ -274,12 +273,12 @@ actor DevicePipeline {
 
     while isActive {
       let loopStartNs = DispatchTime.now().uptimeNanoseconds
-      keepAliveCycle += 1
-      if shouldSendKeepAlive(keepAliveCycle: keepAliveCycle) {
-        keepAliveCycle = 0
+      if shouldSendKeepAlive(lastKeepAliveNs: lastKeepAliveNs, now: loopStartNs) {
+        lastKeepAliveNs = loopStartNs
         runKeepAlive(handle: handle)
       }
       var shouldBreak = false
+      var shouldThrottleIdle = false
       do {
         let bytes = try readInterrupt(handle: handle, inEndpoint: inEndpoint)
         consecutiveUSBIOErrors = 0
@@ -289,6 +288,7 @@ actor DevicePipeline {
         updateInputState(from: events)
       } catch let error as USBError where error.isTimeout {
         // No data in this interval; throttle below to avoid a hot timeout loop.
+        shouldThrottleIdle = true
       } catch let error as USBError where error.isNoDevice {
         print("[DevicePipeline] Device disconnected:" + " \(identifier)")
         shouldBreak = true
@@ -322,10 +322,10 @@ actor DevicePipeline {
 
       if shouldBreak { break }
 
-      // Ensure we never spin faster than the intended read cadence.
+      // Throttle idle timeouts only. Successful packets should dispatch at device cadence.
       let loopElapsedNs = DispatchTime.now().uptimeNanoseconds &- loopStartNs
-      if loopElapsedNs < usbInputLoopCadenceNs {
-        try? await Task.sleep(nanoseconds: usbInputLoopCadenceNs &- loopElapsedNs)
+      if shouldThrottleIdle && loopElapsedNs < usbIdleLoopCadenceNs {
+        try? await Task.sleep(nanoseconds: usbIdleLoopCadenceNs &- loopElapsedNs)
       }
     }
 
@@ -334,8 +334,8 @@ actor DevicePipeline {
     print("[DevicePipeline] Input loop ended:" + " \(identifier)")
   }
 
-  private func shouldSendKeepAlive(keepAliveCycle: UInt) -> Bool {
-    keepAliveCycle >= keepAliveCycleInterval
+  private func shouldSendKeepAlive(lastKeepAliveNs: UInt64, now: UInt64) -> Bool {
+    now &- lastKeepAliveNs >= keepAliveIntervalNs
   }
 
   private func runKeepAlive(handle: USBDeviceHandle) {

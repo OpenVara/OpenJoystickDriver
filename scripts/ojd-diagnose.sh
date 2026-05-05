@@ -5,7 +5,7 @@
 #   ./scripts/ojd diagnose <subcommand>
 #
 # Subcommands:
-#   dext (default), sdl3, pcsx2-latency, backends
+#   dext (default), sdl3, pcsx2-sdl3, pcsx2-live, pcsx2-latency, backends
 #
 # Runs all checks regardless of individual failures.
 
@@ -22,6 +22,8 @@ if [[ "$cmd" == "-h" || "$cmd" == "--help" || "$cmd" == "help" ]]; then
 Usage:
   ./scripts/ojd diagnose dext
   ./scripts/ojd diagnose sdl3 [--seconds N] [other args]
+  ./scripts/ojd diagnose pcsx2-sdl3 [--seconds N] [other args]
+  ./scripts/ojd diagnose pcsx2-live [--seconds N]
   ./scripts/ojd diagnose gamecontroller [--seconds N]
   ./scripts/ojd diagnose pcsx2-latency
   ./scripts/ojd diagnose backends [--seconds N]
@@ -50,6 +52,26 @@ run_sdl3_probe_native() {
   echo "  System Settings -> Privacy & Security -> Input Monitoring"
   echo
   "$OUT" "$@"
+}
+
+combined_sdl_mapping_file() {
+  local ROOT="$1"
+  local PCSX2_USER_DB="$HOME/Library/Application Support/PCSX2/game_controller_db.txt"
+  local PCSX2_DB="/Applications/PCSX2.app/Contents/Resources/game_controller_db.txt"
+  local OJD_DB="$ROOT/Resources/SDL/openjoystickdriver.gamecontrollerdb.txt"
+  local OUT="/tmp/ojd-game-controller-db.txt"
+
+  : > "$OUT"
+  if [[ -f "$PCSX2_USER_DB" ]]; then
+    cat "$PCSX2_USER_DB" >> "$OUT"
+  fi
+  if [[ -f "$PCSX2_DB" ]]; then
+    cat "$PCSX2_DB" >> "$OUT"
+  fi
+  if [[ -f "$OJD_DB" ]]; then
+    cat "$OJD_DB" >> "$OUT"
+  fi
+  echo "$OUT"
 }
 
 run_sdl3_probe_pcsx2_x86_64() {
@@ -155,19 +177,31 @@ run_pcsx2_latency_triage() {
   fi
 
   echo "2) SDL3 probe (native):"
-  if [[ -f "$PCSX2_DB" ]]; then
-    run_sdl3_probe_native --seconds 10 --mappings-file "$PCSX2_DB" || true
-  else
-    run_sdl3_probe_native --seconds 10 || true
-  fi
+  run_sdl3_probe_native --seconds 10 --mappings-file "$(combined_sdl_mapping_file "$ROOT")" --expect-single-neutral-ojd || true
   echo
 
   echo "3) SDL3 probe (PCSX2/Rosetta x86_64, uses PCSX2's bundled SDL3):"
-  if [[ -f "$PCSX2_DB" ]]; then
-    run_sdl3_probe_pcsx2_x86_64 --seconds 10 --mappings-file "$PCSX2_DB" || true
-  else
-    run_sdl3_probe_pcsx2_x86_64 --seconds 10 || true
+  run_sdl3_probe_pcsx2_x86_64 --seconds 10 --mappings-file "$(combined_sdl_mapping_file "$ROOT")" --expect-single-neutral-ojd || true
+}
+
+run_pcsx2_live_probe() {
+  local seconds="${1:-8}"
+  local APP_BIN="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver"
+  local ROOT
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  local CLI_BIN="$ROOT/.build/debug/OpenJoystickDriver"
+  if [[ ! -x "$CLI_BIN" ]]; then
+    CLI_BIN="$APP_BIN"
   fi
+
+  [[ -x "$CLI_BIN" ]] || die "OpenJoystickDriver CLI not found at $CLI_BIN or $APP_BIN"
+
+  echo "=== PCSX2/Rosetta SDL3 live input probe ==="
+  echo "Start this probe, then run this in another terminal while it listens:"
+  echo "  $CLI_BIN --headless selftest 4"
+  echo
+
+  run_sdl3_probe_pcsx2_x86_64 --seconds "$seconds" --mappings-file "$(combined_sdl_mapping_file "$ROOT")"
 }
 
 run_gamecontroller_probe() {
@@ -241,12 +275,12 @@ run_backend_acceptance_loop() {
   echo
 
   echo "4) SDL3 consumer probe:"
-  run_limited "$step_timeout" /usr/bin/env bash "$0" sdl3 --seconds "$seconds" || true
+  run_limited "$step_timeout" /usr/bin/env bash "$0" sdl3 --seconds "$seconds" --mappings-file "$(combined_sdl_mapping_file "$ROOT")" --expect-single-neutral-ojd || true
   echo
 
   echo "5) PCSX2/Rosetta consumer probe:"
   if [[ -d "/Applications/PCSX2.app" ]]; then
-    run_limited "$step_timeout" run_sdl3_probe_pcsx2_x86_64 --seconds "$seconds" || true
+    run_limited "$step_timeout" run_sdl3_probe_pcsx2_x86_64 --seconds "$seconds" --mappings-file "$(combined_sdl_mapping_file "$ROOT")" --expect-single-neutral-ojd || true
   else
     echo "SKIP: PCSX2 not found at /Applications/PCSX2.app"
   fi
@@ -258,6 +292,21 @@ run_backend_acceptance_loop() {
 
 if [[ "$cmd" == "sdl3" ]]; then
   run_sdl3_probe_native "$@"
+  exit 0
+fi
+
+if [[ "$cmd" == "pcsx2-sdl3" ]]; then
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  run_sdl3_probe_pcsx2_x86_64 --mappings-file "$(combined_sdl_mapping_file "$ROOT")" "$@"
+  exit 0
+fi
+
+if [[ "$cmd" == "pcsx2-live" ]]; then
+  seconds="8"
+  if [[ "${1:-}" == "--seconds" && -n "${2:-}" ]]; then
+    seconds="$2"
+  fi
+  run_pcsx2_live_probe "$seconds"
   exit 0
 fi
 

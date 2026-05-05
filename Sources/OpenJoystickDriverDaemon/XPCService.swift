@@ -34,7 +34,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
   private var listener: NSXPCListener?
   private static let userSpaceEnabledDefaultsKey = "UserSpaceVirtualDeviceEnabled"
   private static let compatibilityIdentityDefaultsKey = "CompatibilityIdentity"
-  private static let outputModeDefaultsKey = "OutputMode"  // legacy
+  private static let outputModeDefaultsKey = "OutputMode"
   private static let virtualDeviceModeDefaultsKey = "VirtualDeviceMode"
 
   /// Creates an XPCService backed by the given device manager, permission manager, and output dispatcher.
@@ -50,13 +50,12 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     self.dextDispatcher = dextDispatcher
     self.userSpaceEnabled = UserDefaults.standard.bool(forKey: Self.userSpaceEnabledDefaultsKey)
     let savedCompat = UserDefaults.standard.string(forKey: Self.compatibilityIdentityDefaultsKey)
-    // Default to Xbox One identity so SDL/Steam auto-mapping works out of the box.
-    self.compatibilityIdentity = CompatibilityIdentity(rawValue: savedCompat ?? "") ?? .xboxOne
+    self.compatibilityIdentity = CompatibilityIdentity(rawValue: savedCompat ?? "") ?? .sdlMacOS
     let savedVirtual = UserDefaults.standard.string(forKey: Self.virtualDeviceModeDefaultsKey)
     if let raw = savedVirtual, let mode = VirtualDeviceMode(rawValue: raw) {
       self.virtualDeviceMode = mode
     } else {
-      // Migration from legacy keys (OutputMode + userSpaceEnabled).
+      // Migration from previous routing keys (OutputMode + userSpaceEnabled).
       let savedMode = UserDefaults.standard.string(forKey: Self.outputModeDefaultsKey)
       let parsed = CompositeOutputDispatcher.Mode(rawValue: savedMode ?? "")
       if parsed == .both {
@@ -109,14 +108,10 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       // If user-space creation fails, keep DriverKit enabled as a fallback but keep the
       // requested mode as Compatibility and show an explicit error string.
       if setUserSpaceVirtualDeviceEnabledInternal(true) {
-        dextDispatcher.setEnabled(true)
-        // Best-effort: seize the DriverKit virtual device so SDL/IOKit apps don't
-        // prefer the user-space controller while Compatibility is active. Browsers
-        // may still enumerate DriverKit, so keep it live instead of creating a stale
-        // non-working first controller.
-        dextDispatcher.setCompatibilitySeizeEnabled(true)
-        effectiveOutputMode = .both
-        dispatcher.setMode(.both)
+        dextDispatcher.setCompatibilitySeizeEnabled(false)
+        dextDispatcher.setEnabled(false)
+        effectiveOutputMode = .secondaryOnly
+        dispatcher.setMode(.secondaryOnly)
         UserDefaults.standard.set(
           CompositeOutputDispatcher.Mode.secondaryOnly.rawValue,
           forKey: Self.outputModeDefaultsKey
@@ -140,6 +135,14 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     case .both:
       dextDispatcher.setCompatibilitySeizeEnabled(false)
       dextDispatcher.setEnabled(true)
+      if compatibilityIdentity.disablesDriverKitMirror {
+        _ = setUserSpaceVirtualDeviceEnabledInternal(false)
+        effectiveOutputMode = .primaryOnly
+        dispatcher.setMode(.primaryOnly)
+        userSpaceStatus =
+          "off (\(compatibilityIdentity.rawValue) Compatibility disabled while DriverKit output is active)"
+        return
+      }
       if setUserSpaceVirtualDeviceEnabledInternal(true) {
         effectiveOutputMode = .both
         dispatcher.setMode(.both)
@@ -216,7 +219,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       let inputState = await pm.inputMonitoringState
       let devices = await dm.connectedDeviceDescriptions()
       let userEnabled = userSpaceEnabled
-      let userStatus = userSpaceStatus
+      let userStatus = currentUserSpaceStatus()
       let payload = XPCStatusPayload(
         inputMonitoring: "\(inputState)",
         connectedDevices: devices,
@@ -298,7 +301,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
   }
 
   public func getUserSpaceVirtualDeviceStatus(reply: @escaping (String) -> Void) {
-    reply(userSpaceStatus)
+    reply(currentUserSpaceStatus())
   }
 
   public func setCompatibilityIdentity(_ raw: String, reply: @escaping (Bool) -> Void) {
@@ -316,6 +319,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
           compatibilityIdentity = id
           UserDefaults.standard.set(id.rawValue, forKey: Self.compatibilityIdentityDefaultsKey)
           old.close()
+          primeUserSpaceDevices(newDispatcher)
           return true
         } catch {
           if !userSpaceStatus.hasPrefix("error:") {
@@ -333,6 +337,9 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       UserDefaults.standard.set(id.rawValue, forKey: Self.compatibilityIdentityDefaultsKey)
       return true
     }
+    if ok && id.disablesDriverKitMirror && virtualDeviceMode == .both {
+      applyMode(.both)
+    }
     reply(ok)
   }
 
@@ -344,7 +351,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     let callback = SendableReply(call: reply)
     Task {
       let enabled = userSpaceEnabled
-      let status = userSpaceStatus
+      let status = currentUserSpaceStatus()
       let mode = effectiveOutputMode
       let devices = VirtualDeviceDiagnostics.enumerateHIDGamepads()
       let stats = dextDispatcher.outputStatsSnapshot()
@@ -403,7 +410,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       userSpaceStatus = "off"
     }
 
-    compatibilityIdentity = .xboxOne
+    compatibilityIdentity = .sdlMacOS
     virtualDeviceMode = .compatUserSpace
     effectiveOutputMode = .primaryOnly
     applyMode(.compatUserSpace)
@@ -423,14 +430,15 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       }
     }
 
-    let profile: VirtualDeviceProfile
+    let compatibilityProfile = CompatibilityOutputProfileCatalog.profile(for: identity)
+    let profile = compatibilityProfile.deviceProfile
     let format: any VirtualGamepadReportFormat
     switch identity {
-    case .generic:
-      profile = .openJoystickDriver
+    case .genericHID:
       format = OJDGenericGamepadFormat()
-    case .xboxOne:
-      profile = .xboxOneS
+    case .sdlMacOS:
+      format = OJDGenericGamepadFormat(includesDpadButtonBits: false)
+    case .xoneHID:
       // Xbox One identity for SDL/Steam/PCSX2:
       // - Prefer the physical HID report descriptor exposed by macOS for 045E:02EA (USB).
       //   This makes SDL treat the virtual device as a real Xbox controller.
@@ -449,13 +457,15 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       } else {
         format = try HIDDescriptorReportFormat(descriptor: XboxOneBluetoothHIDDescriptor.descriptor)
       }
-    case .xbox360:
-      throw CompatError.unsupported(
-        "Xbox 360 (experimental) is not supported yet (no built-in HID descriptor available). Use Generic or Xbox One (HID)."
-      )
+    case .x360HID:
+      format = Xbox360XUSBDirectInputReportFormat()
     }
 
-    let ud = try UserSpaceOutputDispatcher(profile: profile, format: format)
+    let ud = try UserSpaceOutputDispatcher(
+      profile: profile,
+      format: format,
+      emitsXboxGuideReport: compatibilityProfile.emitsXboxGuideReport
+    )
     return (ud, ud.status)
   }
 
@@ -482,6 +492,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         }
         UserDefaults.standard.set(true, forKey: Self.userSpaceEnabledDefaultsKey)
         print("[XPCService] Enabled user-space virtual gamepad")
+        primeUserSpaceDevices(ud)
         return true
       } catch {
         userSpaceLock.withLock {
@@ -514,6 +525,28 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     case .primaryOnly: applyMode(.driverKit); return true
     case .secondaryOnly: applyMode(.compatUserSpace); return true
     case .both: applyMode(.both); return true
+    }
+  }
+
+  private func currentUserSpaceStatus() -> String {
+    userSpaceLock.withLock {
+      userSpaceDispatcher?.status ?? userSpaceStatus
+    }
+  }
+
+  private func primeUserSpaceDevices(_ ud: UserSpaceOutputDispatcher) {
+    let dm = deviceManager
+    Task {
+      let identifiers = await dm.connectedDeviceIdentifiers()
+      guard !identifiers.isEmpty else { return }
+      for identifier in identifiers {
+        await ud.dispatch(events: [], from: identifier)
+      }
+      userSpaceLock.withLock {
+        if userSpaceDispatcher === ud {
+          userSpaceStatus = ud.status
+        }
+      }
     }
   }
 
@@ -649,6 +682,30 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       print("[XPCService] Self-test IOHIDManagerOpen warning: \(String(openResult, radix: 16))")
     }
 
+    let connectedIdentifiers = await deviceManager.connectedDeviceIdentifiers()
+    let syntheticIdentifier =
+      connectedIdentifiers.first
+      ?? DeviceIdentifier(
+        vendorID: 0x4F4A,
+        productID: 0x5445,
+        serialNumber: "OpenJoystickDriver-SelfTest"
+      )
+    Task {
+      let userSpace = userSpaceLock.withLock { userSpaceDispatcher }
+      try? await Task.sleep(for: .milliseconds(250))
+      await dextDispatcher.dispatch(events: [.buttonPressed(.a)], from: syntheticIdentifier)
+      await userSpace?.dispatch(events: [.buttonPressed(.a)], from: syntheticIdentifier)
+      try? await Task.sleep(for: .milliseconds(250))
+      await dextDispatcher.dispatch(events: [.buttonReleased(.a)], from: syntheticIdentifier)
+      await userSpace?.dispatch(events: [.buttonReleased(.a)], from: syntheticIdentifier)
+      try? await Task.sleep(for: .milliseconds(250))
+      await dextDispatcher.dispatch(events: [.leftStickChanged(x: 0.75, y: 0)], from: syntheticIdentifier)
+      await userSpace?.dispatch(events: [.leftStickChanged(x: 0.75, y: 0)], from: syntheticIdentifier)
+      try? await Task.sleep(for: .milliseconds(250))
+      await dextDispatcher.dispatch(events: [.leftStickChanged(x: 0, y: 0)], from: syntheticIdentifier)
+      await userSpace?.dispatch(events: [.leftStickChanged(x: 0, y: 0)], from: syntheticIdentifier)
+    }
+
     try? await Task.sleep(for: .seconds(Double(seconds)))
 
     IOHIDManagerUnscheduleFromRunLoop(mgr, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
@@ -661,6 +718,11 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       return max(0, b - a)
     }()
     let setReportSuccessDelta = max(0, endStats.successes - startStats.successes)
+    let setReportAttemptDelta = max(0, endStats.attempts - startStats.attempts)
+    let setReportFailureDelta = max(0, endStats.failures - startStats.failures)
+    let connectionAttemptDelta = max(0, endStats.connectionAttempts - startStats.connectionAttempts)
+    let connectionSuccessDelta = max(0, endStats.connectionSuccesses - startStats.connectionSuccesses)
+    let connectionFailureDelta = max(0, endStats.connectionFailures - startStats.connectionFailures)
 
     let retained = Unmanaged<SelfTestCounter>.fromOpaque(counterPtr).takeRetainedValue()
     return XPCVirtualDeviceSelfTestPayload(
@@ -670,7 +732,15 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       userSpaceValueEvents: retained.userSpaceValueEvents,
       userSpaceReportEvents: retained.userSpaceReportEvents,
       driverKitInputReportDelta: driverKitDelta,
-      driverKitSetReportSuccessDelta: setReportSuccessDelta
+      driverKitSetReportSuccessDelta: setReportSuccessDelta,
+      driverKitSetReportAttemptDelta: setReportAttemptDelta,
+      driverKitSetReportFailureDelta: setReportFailureDelta,
+      driverKitSetReportLastErrorHex: endStats.lastErrorHex,
+      driverKitConnectionAttemptDelta: connectionAttemptDelta,
+      driverKitConnectionSuccessDelta: connectionSuccessDelta,
+      driverKitConnectionFailureDelta: connectionFailureDelta,
+      driverKitLastConnectionErrorHex: endStats.lastConnectionErrorHex,
+      driverKitDiscoverySummary: endStats.lastDiscoverySummary
     )
   }
 

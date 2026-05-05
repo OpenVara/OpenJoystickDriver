@@ -166,7 +166,7 @@ public final class XPCClient: @unchecked Sendable {
 
   /// Sets which identity/protocol to emulate in Compatibility mode (user-space IOHIDUserDevice).
   ///
-  /// Values: "generic", "xboxOne", "xbox360".
+  /// Values: "generic-hid", "sdl-macos", "x360-hid", "xone-hid".
   public func setCompatibilityIdentity(_ raw: String) async throws {
     let _: Bool = try await xpcCall { service, reply in
       service.setCompatibilityIdentity(raw, reply: reply)

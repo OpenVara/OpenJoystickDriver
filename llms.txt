@@ -11,7 +11,9 @@ DriverKit HID or IOHIDUserDevice compatibility mode.
   virtual backends, XPC/service logic.
 - `Sources/OpenJoystickDriver/`: SwiftUI menu bar app and headless CLI.
 - `Sources/OpenJoystickDriverDaemon/`: LaunchAgent daemon executable.
-- `OpenJoystickVirtualHIDDevice/`: DriverKit virtual HID system extension.
+- `DriverKitExtension/`: DriverKit virtual HID system extension.
+- `Resources/SDL/openjoystickdriver.gamecontrollerdb.txt`: SDL gamepad mapping
+  for the generic user-space OJD device; use `platform:macOS` for SDL3/PCSX2.
 - `Sources/OpenJoystickDriverKit/Resources/Controllers/`: runtime controller
   profiles.
 - `Resources/Schemas/`: JSON schemas and per-device schema documents.
@@ -22,6 +24,25 @@ DriverKit HID or IOHIDUserDevice compatibility mode.
 
 - GameSir G7 SE: GIP USB path works; Xbox One HID compatibility reports are
   hardware verified through browser Gamepad API.
+- Compatibility profiles are `sdl-macos`, `generic-hid`, `x360-hid`, and
+  `xone-hid`. `sdl-macos` is the default for macOS SDL consumers.
+- PCSX2 should use SDL macOS Compatibility with user-space-only output.
+  The mapped user-space PID differs from DriverKit so stale dext copies stay unmapped.
+  SDL-known third-party VID/PIDs are avoided because macOS GameController can
+  claim those virtual devices before SDL's IOKit backend enumerates them.
+- If a stale DriverKit process remains after sysext upgrade, run
+  `./scripts/ojd repair stale-dext`; it kills only OJD dext processes whose
+  executable path does not match the newest installed system-extension copy.
+- Xbox 360 compatibility is exposed as an experimental user-space HID identity
+  using Microsoft's XUSB-to-DirectInput HID mapping. It is descriptor-backed,
+  but it is not true Windows XInput/XUSB emulation. Expect combined triggers,
+  hat-only D-pad, and no Guide/vibration/headset semantics.
+- Use `./scripts/ojd launch pcsx2` when PCSX2's bundled SDL database lacks the
+  OJD mapping; it sets SDL mapping override environment variables and applies
+  the known-good daemon routing before launch.
+- For normal PCSX2 launches, `./scripts/ojd install pcsx2-sdl-db` installs a
+  merged user-data SDL database and `./scripts/ojd install pcsx2-profile`
+  installs an input profile that binds both `SDL-0` and `SDL-1`.
 - Flydigi Vader 5S: GIP USB path supported with endpoint configuration,
   `setConfiguration(1)` before claim, and post-handshake settle delay.
 - DualShock 4 v1/v2: USB HID parser profiles exist, not locally hardware

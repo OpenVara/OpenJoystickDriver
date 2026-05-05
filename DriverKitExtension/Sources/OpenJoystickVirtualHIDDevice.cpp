@@ -1,11 +1,12 @@
 // DriverKit extension: virtual HID gamepad device (C++ implementation).
 //
 // Compiled against the DriverKit SDK (SDKROOT=driverkit).
-// The HID report descriptor below matches GamepadHIDDescriptor in
-// Sources/OpenJoystickDriverKit/Output/GamepadHIDDescriptor.swift.
+// The HID report descriptor below is a vendor-defined relay endpoint.
+// Consumer-facing gamepads are published by the user-space IOHIDUserDevice backend.
 //
 // DriverKit uses OpenJoystickDriver's generic HID identity. Xbox compatibility is
-// provided by the user-space IOHIDUserDevice backend.
+// provided by the user-space IOHIDUserDevice backend; SDL/PCSX2 compatibility is
+// provided by an SDL mapping for the OJD GUID.
 
 #include "OpenJoystickVirtualHIDDevice.h"
 
@@ -29,20 +30,25 @@ struct OpenJoystickVirtualHIDDevice_IVars {
 
 // clang-format off
 
-/// HID report descriptor — byte-for-byte copy of GamepadHIDDescriptor.descriptor.
-/// Keep both files in sync whenever the descriptor changes.
+/// HID report descriptor for the daemon-to-dext relay.
+///
+/// Keep this device off Generic Desktop/GamePad so SDL, browsers, and games do not
+/// enumerate it as a stale controller. The daemon writes the output report, then
+/// setReport() republishes it through the matching input report for diagnostics and
+/// consumers that subscribe to the relay.
 static const uint8_t HID_REPORT_DESCRIPTOR[] = {
-    0x05, 0x01, 0x09, 0x05, 0xA1, 0x01, 0xA1, 0x00, 0x05, 0x09, 0x19, 0x01, 0x29,
-    0x0F, 0x15, 0x00, 0x25, 0x01, 0x75, 0x01, 0x95, 0x0F, 0x81, 0x02, 0x75, 0x01,
-    0x95, 0x01, 0x81, 0x03, 0x05, 0x01, 0x09, 0x30, 0x09, 0x31, 0x16, 0x01, 0x80,
-    0x26, 0xFF, 0x7F, 0x75, 0x10, 0x95, 0x02, 0x81, 0x02, 0x09, 0x32, 0x15, 0x00,
-    0x26, 0xFF, 0x7F, 0x75, 0x10, 0x95, 0x01, 0x81, 0x02, 0x09, 0x33, 0x09, 0x34,
-    0x16, 0x01, 0x80, 0x26, 0xFF, 0x7F, 0x75, 0x10, 0x95, 0x02, 0x81, 0x02, 0x09,
-    0x35, 0x15, 0x00, 0x26, 0xFF, 0x7F, 0x75, 0x10, 0x95, 0x01, 0x81, 0x02, 0x05,
-    0x01, 0x09, 0x39, 0x15, 0x01, 0x25, 0x08, 0x35, 0x00, 0x46, 0x3B, 0x01, 0x66,
-    0x14, 0x00, 0x75, 0x04, 0x95, 0x01, 0x81, 0x42, 0x75, 0x04, 0x95, 0x01, 0x81,
-    0x03, 0x09, 0x01, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x0F, 0x91,
-    0x02, 0xC0, 0xC0,
+    0x06, 0x00, 0xFF,  // Usage Page: Vendor Defined 0xFF00
+    0x09, 0x01,  // Usage: Relay
+    0xA1, 0x01,  // Collection: Application
+    0x15, 0x00,  // Logical Minimum: 0
+    0x26, 0xFF, 0x00,  // Logical Maximum: 255
+    0x75, 0x08,  // Report Size: 8
+    0x95, 0x0F,  // Report Count: 15
+    0x09, 0x02,  // Usage: Output report
+    0x91, 0x02,  // Output: Data, Variable, Absolute
+    0x09, 0x03,  // Usage: Input report
+    0x81, 0x02,  // Input: Data, Variable, Absolute
+    0xC0,  // End Collection
 };
 
 // clang-format on
@@ -186,7 +192,7 @@ auto OpenJoystickVirtualHIDDevice::newDeviceDescription() -> OSDictionary* {
         OSDictionarySetValue(dict, kIOHIDSerialNumberKey, serial);
         serial->release();
     }
-    if (auto* product = OSString::withCString("OpenJoystickDriver Virtual Gamepad")) {
+    if (auto* product = OSString::withCString("OpenJoystickDriver DriverKit Relay")) {
         OSDictionarySetValue(dict, kIOHIDProductKey, product);
         product->release();
     }
@@ -194,12 +200,11 @@ auto OpenJoystickVirtualHIDDevice::newDeviceDescription() -> OSDictionary* {
         OSDictionarySetValue(dict, kIOHIDManufacturerKey, manufacturer);
         manufacturer->release();
     }
-    if (auto* usage_page =
-            OSNumber::withNumber(static_cast<uint32_t>(kHIDPage_GenericDesktop), 32)) {
+    if (auto* usage_page = OSNumber::withNumber(static_cast<uint32_t>(0xFF00), 32)) {
         OSDictionarySetValue(dict, kIOHIDPrimaryUsagePageKey, usage_page);
         usage_page->release();
     }
-    if (auto* usage = OSNumber::withNumber(static_cast<uint32_t>(kHIDUsage_GD_GamePad), 32)) {
+    if (auto* usage = OSNumber::withNumber(static_cast<uint32_t>(0x0001), 32)) {
         OSDictionarySetValue(dict, kIOHIDPrimaryUsageKey, usage);
         usage->release();
     }
@@ -217,12 +222,11 @@ auto OpenJoystickVirtualHIDDevice::newDeviceDescription() -> OSDictionary* {
     // user-space enumerators.
     if (auto* pairs = OSArray::withCapacity(1)) {
         if (auto* pair = OSDictionary::withCapacity(2)) {
-            if (auto* page =
-                    OSNumber::withNumber(static_cast<uint32_t>(kHIDPage_GenericDesktop), 32)) {
+            if (auto* page = OSNumber::withNumber(static_cast<uint32_t>(0xFF00), 32)) {
                 OSDictionarySetValue(pair, kIOHIDDeviceUsagePageKey, page);
                 page->release();
             }
-            if (auto* u = OSNumber::withNumber(static_cast<uint32_t>(kHIDUsage_GD_GamePad), 32)) {
+            if (auto* u = OSNumber::withNumber(static_cast<uint32_t>(0x0001), 32)) {
                 OSDictionarySetValue(pair, kIOHIDDeviceUsageKey, u);
                 u->release();
             }
@@ -362,9 +366,9 @@ auto OpenJoystickVirtualHIDDevice::setReport(
         }
     }
 
-    // Our virtual controller uses Report IDs. Unframed daemon reports are primary
-    // gamepad payloads for report ID 1. Framed reports can target secondary input
-    // reports, for example Xbox guide/home on report ID 2.
+    // The generic DriverKit descriptor has no report IDs. Unframed daemon reports
+    // are primary gamepad payloads; framed reports can still carry the relay header
+    // so the Swift side can share one path with report-ID-based descriptors.
     const uint32_t reportLen32 =
         (relayLen > UINT32_MAX) ? UINT32_MAX : static_cast<uint32_t>(relayLen);
     const kern_return_t relayKr =

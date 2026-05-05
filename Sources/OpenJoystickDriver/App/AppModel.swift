@@ -43,7 +43,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   @Published var userSpaceVirtualDeviceStatus = "unknown"
   @Published var virtualDeviceMode: String = VirtualDeviceMode.compatUserSpace.rawValue
   @Published var outputMode: String = CompositeOutputDispatcher.Mode.primaryOnly.rawValue
-  @Published var compatibilityIdentity: String = CompatibilityIdentity.generic.rawValue
+  @Published var compatibilityIdentity: String = CompatibilityIdentity.sdlMacOS.rawValue
   @Published var virtualDeviceDiagnostics: XPCVirtualDeviceDiagnosticsPayload?
   @Published var virtualDeviceSelfTest: XPCVirtualDeviceSelfTestPayload?
 
@@ -277,7 +277,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       userSpaceVirtualDeviceStatus = status.userSpaceVirtualDeviceStatus ?? "unknown"
       virtualDeviceMode = status.virtualDeviceMode ?? VirtualDeviceMode.compatUserSpace.rawValue
       outputMode = status.effectiveOutputMode ?? CompositeOutputDispatcher.Mode.primaryOnly.rawValue
-      compatibilityIdentity = status.compatibilityIdentity ?? CompatibilityIdentity.generic.rawValue
+      compatibilityIdentity = status.compatibilityIdentity ?? CompatibilityIdentity.sdlMacOS.rawValue
     } catch {
       daemonConnected = false
       devices = []

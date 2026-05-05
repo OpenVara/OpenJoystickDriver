@@ -54,13 +54,18 @@ public struct OJDGenericGamepadFormat: VirtualGamepadReportFormat {
   public let descriptor: [UInt8] = GamepadHIDDescriptor.descriptor
   public let inputReportPayloadSize: Int = GamepadHIDDescriptor.reportSize
   public let inputReportID: UInt8? = nil
+  private let includesDpadButtonBits: Bool
 
-  public init() {}
+  public init(includesDpadButtonBits: Bool = true) {
+    self.includesDpadButtonBits = includesDpadButtonBits
+  }
 
   public func buildInputReport(from state: VirtualGamepadState) -> [UInt8] {
     var r = [UInt8](repeating: 0, count: GamepadHIDDescriptor.reportSize)
-    r[0] = UInt8(state.buttons & 0xFF)
-    r[1] = UInt8((state.buttons >> 8) & 0xFF)
+    let dpadMask: UInt32 = 0xF << 11
+    let buttons = includesDpadButtonBits ? state.buttons : (state.buttons & ~dpadMask)
+    r[0] = UInt8(buttons & 0xFF)
+    r[1] = UInt8((buttons >> 8) & 0xFF)
     let lsxB = state.leftStickX.littleEndianBytes
     r[2] = lsxB.0
     r[3] = lsxB.1

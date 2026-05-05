@@ -22,16 +22,10 @@ public final class HIDDeviceStream: @unchecked Sendable {
   private let seizeLock = NSLock()
   private var seizedByLocation: [UInt32: IOHIDDevice] = [:]
 
-  /// VID/PID of the virtual gamepad, used to filter it from the input stream.
-  private let virtualVID: UInt16
-  private let virtualPID: UInt16
-
   /// Creates a new stream that matches HID gamepad devices.
   ///
   /// - Parameter virtualProfile: The virtual device profile to exclude from detection.
-  public init(virtualProfile: VirtualDeviceProfile = .default) {
-    virtualVID = UInt16(virtualProfile.vendorID)
-    virtualPID = UInt16(virtualProfile.productID)
+  public init(virtualProfile _: VirtualDeviceProfile = .default) {
     manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
     let matching: [String: Any] = [
       kIOHIDDeviceUsagePageKey: kHIDPage_GenericDesktop, kIOHIDDeviceUsageKey: kHIDUsage_GD_GamePad,
@@ -95,14 +89,11 @@ public final class HIDDeviceStream: @unchecked Sendable {
     let productName = IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) as? String
     let ioUserClass = IOHIDDeviceGetProperty(device, "IOUserClass" as CFString) as? String
 
-    // Skip our virtual gamepad to prevent a feedback loop.
-    // Distinguish from real controllers by checking transport = "Virtual".
     let transport = IOHIDDeviceGetProperty(device, kIOHIDTransportKey as CFString) as? String ?? ""
-    if UInt16(truncatingIfNeeded: vid) == virtualVID
-      && UInt16(truncatingIfNeeded: pid) == virtualPID && transport == "Virtual"
-    {
-      return
-    }
+    // Skip virtual HID gamepads entirely. Compatibility modes may intentionally spoof
+    // third-party VID/PID values, so matching only the current OJD profile is not enough:
+    // re-ingesting any virtual gamepad creates duplicate outputs and feedback latency.
+    if transport == "Virtual" { return }
 
     // Some macOS versions report our DriverKit virtual HID device as Transport="USB".
     // Exclude it by its IOUserClass to avoid a feedback loop.
