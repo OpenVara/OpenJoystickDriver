@@ -36,7 +36,7 @@ export SDL_JOYSTICK_HIDAPI_XBOX_ONE=0
 export SDL_JOYSTICK_HIDAPI_GIP=0
 
 if [[ "${OJD_SKIP_PCSX2_ROUTING:-0}" != "1" && -x "$OJD_CLI" ]]; then
-"$OJD_CLI" --headless compat sdl-macos >/dev/null || {
+  "$OJD_CLI" --headless compat sdl-macos >/dev/null || {
     echo "WARN: could not set OpenJoystickDriver compatibility identity to sdl-macos" >&2
   }
   "$OJD_CLI" --headless output secondary >/dev/null || {
@@ -44,4 +44,15 @@ if [[ "${OJD_SKIP_PCSX2_ROUTING:-0}" != "1" && -x "$OJD_CLI" ]]; then
   }
 fi
 
-exec "$PCSX2_BIN" "$@"
+# Launch the app bundle through LaunchServices so PCSX2 keeps its normal app
+# identity, resource lookup, and Input Monitoring behavior. Directly exec'ing
+# Contents/MacOS/PCSX2 can leave PCSX2 without the devices the .app can access.
+launchctl setenv SDL_GAMECONTROLLERCONFIG "$SDL_GAMECONTROLLERCONFIG"
+launchctl setenv SDL_GAMECONTROLLERCONFIG_FILE "$SDL_GAMECONTROLLERCONFIG_FILE"
+launchctl setenv SDL_JOYSTICK_HIDAPI_XBOX "$SDL_JOYSTICK_HIDAPI_XBOX"
+launchctl setenv SDL_JOYSTICK_HIDAPI_XBOX_360 "$SDL_JOYSTICK_HIDAPI_XBOX_360"
+launchctl setenv SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS "$SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS"
+launchctl setenv SDL_JOYSTICK_HIDAPI_XBOX_ONE "$SDL_JOYSTICK_HIDAPI_XBOX_ONE"
+launchctl setenv SDL_JOYSTICK_HIDAPI_GIP "$SDL_JOYSTICK_HIDAPI_GIP"
+
+exec open "$PCSX2_APP" --args "$@"
