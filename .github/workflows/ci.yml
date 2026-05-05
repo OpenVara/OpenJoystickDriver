@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-swiftpm:
+    name: macOS SwiftPM
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Install dependencies
+        run: |
+          brew install libusb
+
+      - name: Validate controller profiles
+        run: |
+          bash scripts/ojd validate profiles
+
+      - name: Build package
+        run: |
+          swift build
+
+      - name: Run tests
+        run: |
+          swift test
