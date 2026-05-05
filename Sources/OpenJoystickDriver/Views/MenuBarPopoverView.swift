@@ -54,13 +54,20 @@ struct MenuBarPopoverView: View {
   }
 
   private var daemonRow: some View {
+    let daemonStatusLabel =
+      model.daemonRestarting
+      ? "restarting..."
+      : (model.daemonConnected ? "running" : (model.daemonInstalled ? "installed" : "missing"))
+    let daemonStatusColor: Color =
+      model.daemonRestarting ? .orange : (model.daemonConnected ? .green : .secondary)
+
     return VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 8) {
         Text("Driver").font(.subheadline)
         Spacer()
-        Text(model.daemonConnected ? "running" : (model.daemonInstalled ? "installed" : "missing"))
+        Text(daemonStatusLabel)
           .font(.caption)
-          .foregroundStyle(model.daemonConnected ? .green : .secondary)
+          .foregroundStyle(daemonStatusColor)
       }
 
       Text("Controllers: \(model.devices.count)").font(.caption2).foregroundStyle(.secondary)
@@ -116,10 +123,12 @@ struct MenuBarPopoverView: View {
           }
           .buttonStyle(.bordered)
           .controlSize(.small)
+          .disabled(model.daemonRestarting)
 
           SwiftUI.Button("Uninstall", role: .destructive) { showUninstallConfirm = true }
             .buttonStyle(.bordered)
             .controlSize(.small)
+            .disabled(model.daemonRestarting)
         }
         Spacer()
       }
