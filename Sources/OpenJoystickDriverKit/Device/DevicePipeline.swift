@@ -377,6 +377,8 @@ actor DevicePipeline {
       let loopElapsedNs = DispatchTime.now().uptimeNanoseconds &- loopStartNs
       if shouldThrottleIdle && loopElapsedNs < usbIdleLoopCadenceNs {
         try? await Task.sleep(nanoseconds: usbIdleLoopCadenceNs &- loopElapsedNs)
+      } else {
+        await Task.yield()
       }
     }
 

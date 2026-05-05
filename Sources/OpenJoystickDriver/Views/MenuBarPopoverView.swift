@@ -598,17 +598,28 @@ private struct AxisMeter: View {
         Text(String(format: "%.3f", value))
           .font(.system(.caption, design: .monospaced))
       }
-      ProgressView(value: normalizedValue)
-        .frame(width: 300)
+      GeometryReader { proxy in
+        ZStack(alignment: .leading) {
+          RoundedRectangle(cornerRadius: 4)
+            .fill(Color.secondary.opacity(0.18))
+          RoundedRectangle(cornerRadius: 4)
+            .fill(Color.accentColor)
+            .frame(width: max(4, proxy.size.width * normalizedValue))
+        }
+      }
+      .frame(width: 300, height: 8)
+      .transaction { transaction in
+        transaction.animation = nil
+      }
         .accessibilityLabel(label)
         .accessibilityValue(String(format: "%.3f", value))
     }
   }
 
-  private var normalizedValue: Double {
+  private var normalizedValue: CGFloat {
     let width = range.upperBound - range.lowerBound
-    guard width > 0 else { return 0 }
+    guard width > 0 else { return 0.0 }
     let normalized = (value - range.lowerBound) / width
-    return Double(max(0, min(1, normalized)))
+    return CGFloat(max(0, min(1, normalized)))
   }
 }
