@@ -1,6 +1,6 @@
 import Foundation
 
-/// HID report descriptor for the legacy macOS Xbox 360 wired-controller shape.
+/// HID report descriptor for the macOS Xbox 360 wired-controller shape.
 ///
 /// This is the IOHIDDevice-style gamepad surface used by the historical macOS
 /// Xbox 360 driver family, not the Windows XUSB USB configuration used by
@@ -9,7 +9,7 @@ import Foundation
 ///
 /// Report layout (14 bytes):
 ///   Bytes 0-1: counted-buffer header fields exposed as constant inputs
-///   Bytes 2-3: 16 digital buttons in the legacy 360 HID element order
+///   Bytes 2-3: 16 digital buttons in the macOS 360 HID element order
 ///              dpad, start/menu, back/view, stick clicks, shoulders, guide,
 ///              then A/B/X/Y; this matches the XINPUT_GAMEPAD bitmask order.
 ///   Byte  4  : Left trigger, 0...255
@@ -35,7 +35,7 @@ public enum Xbox360MacHIDDescriptor {
     0x09, 0x3B,
     0x81, 0x01,
 
-    // D-pad button usages first, in the legacy 360 HID byte order.
+    // D-pad button usages first, in the macOS 360 HID byte order.
     0x75, 0x01,
     0x15, 0x00,
     0x25, 0x01,

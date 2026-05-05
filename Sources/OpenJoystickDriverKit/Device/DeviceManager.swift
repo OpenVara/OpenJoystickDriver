@@ -265,7 +265,7 @@ public actor DeviceManager {
       parser: parser,
       dispatcher: dispatcher,
       usbContext: usbContext,
-      endpointConfig: transportProfile
+      transportProfile: transportProfile
     )
     pipelines[identifier] = pipeline
     Task { await pipeline.start() }

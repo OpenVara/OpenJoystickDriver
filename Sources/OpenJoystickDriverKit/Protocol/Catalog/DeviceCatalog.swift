@@ -26,9 +26,6 @@ public struct DeviceTransportProfile: Equatable, Sendable {
     inputEndpoint: 0x82, outputEndpoint: 0x02, needsSetConfiguration: false)
 }
 
-/// Backwards-compatible name for PR #1 endpoint injection call sites.
-public typealias USBEndpointConfig = DeviceTransportProfile
-
 /// Controller protocol family/variant used for long-term compatibility metadata.
 public enum ControllerProtocolVariant: String, Sendable {
   case xboxOriginal
@@ -165,11 +162,6 @@ struct DeviceCatalog: Sendable {
     return transportEntries[key] ?? .gipDefault
   }
 
-  /// Returns USB endpoint config for a device, falling back to GIP defaults.
-  func endpointConfig(for identifier: DeviceIdentifier) -> USBEndpointConfig {
-    transportProfile(for: identifier)
-  }
-
   func runtimeProfile(for identifier: DeviceIdentifier) -> DeviceRuntimeProfile {
     let key = "\(identifier.vendorID):\(identifier.productID)"
     return DeviceRuntimeProfile(
@@ -197,59 +189,7 @@ struct DeviceCatalog: Sendable {
       return RuntimeEntry(profile: decoded)
     }
     if !profiles.isEmpty { return profiles }
-
-    // Migration fallback for older bundles that still contain a monolithic catalog.
-    guard let data = Bundle.module.url(forResource: "devices", withExtension: "json").flatMap({
-      try? Data(contentsOf: $0)
-    }) else { return [] }
-
-    return decodeCatalog(data)
-  }
-
-  private static func decodeCatalog(_ data: Data) -> [RuntimeEntry] {
-    let decoder = JSONDecoder()
-    if let decoded = try? decoder.decode(ProfileDeviceList.self, from: data) {
-      return decoded.controllers.compactMap { RuntimeEntry(profile: $0) }
-    }
-    if let decoded = try? decoder.decode(LegacyDeviceList.self, from: data) {
-      return decoded.devices.compactMap { RuntimeEntry(legacy: $0) }
-    }
     return []
-  }
-
-  private static func transportProfile(from entry: LegacyDeviceEntry, key: String)
-    -> DeviceTransportProfile?
-  {
-    let hasInput = entry.inputEndpoint != nil
-    let hasOutput = entry.outputEndpoint != nil
-    if hasInput != hasOutput {
-      print("[DeviceCatalog] Ignoring incomplete endpoint override for \(key)")
-      return nil
-    }
-
-    guard let inEP = entry.inputEndpoint, let outEP = entry.outputEndpoint else { return nil }
-    guard (0...255).contains(inEP), (0...255).contains(outEP) else {
-      print("[DeviceCatalog] Ignoring invalid endpoint override for \(key): in=\(inEP) out=\(outEP)")
-      return nil
-    }
-
-    let settleNs: UInt64
-    if let settleMs = entry.postHandshakeSettleMs {
-      guard settleMs >= 0 else {
-        print("[DeviceCatalog] Ignoring negative settle delay for \(key): \(settleMs)")
-        return nil
-      }
-      settleNs = UInt64(settleMs) * 1_000_000
-    } else {
-      settleNs = 0
-    }
-
-    return DeviceTransportProfile(
-      inputEndpoint: UInt8(inEP),
-      outputEndpoint: UInt8(outEP),
-      needsSetConfiguration: entry.needsSetConfiguration ?? false,
-      postHandshakeSettleNanoseconds: settleNs
-    )
   }
 
   private static func mappingOptions(from flags: [String]?) -> ControllerMappingOptions {
@@ -319,21 +259,6 @@ struct DeviceCatalog: Sendable {
         needsSetConfiguration: needsSetConfiguration,
         postHandshakeSettleNanoseconds: settleNs
       )
-    }
-
-    init?(legacy: LegacyDeviceEntry) {
-      vendorId = legacy.vendorId
-      productId = legacy.productId
-      parser = legacy.parser
-      virtualProfile = legacy.virtualProfile ?? "xboxOneS"
-      protocolVariant =
-        legacy.protocolVariant.flatMap(ControllerProtocolVariant.init(rawValue:))
-        ?? .unknown
-      mappingFlags = legacy.mappingFlags ?? []
-      mappingOptions = DeviceCatalog.mappingOptions(from: mappingFlags)
-      preferredBackends = [.driverKitHID, .userSpaceHID]
-      transportProfile = DeviceCatalog.transportProfile(from: legacy, key: "\(vendorId):\(productId)")
-        ?? .gipDefault
     }
   }
 
@@ -412,32 +337,4 @@ struct DeviceCatalog: Sendable {
       }
     }
   }
-
-  private struct LegacyDeviceEntry: Decodable {
-    let vendorId: Int
-    let productId: Int
-    let parser: String
-    let virtualProfile: String?
-    let inputEndpoint: Int?
-    let outputEndpoint: Int?
-    let needsSetConfiguration: Bool?
-    let postHandshakeSettleMs: Int?
-    let protocolVariant: String?
-    let mappingFlags: [String]?
-
-    enum CodingKeys: String, CodingKey {
-      case vendorId = "vendor_id"
-      case productId = "product_id"
-      case parser
-      case virtualProfile = "virtual_profile"
-      case inputEndpoint = "input_endpoint"
-      case outputEndpoint = "output_endpoint"
-      case needsSetConfiguration = "needs_set_configuration"
-      case postHandshakeSettleMs = "post_handshake_settle_ms"
-      case protocolVariant = "protocol_variant"
-      case mappingFlags = "mapping_flags"
-    }
-  }
-
-  private struct LegacyDeviceList: Decodable { let devices: [LegacyDeviceEntry] }
 }

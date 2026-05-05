@@ -1,6 +1,6 @@
 import Foundation
 
-/// HID surface for Xbox 360 XUSB controllers as seen by legacy DirectInput consumers.
+/// HID surface for Xbox 360 XUSB controllers as seen by DirectInput-era consumers.
 ///
 /// Microsoft documents that XUSB controllers expose a HID-compatible DirectInput
 /// surface for older applications. This is still HID, not true XInput/XUSB:

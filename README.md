@@ -224,11 +224,16 @@ Each connected controller runs through an isolated `DevicePipeline` actor. The
 daemon exposes XPC status/control APIs to the GUI and CLI. The GUI is not the
 driver owner; the daemon can run without the menu bar app open.
 
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the current extension rules and
+long-term boundaries for profiles, protocol parsers, physical output
+capabilities, and virtual output profiles.
+
 ## LLM and Agent Context
 
 This repo includes dedicated context files for coding agents and LLM tooling:
 
 - [AGENTS.md](AGENTS.md) - working instructions for repo agents
+- [ARCHITECTURE.md](ARCHITECTURE.md) - runtime boundaries and extension rules
 - [llms.txt](llms.txt) - concise project map
 - [llms-full.txt](llms-full.txt) - expanded architecture, validation, and device context
 

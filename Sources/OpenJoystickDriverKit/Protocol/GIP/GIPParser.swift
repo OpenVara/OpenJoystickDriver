@@ -56,9 +56,9 @@ public final class GIPParser: InputParser, PhysicalRumbleOutput, @unchecked Send
   private var prevRSY: Int16?
 
   /// Creates a new GIPParser with the given endpoint configuration.
-  public init(endpointConfig: USBEndpointConfig = .gipDefault) {
-    self.outEndpoint = endpointConfig.outputEndpoint
-    self.authHandler = GIPAuthHandler(outEndpoint: endpointConfig.outputEndpoint)
+  public init(transportProfile: DeviceTransportProfile = .gipDefault) {
+    self.outEndpoint = transportProfile.outputEndpoint
+    self.authHandler = GIPAuthHandler(outEndpoint: transportProfile.outputEndpoint)
   }
 
   // MARK: - InputParser

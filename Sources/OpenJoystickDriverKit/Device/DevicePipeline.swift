@@ -64,7 +64,7 @@ actor DevicePipeline {
   private let parser: any InputParser
   private let dispatcher: any OutputDispatcher
   private let usbContext: USBContext?
-  private let endpointConfig: USBEndpointConfig
+  private let transportProfile: DeviceTransportProfile
   private var isActive = false
   private var usbHandle: USBDeviceHandle?
   private var currentInputState: DeviceInputState
@@ -80,14 +80,14 @@ actor DevicePipeline {
     parser: any InputParser,
     dispatcher: any OutputDispatcher,
     usbContext: USBContext?,
-    endpointConfig: USBEndpointConfig = .gipDefault
+    transportProfile: DeviceTransportProfile = .gipDefault
   ) {
     self.identifier = identifier
     self.transport = transport
     self.parser = parser
     self.dispatcher = dispatcher
     self.usbContext = usbContext
-    self.endpointConfig = endpointConfig
+    self.transportProfile = transportProfile
     let initialState = DeviceInputState(
       vendorID: identifier.vendorID,
       productID: identifier.productID
@@ -293,7 +293,7 @@ actor DevicePipeline {
 
   private func openAndClaimDevice(_ device: USBDevice) throws -> USBDeviceHandle {
     let handle = try device.open()
-    if endpointConfig.needsSetConfiguration {
+    if transportProfile.needsSetConfiguration {
       let cfg = (try? handle.getConfiguration()) ?? 0
       if cfg != 1 {
         try handle.setConfiguration(1)
@@ -312,13 +312,13 @@ actor DevicePipeline {
   }
 
   private func runUSBInputLoop(handle: USBDeviceHandle) async {
-    let inEndpoint = endpointConfig.inputEndpoint
+    let inEndpoint = transportProfile.inputEndpoint
     var lastKeepAliveNs = DispatchTime.now().uptimeNanoseconds
     print("[DevicePipeline] Starting USB input loop:" + " \(identifier)"
           + " inEP=0x\(String(inEndpoint, radix: 16))")
 
-    if endpointConfig.postHandshakeSettleNanoseconds > 0 {
-      try? await Task.sleep(nanoseconds: endpointConfig.postHandshakeSettleNanoseconds)
+    if transportProfile.postHandshakeSettleNanoseconds > 0 {
+      try? await Task.sleep(nanoseconds: transportProfile.postHandshakeSettleNanoseconds)
     }
 
     while isActive {

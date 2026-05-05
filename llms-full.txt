@@ -97,6 +97,7 @@ Validate profile/schema consistency with:
 ## Documentation and Agent Files
 
 - `README.md`: human entry point.
+- `ARCHITECTURE.md`: runtime boundaries, extension rules, and validation contract.
 - `llms.txt`: concise LLM context.
 - `llms-full.txt`: expanded LLM context.
 - `AGENTS.md`: authored coding-agent instructions.

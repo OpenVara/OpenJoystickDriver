@@ -15,18 +15,13 @@ public final class ParserRegistry: Sendable {
 
   /// Returns parser for given device identifier.
   public func parser(for identifier: DeviceIdentifier) -> any InputParser {
-    let endpoints = catalog.endpointConfig(for: identifier)
+    let transportProfile = catalog.transportProfile(for: identifier)
     switch catalog.parserName(for: identifier) {
-    case "GIP": return GIPParser(endpointConfig: endpoints)
+    case "GIP": return GIPParser(transportProfile: transportProfile)
     case "DS4": return DS4Parser()
-    case "Xbox360": return Xbox360Parser(outEndpoint: endpoints.outputEndpoint)
+    case "Xbox360": return Xbox360Parser(outEndpoint: transportProfile.outputEndpoint)
     default: return GenericHIDParser(identifier: identifier)
     }
-  }
-
-  /// Returns USB endpoint config for given device identifier.
-  public func endpointConfig(for identifier: DeviceIdentifier) -> USBEndpointConfig {
-    catalog.endpointConfig(for: identifier)
   }
 
   /// Returns the physical transport profile for given device identifier.
