@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/controller-profile.schema.json",
+  "profile_version": "1.0.0",
+  "identity": {
+    "vendor_id": 1133,
+    "product_id": 49695,
+    "name": "Logitech Gamepad F710",
+    "short_name": "LogitechF710"
+  },
+  "input": {
+    "transport": "usb",
+    "usb": {
+      "class": 255,
+      "interface": 0,
+      "endpoints": {
+        "in": 129,
+        "out": 1
+      }
+    }
+  },
+  "protocol": {
+    "driver": "Xbox360",
+    "variant": "xbox360"
+  },
+  "output": {
+    "virtual_profile": "xboxOneS",
+    "preferred_backends": [
+      "driverKitHID",
+      "userSpaceHID"
+    ]
+  }
+}

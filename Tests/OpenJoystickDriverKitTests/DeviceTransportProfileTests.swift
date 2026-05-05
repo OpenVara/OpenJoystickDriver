@@ -39,4 +39,27 @@ import Testing
     #expect(profile.needsSetConfiguration)
     #expect(profile.postHandshakeSettleNanoseconds == 200_000_000)
   }
+
+  @Test("xpad.c Xbox 360 profile batch uses the Xbox360 parser")
+  func xpadXbox360ProfileBatch() {
+    let registry = ParserRegistry()
+    let identifiers = [
+      DeviceIdentifier(vendorID: 1133, productID: 49693),
+      DeviceIdentifier(vendorID: 1133, productID: 49694),
+      DeviceIdentifier(vendorID: 1133, productID: 49695),
+      DeviceIdentifier(vendorID: 1133, productID: 49730),
+      DeviceIdentifier(vendorID: 1848, productID: 18198),
+      DeviceIdentifier(vendorID: 1848, productID: 18214),
+      DeviceIdentifier(vendorID: 3695, productID: 275),
+      DeviceIdentifier(vendorID: 3695, productID: 287),
+      DeviceIdentifier(vendorID: 3695, productID: 307)
+    ]
+
+    for identifier in identifiers {
+      #expect(registry.parserName(for: identifier) == "Xbox360")
+      #expect(registry.runtimeProfile(for: identifier).protocolVariant == .xbox360)
+      #expect(registry.transportProfile(for: identifier).inputEndpoint == 0x81)
+      #expect(registry.transportProfile(for: identifier).outputEndpoint == 0x01)
+    }
+  }
 }
