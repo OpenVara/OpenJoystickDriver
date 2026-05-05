@@ -189,3 +189,44 @@ OJD_ENV=release ./scripts/ojd rebuild release
 OJD_ENV=release ./scripts/ojd notarize submit
 OJD_ENV=release ./scripts/ojd notarize status
 ```
+
+### Tester package
+
+For a tester build that does not install anything on the build machine:
+
+```bash
+./scripts/ojd package tester 0.1.0-test.1
+```
+
+This command uses release signing, embeds the DriverKit extension into the app
+bundle, submits the app for notarization, staples the accepted ticket, verifies
+the result, and writes:
+
+```text
+.build/release-artifacts/OpenJoystickDriver-<version>-macOS.zip
+```
+
+The package command does not register the LaunchAgent and does not submit a
+system-extension activation request on the build machine. Testers still need to
+install and approve the app/system extension locally.
+
+## GitHub Actions tester release
+
+`.github/workflows/release-tester.yml` runs on `v*` tags and by manual dispatch.
+It installs `libusb`, validates profiles, imports signing material, builds a
+release app, notarizes it, and uploads the tester zip as a workflow artifact.
+
+Required repository secrets:
+
+- `APPLE_DEVELOPMENT_CERT_BASE64`
+- `DEVELOPER_ID_APPLICATION_CERT_BASE64`
+- `CERTIFICATE_SECRET`
+- `KEYCHAIN_SECRET`
+- `OPENJOYSTICKDRIVER_GUI_DEVID_PROFILE_BASE64`
+- `OPENJOYSTICKDRIVER_DAEMON_DEVID_PROFILE_BASE64`
+- `OPENJOYSTICKDRIVER_DEXT_PROFILE_BASE64`
+- `NOTARIZE_APPLE_ID`
+- `NOTARIZE_PASSWORD`
+
+The certificate payload secrets are base64-encoded certificate export files.
+The profile secrets are base64-encoded `.provisionprofile` files.

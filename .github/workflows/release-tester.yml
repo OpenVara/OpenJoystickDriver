@@ -1,0 +1,59 @@
+name: Tester Release
+
+"on":
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Artifact version label
+        required: false
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Notarized tester app
+    runs-on: macos-26
+    timeout-minutes: 360
+    env:
+      APPLE_DEVELOPMENT_CERT_BASE64: ${{ secrets.APPLE_DEVELOPMENT_CERT_BASE64 }}
+      DEVELOPER_ID_APPLICATION_CERT_BASE64: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_BASE64 }}
+      CERTIFICATE_SECRET: ${{ secrets.CERTIFICATE_SECRET }}
+      KEYCHAIN_SECRET: ${{ secrets.KEYCHAIN_SECRET }}
+      OPENJOYSTICKDRIVER_GUI_DEVID_PROFILE_BASE64: ${{ secrets.OPENJOYSTICKDRIVER_GUI_DEVID_PROFILE_BASE64 }}
+      OPENJOYSTICKDRIVER_DAEMON_DEVID_PROFILE_BASE64: ${{ secrets.OPENJOYSTICKDRIVER_DAEMON_DEVID_PROFILE_BASE64 }}
+      OPENJOYSTICKDRIVER_DEXT_PROFILE_BASE64: ${{ secrets.OPENJOYSTICKDRIVER_DEXT_PROFILE_BASE64 }}
+      NOTARIZE_APPLE_ID: ${{ secrets.NOTARIZE_APPLE_ID }}
+      NOTARIZE_PASSWORD: ${{ secrets.NOTARIZE_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: brew install libusb
+
+      - name: Validate profiles
+        run: ./scripts/ojd validate profiles
+
+      - name: Set up release signing
+        run: ./scripts/ojd-ci-release-setup.sh
+
+      - name: Package tester build
+        env:
+          MANUAL_VERSION: ${{ github.event.inputs.version }}
+          DEFAULT_VERSION: ${{ github.ref_name || github.sha }}
+        run: |
+          version="${MANUAL_VERSION:-$DEFAULT_VERSION}"
+          ./scripts/ojd package tester "$version"
+
+      - name: Upload tester artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: OpenJoystickDriver-tester-${{ github.run_id }}
+          path: .build/release-artifacts/*.zip
+          if-no-files-found: error
+          retention-days: 14

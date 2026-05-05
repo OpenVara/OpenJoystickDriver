@@ -51,8 +51,8 @@ if [[ -z "${NOTARIZE_APPLE_ID:-}" || -z "${NOTARIZE_PASSWORD:-}" ]]; then
   exit 1
 fi
 
-APP="/Applications/OpenJoystickDriver.app"
-ZIP_PATH="$PROJECT_DIR/.build/OpenJoystickDriver-notarize.zip"
+APP="${OJD_NOTARIZE_APP:-/Applications/OpenJoystickDriver.app}"
+ZIP_PATH="${OJD_NOTARIZE_ZIP:-$PROJECT_DIR/.build/OpenJoystickDriver-notarize.zip}"
 
 TIMEOUT_MINUTES="${NOTARIZE_TIMEOUT_MINUTES:-180}"
 POLL_INTERVAL="${NOTARIZE_POLL_INTERVAL:-30}"

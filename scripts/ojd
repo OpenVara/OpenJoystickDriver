@@ -44,6 +44,7 @@ Commands:
   notarize status [id]        Show notarization status (release only)
   notarize log <id>           Fetch notarization log (release only)
   notarize history            List notarization history (release only)
+  package tester              Build, notarize, staple, and zip a tester app (release only)
 
   lint                        Run SwiftLint (requires swiftlint)
 
@@ -201,6 +202,21 @@ case "$cmd" in
         ;;
       *)
         die "Unknown: notarize $sub (expected: submit | status | history | log)"
+        ;;
+    esac
+    ;;
+
+  package)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      ""|-h|--help|help)
+        exec env OJD_ENV=release /usr/bin/env bash "$SCRIPT_DIR/ojd-package.sh" help
+        ;;
+      tester)
+        exec env OJD_ENV=release /usr/bin/env bash "$SCRIPT_DIR/ojd-package.sh" tester "$@"
+        ;;
+      *)
+        die "Unknown: package $sub (expected: tester)"
         ;;
     esac
     ;;
