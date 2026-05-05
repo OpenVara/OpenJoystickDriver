@@ -14,6 +14,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   let connection: String
   /// USB serial number string, nil when unavailable.
   let serialNumber: String?
+  let supportsPhysicalRumble: Bool
 
   init(from description: XPCDeviceDescription) {
     self.id = "\(description.vendorID):\(description.productID):\(description.name)"
@@ -23,6 +24,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     self.parser = description.parser
     self.connection = description.connection
     self.serialNumber = description.serialNumber
+    self.supportsPhysicalRumble = description.supportsPhysicalRumble
   }
 }
 

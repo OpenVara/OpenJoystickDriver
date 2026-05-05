@@ -380,6 +380,25 @@ public struct XPCDeviceDescription: Codable, Sendable {
   public let postHandshakeSettleMs: Int
   /// Preferred virtual output backends from the controller profile.
   public let preferredBackends: [String]
+  /// Whether the active physical parser can send source-controller rumble.
+  public let supportsPhysicalRumble: Bool
+
+  private enum CodingKeys: String, CodingKey {
+    case name
+    case vendorID
+    case productID
+    case parser
+    case connection
+    case serialNumber
+    case protocolVariant
+    case mappingFlags
+    case inputEndpoint
+    case outputEndpoint
+    case needsSetConfiguration
+    case postHandshakeSettleMs
+    case preferredBackends
+    case supportsPhysicalRumble
+  }
 
   /// Creates a new XPCDeviceDescription.
   public init(
@@ -395,7 +414,8 @@ public struct XPCDeviceDescription: Codable, Sendable {
     outputEndpoint: UInt8 = 0,
     needsSetConfiguration: Bool = false,
     postHandshakeSettleMs: Int = 0,
-    preferredBackends: [String] = []
+    preferredBackends: [String] = [],
+    supportsPhysicalRumble: Bool = false
   ) {
     self.name = name
     self.vendorID = vendorID
@@ -410,6 +430,30 @@ public struct XPCDeviceDescription: Codable, Sendable {
     self.needsSetConfiguration = needsSetConfiguration
     self.postHandshakeSettleMs = postHandshakeSettleMs
     self.preferredBackends = preferredBackends
+    self.supportsPhysicalRumble = supportsPhysicalRumble
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.name = try container.decode(String.self, forKey: .name)
+    self.vendorID = try container.decode(UInt16.self, forKey: .vendorID)
+    self.productID = try container.decode(UInt16.self, forKey: .productID)
+    self.parser = try container.decode(String.self, forKey: .parser)
+    self.connection = try container.decode(String.self, forKey: .connection)
+    self.serialNumber = try container.decodeIfPresent(String.self, forKey: .serialNumber)
+    self.protocolVariant =
+      try container.decodeIfPresent(String.self, forKey: .protocolVariant) ?? "unknown"
+    self.mappingFlags = try container.decodeIfPresent([String].self, forKey: .mappingFlags) ?? []
+    self.inputEndpoint = try container.decodeIfPresent(UInt8.self, forKey: .inputEndpoint) ?? 0
+    self.outputEndpoint = try container.decodeIfPresent(UInt8.self, forKey: .outputEndpoint) ?? 0
+    self.needsSetConfiguration =
+      try container.decodeIfPresent(Bool.self, forKey: .needsSetConfiguration) ?? false
+    self.postHandshakeSettleMs =
+      try container.decodeIfPresent(Int.self, forKey: .postHandshakeSettleMs) ?? 0
+    self.preferredBackends =
+      try container.decodeIfPresent([String].self, forKey: .preferredBackends) ?? []
+    self.supportsPhysicalRumble =
+      try container.decodeIfPresent(Bool.self, forKey: .supportsPhysicalRumble) ?? false
   }
 }
 

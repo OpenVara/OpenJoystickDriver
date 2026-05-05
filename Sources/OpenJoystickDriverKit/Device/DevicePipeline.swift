@@ -133,6 +133,10 @@ actor DevicePipeline {
     } catch { print("[DevicePipeline] Parse error" + " for \(identifier): \(error)") }
   }
 
+  nonisolated func supportsPhysicalRumble() -> Bool {
+    (parser as? PhysicalRumbleOutput)?.supportsPhysicalRumble ?? false
+  }
+
   // MARK: - Input state and packet log
 
   nonisolated func inputState() -> DeviceInputState { snapshots.currentInputState() }
@@ -180,21 +184,16 @@ actor DevicePipeline {
   // MARK: - Rumble
 
   func sendRumble(left: UInt8, right: UInt8, lt: UInt8, rt: UInt8) -> Bool {
-    guard let handle = usbHandle else { return false }
+    guard let handle = usbHandle, let rumbleOutput = parser as? PhysicalRumbleOutput else {
+      return false
+    }
     do {
-      if let gipParser = parser as? GIPParser {
-        try gipParser.sendRumble(handle: handle, left: left, right: right, ltMotor: lt, rtMotor: rt)
-        return true
-      } else if let xbox360Parser = parser as? Xbox360Parser {
-        // Xbox 360 has left/right motors only; trigger motor values are ignored.
-        try xbox360Parser.sendRumble(handle: handle, left: left, right: right)
-        return true
-      }
+      try rumbleOutput.sendPhysicalRumble(handle: handle, left: left, right: right, lt: lt, rt: rt)
+      return true
     } catch {
       print("[DevicePipeline] Rumble send failed for \(identifier): \(error)")
       return false
     }
-    return false
   }
 
   // MARK: - Private USB pipeline

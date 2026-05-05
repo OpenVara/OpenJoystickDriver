@@ -82,7 +82,7 @@ public enum Xbox360LEDPattern: UInt8, Sendable {
 ///   byte 1 : 0x03 (length)
 ///   byte 2 : LED pattern (see Xbox360LEDPattern)
 /// ```
-public final class Xbox360Parser: InputParser, @unchecked Sendable {
+public final class Xbox360Parser: InputParser, PhysicalRumbleOutput, @unchecked Sendable {
 
   // MARK: - Thread safety
   //
@@ -164,6 +164,16 @@ public final class Xbox360Parser: InputParser, @unchecked Sendable {
   public func sendRumble(handle: USBDeviceHandle, left: UInt8, right: UInt8) throws {
     let packet: [UInt8] = [0x00, 0x08, 0x00, left, right, 0x00, 0x00, 0x00]
     _ = try handle.interruptTransfer(endpoint: outEndpoint, data: packet, timeout: 2000)
+  }
+
+  public func sendPhysicalRumble(
+    handle: USBDeviceHandle,
+    left: UInt8,
+    right: UInt8,
+    lt: UInt8,
+    rt: UInt8
+  ) throws {
+    try sendRumble(handle: handle, left: left, right: right)
   }
 
   /// Sets the ring-of-light LED pattern on the physical controller.

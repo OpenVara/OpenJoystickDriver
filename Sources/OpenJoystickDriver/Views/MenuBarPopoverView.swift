@@ -517,7 +517,8 @@ private struct InputTestWindowView: View {
   }
 
   private func outputTestRow(_ device: DeviceViewModel) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
+    let canRumble = device.supportsPhysicalRumble
+    return VStack(alignment: .leading, spacing: 8) {
       Text("Physical output").font(.headline)
       HStack {
         SwiftUI.Button(rumbleRunning ? "Rumbling..." : "Rumble pulse") {
@@ -537,8 +538,11 @@ private struct InputTestWindowView: View {
             rumbleRunning = false
           }
         }
-        .disabled(rumbleRunning)
+        .disabled(rumbleRunning || !canRumble)
         .accessibilityLabel("Send physical rumble pulse")
+        Text("Rumble: \(canRumble ? "supported" : "not supported")")
+          .font(.caption)
+          .foregroundStyle(.secondary)
         Text("LED: not exposed")
           .font(.caption)
           .foregroundStyle(.secondary)

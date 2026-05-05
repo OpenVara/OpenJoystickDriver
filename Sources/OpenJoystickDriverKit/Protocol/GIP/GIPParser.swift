@@ -27,7 +27,7 @@ public enum GIPError: Error, Sendable {
 /// incoming interrupt-transfer packets into ``ControllerEvent`` values.
 /// Sends a keep-alive ping every ~4 seconds to prevent the controller
 /// from entering idle.
-public final class GIPParser: InputParser, @unchecked Sendable {
+public final class GIPParser: InputParser, PhysicalRumbleOutput, @unchecked Sendable {
 
   // MARK: - Thread safety
   //
@@ -158,6 +158,16 @@ public final class GIPParser: InputParser, @unchecked Sendable {
       right, 0x20, 0x00, 0x00,  // duration=32, delay=0, repeat=0
     ]
     _ = try handle.interruptTransfer(endpoint: outEndpoint, data: packet, timeout: 2000)
+  }
+
+  public func sendPhysicalRumble(
+    handle: USBDeviceHandle,
+    left: UInt8,
+    right: UInt8,
+    lt: UInt8,
+    rt: UInt8
+  ) throws {
+    try sendRumble(handle: handle, left: left, right: right, ltMotor: lt, rtMotor: rt)
   }
 
   // MARK: - Private

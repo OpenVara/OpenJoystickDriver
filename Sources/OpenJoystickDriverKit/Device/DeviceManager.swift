@@ -129,7 +129,8 @@ public actor DeviceManager {
         outputEndpoint: profile.transportProfile.outputEndpoint,
         needsSetConfiguration: profile.transportProfile.needsSetConfiguration,
         postHandshakeSettleMs: Int(profile.transportProfile.postHandshakeSettleNanoseconds / 1_000_000),
-        preferredBackends: profile.preferredBackends.map(\.rawValue)
+        preferredBackends: profile.preferredBackends.map(\.rawValue),
+        supportsPhysicalRumble: pipelines[id]?.supportsPhysicalRumble() ?? false
       )
     }
   }
