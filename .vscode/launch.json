@@ -39,6 +39,26 @@
 			"target": "OpenJoystickDriver",
 			"configuration": "release",
 			"preLaunchTask": "swift: Build Release OpenJoystickDriver"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:OpenJoystickDriver}",
+			"name": "Debug OpenJoystickDriverHIDTool",
+			"target": "OpenJoystickDriverHIDTool",
+			"configuration": "debug",
+			"preLaunchTask": "swift: Build Debug OpenJoystickDriverHIDTool"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:OpenJoystickDriver}",
+			"name": "Release OpenJoystickDriverHIDTool",
+			"target": "OpenJoystickDriverHIDTool",
+			"configuration": "release",
+			"preLaunchTask": "swift: Build Release OpenJoystickDriverHIDTool"
 		}
 	]
 }
