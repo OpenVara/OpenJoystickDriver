@@ -44,7 +44,7 @@ let package = Package(
     .library(name: "OpenJoystickDriverKit", targets: ["OpenJoystickDriverKit"]),
   ],
   dependencies: [
-    .package(path: "../SwiftUSB"),
+   .package(url: "https://github.com/xsyetopz/SwiftUSB.git", from: "0.1.0")
   ],
   targets: [
     .target(
