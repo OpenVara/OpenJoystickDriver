@@ -41,28 +41,15 @@ let package = Package(
   name: "OpenJoystickDriver",
   platforms: [.macOS(.v13)],
   products: [
-    .library(name: "SwiftUSB", targets: ["SwiftUSB"]),
     .library(name: "OpenJoystickDriverKit", targets: ["OpenJoystickDriverKit"]),
   ],
-  dependencies: [],
+  dependencies: [
+    .package(path: "../SwiftUSB"),
+  ],
   targets: [
-    .systemLibrary(
-      name: "CLibUSB",
-      path: "Modules/SwiftUSB/Sources/CLibUSB",
-      pkgConfig: "libusb-1.0",
-      providers: [.brew(["libusb"]), .apt(["libusb-1.0-0-dev"])]
-    ),
-
-    .target(
-      name: "SwiftUSB",
-      dependencies: ["CLibUSB"],
-      path: "Modules/SwiftUSB",
-      exclude: ["Tests"]
-    ),
-
     .target(
       name: "OpenJoystickDriverKit",
-      dependencies: ["SwiftUSB", "CLibUSB"],
+      dependencies: [.product(name: "SwiftUSB", package: "SwiftUSB")],
       path: "Sources/OpenJoystickDriverKit",
       resources: [.process("Resources/")],
       linkerSettings: [
@@ -106,24 +93,8 @@ let package = Package(
     ),
 
     .testTarget(
-      name: "SwiftUSBTests",
-      dependencies: ["SwiftUSB"],
-      path: "Modules/SwiftUSB/Tests/SwiftUSBTests",
-      swiftSettings: appleTestingFrameworkSettings,
-      linkerSettings: appleTestingFrameworkLinkerSettings
-    ),
-
-    .testTarget(
-      name: "HardwareTests",
-      dependencies: ["SwiftUSB"],
-      path: "Modules/SwiftUSB/Tests/HardwareTests",
-      swiftSettings: appleTestingFrameworkSettings,
-      linkerSettings: appleTestingFrameworkLinkerSettings
-    ),
-
-    .testTarget(
       name: "OpenJoystickDriverKitTests",
-      dependencies: ["OpenJoystickDriverKit", "SwiftUSB"],
+      dependencies: ["OpenJoystickDriverKit", .product(name: "SwiftUSB", package: "SwiftUSB")],
       path: "Tests/OpenJoystickDriverKitTests",
       swiftSettings: appleTestingFrameworkSettings,
       linkerSettings: appleTestingFrameworkLinkerSettings

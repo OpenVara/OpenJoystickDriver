@@ -39,7 +39,7 @@ XPC status/control APIs.
 ## Package and Runtime Surfaces
 
 - `Package.swift`: Swift tools version 6.2; macOS 13 minimum.
-- `Modules/SwiftUSB/`: libusb wrapper and tests.
+- `../SwiftUSB/`: external SwiftUSB libusb wrapper package.
 - `Sources/OpenJoystickDriverKit/`: parser, profile, virtual backend, service,
   and shared daemon logic.
 - `Sources/OpenJoystickDriver/`: SwiftUI menu bar app plus `--headless` CLI.
@@ -52,7 +52,7 @@ XPC status/control APIs.
   for the generic user-space OJD device. SDL3/PCSX2 needs `platform:macOS`;
   `platform:Mac OS X` is SDL2-era and can be ignored by SDL 3.2.x.
 - `Tests/OpenJoystickDriverKitTests/`: package tests for core behavior.
-- `Modules/SwiftUSB/Tests/`: SwiftUSB and hardware integration test targets.
+- `../SwiftUSB/Tests/HardwareTests/`: SwiftUSB hardware integration tests.
 
 ## Controller and Schema Model
 

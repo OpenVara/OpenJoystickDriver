@@ -66,7 +66,7 @@ New parsers go in `Sources/OpenJoystickDriverKit/Protocol/` and must conform to 
 
 **Step 5 - Add tests.**
 
-Add test cases to `Tests/OpenJoystickDriverKitTests/`. Tests that require hardware should be in `Modules/SwiftUSB/Tests/HardwareTests/` and use the `.serialized` trait.
+Add test cases to `Tests/OpenJoystickDriverKitTests/`. Tests that require SwiftUSB hardware access should live in `../SwiftUSB/Tests/HardwareTests/` and use the `.serialized` trait.
 
 ---
 
@@ -98,9 +98,9 @@ There's no formal PR template. Just be clear about what changed and why.
 Sources/OpenJoystickDriverKit/    Shared library: parsers, device management, output, XPC
 Sources/OpenJoystickDriverDaemon/ Background daemon executable
 Sources/OpenJoystickDriver/       GUI app (SwiftUI, menu bar) + CLI (--headless)
-Modules/SwiftUSB/                 LibUSB wrapper for class 0xFF devices
+../SwiftUSB/                      External libusb wrapper package
 Tests/OpenJoystickDriverKitTests/ Unit tests (no hardware required)
-Modules/SwiftUSB/Tests/           Hardware integration tests
+../SwiftUSB/Tests/HardwareTests/  SwiftUSB hardware integration tests
 Resources/Schemas/                JSON schemas for IDE validation (not bundled at runtime)
 docs/                             Protocol reference docs
 scripts/                          Build, sign, install, uninstall helpers
