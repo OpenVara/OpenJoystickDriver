@@ -8,6 +8,8 @@ The project is built for users who need a scriptable controller input layer on
 macOS: emulator users, engine integrators, game studios, and contributors adding
 new controller profiles.
 
+<img width="492" height="532" alt="image" src="https://github.com/user-attachments/assets/532f809a-d6ef-49fc-9f99-3dbb5af7fc28" />
+
 ## Status
 
 | Area                                    | Current state                                                                             |
