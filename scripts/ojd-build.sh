@@ -32,7 +32,7 @@ TXT
 }
 
 _require_codesign_identity() {
-  if [[ "${IDENTITY:-"-"}" == "-" ]]; then
+  if [[ "${GUI_IDENTITY:-"-"}" == "-" || "${DAEMON_IDENTITY:-"-"}" == "-" ]]; then
     echo "ERROR: CODESIGN_IDENTITY not set."
     echo "Fix: run: ./scripts/ojd signing configure"
     exit 1
@@ -68,7 +68,7 @@ nuke_all() {
   echo "=== NUKE: removing daemon from launchd ==="
   if [[ -x "$APP_PATH/Contents/MacOS/OpenJoystickDriver" ]]; then
     "$APP_PATH/Contents/MacOS/OpenJoystickDriver" --headless uninstall \
-      && echo "  SMAppService uninstall succeeded" || true
+      && echo "  daemon uninstall succeeded" || true
   fi
   launchctl bootout "gui/$(id -u)/$DAEMON_LABEL" 2>/dev/null && echo "  bootout succeeded" || true
   launchctl remove "$DAEMON_LABEL" 2>/dev/null && echo "  remove succeeded" || true
@@ -231,21 +231,28 @@ build_app_bundle() {
 
   if [[ "$OJD_ENV" == "release" ]]; then
     setup_libusb_pkgconfig
-  fi
-
-  if [[ "$OJD_ENV" == "release" ]]; then
     echo "Building release binaries (universal)..."
     cd "$PROJECT_DIR"
     swift build -c release --product OpenJoystickDriverDaemon --arch arm64 --arch x86_64 -Xswiftc -warnings-as-errors
     swift build -c release --product OpenJoystickDriver --arch arm64 --arch x86_64 -Xswiftc -warnings-as-errors
+    local daemon_bin="$DAEMON_RELEASE"
+    local gui_bin="$GUI_RELEASE"
   else
-    echo "Building debug binaries..."
+    setup_libusb_pkgconfig
+    echo "Building debug binaries (universal)..."
     cd "$PROJECT_DIR"
-    swift build --product OpenJoystickDriverDaemon -Xswiftc -warnings-as-errors
-    swift build --product OpenJoystickDriver -Xswiftc -warnings-as-errors
+    swift build --product OpenJoystickDriverDaemon --arch arm64 --arch x86_64 -Xswiftc -warnings-as-errors
+    swift build --product OpenJoystickDriver --arch arm64 --arch x86_64 -Xswiftc -warnings-as-errors
+    local daemon_bin="$PROJECT_DIR/.build/apple/Products/Debug/OpenJoystickDriverDaemon"
+    local gui_bin="$PROJECT_DIR/.build/apple/Products/Debug/OpenJoystickDriver"
   fi
 
   mkdir -p "$PROJECT_DIR/.build"
+  if [[ -L "$PROJECT_DIR/.build/debug" && ! -e "$PROJECT_DIR/.build/debug" ]]; then
+    _DEBUG_TARGET="$(readlink "$PROJECT_DIR/.build/debug")"
+    mkdir -p "$PROJECT_DIR/.build/$_DEBUG_TARGET"
+    unset _DEBUG_TARGET
+  fi
   resolve_entitlements "$DAEMON_ENTITLEMENTS_TEMPLATE" "$DAEMON_ENTITLEMENTS"
   resolve_entitlements "$GUI_ENTITLEMENTS_TEMPLATE" "$GUI_ENTITLEMENTS"
 
@@ -256,13 +263,15 @@ build_app_bundle() {
   echo "Creating app bundle..."
   rm -rf "$GUI_APP"
   mkdir -p "$GUI_MACOS"
-  cp "$GUI_BIN" "$GUI_MACOS/OpenJoystickDriver"
-  cp "$DAEMON_BIN" "$GUI_MACOS/OpenJoystickDriverDaemon"
+  cp "$gui_bin" "$GUI_MACOS/OpenJoystickDriver"
+  cp "$daemon_bin" "$GUI_MACOS/OpenJoystickDriverDaemon"
 
   local BUILD_DIR
-  BUILD_DIR="$(dirname "$DAEMON_BIN")"
+  BUILD_DIR="$(dirname "$daemon_bin")"
   local GUI_RESOURCES="$GUI_CONTENTS/Resources"
   mkdir -p "$GUI_RESOURCES"
+  cp "$PROJECT_DIR/Sources/OpenJoystickDriver/Resources/OpenJoystickDriver.icns" \
+    "$GUI_RESOURCES/OpenJoystickDriver.icns"
   for bundle in "$BUILD_DIR"/OpenJoystickDriver_*.bundle; do
     [[ -d "$bundle" ]] && cp -R "$bundle" "$GUI_RESOURCES/"
   done
@@ -288,6 +297,8 @@ build_app_bundle() {
     <string>OpenJoystickDriver</string>
     <key>CFBundleExecutable</key>
     <string>OpenJoystickDriver</string>
+    <key>CFBundleIconFile</key>
+    <string>OpenJoystickDriver</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -295,7 +306,7 @@ build_app_bundle() {
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>10.15</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSHighResolutionCapable</key>
@@ -312,7 +323,7 @@ PLIST
 
   echo "Creating daemon bundle..."
   mkdir -p "$DAEMON_BUNDLE_MACOS"
-  cp "$DAEMON_BIN" "$DAEMON_BUNDLE_MACOS/OpenJoystickDriverDaemon"
+  cp "$daemon_bin" "$DAEMON_BUNDLE_MACOS/OpenJoystickDriverDaemon"
   cp "$DAEMON_PROFILE" "$DAEMON_BUNDLE_CONTENTS/embedded.provisionprofile"
   xattr -d com.apple.quarantine "$DAEMON_BUNDLE_CONTENTS/embedded.provisionprofile" 2>/dev/null || true
 
@@ -340,28 +351,34 @@ PLIST
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>10.15</string>
     <key>LSBackgroundOnly</key>
     <true/>
 </dict>
 </plist>
 PLIST
 
-  echo "Signing using: $IDENTITY"
-  ojd_sign "$DAEMON_BUNDLE_MACOS/OpenJoystickDriverDaemon" --entitlements "$DAEMON_ENTITLEMENTS"
-  ojd_sign "$DAEMON_BUNDLE" --entitlements "$DAEMON_ENTITLEMENTS"
-  ojd_sign "$GUI_MACOS/OpenJoystickDriverDaemon" --entitlements "$DAEMON_ENTITLEMENTS"
-  ojd_sign "$GUI_APP" --entitlements "$GUI_ENTITLEMENTS"
-  ojd_sign "$DAEMON_BUNDLE_MACOS/OpenJoystickDriverDaemon" --entitlements "$DAEMON_ENTITLEMENTS"
-  ojd_sign "$DAEMON_BUNDLE" --entitlements "$DAEMON_ENTITLEMENTS"
+  echo "Signing GUI using:    $GUI_IDENTITY"
+  echo "Signing daemon using: $DAEMON_IDENTITY"
+  for bundle in "$GUI_RESOURCES"/*.bundle; do
+    [[ -d "$bundle" ]] && OJD_ACTIVE_SIGN_IDENTITY="$GUI_IDENTITY" ojd_sign_resource_bundle "$bundle"
+  done
+  for bundle in "$DAEMON_RESOURCES"/*.bundle; do
+    [[ -d "$bundle" ]] && OJD_ACTIVE_SIGN_IDENTITY="$DAEMON_IDENTITY" ojd_sign_resource_bundle "$bundle"
+  done
+  OJD_ACTIVE_SIGN_IDENTITY="$DAEMON_IDENTITY" ojd_sign "$DAEMON_BUNDLE_MACOS/OpenJoystickDriverDaemon" --entitlements "$DAEMON_ENTITLEMENTS"
+  OJD_ACTIVE_SIGN_IDENTITY="$DAEMON_IDENTITY" ojd_sign "$DAEMON_BUNDLE" --entitlements "$DAEMON_ENTITLEMENTS"
+  OJD_ACTIVE_SIGN_IDENTITY="$DAEMON_IDENTITY" ojd_sign "$GUI_MACOS/OpenJoystickDriverDaemon" --entitlements "$DAEMON_ENTITLEMENTS"
+  OJD_ACTIVE_SIGN_IDENTITY="$GUI_IDENTITY" ojd_sign "$GUI_APP" --entitlements "$GUI_ENTITLEMENTS"
 
   if [[ "$OJD_ENV" == "release" ]]; then
-    verify_profile_cert "$GUI_PROFILE" "$IDENTITY"
-    verify_profile_cert "$DAEMON_PROFILE" "$IDENTITY"
+    verify_profile_cert "$GUI_PROFILE" "$GUI_IDENTITY"
+    verify_profile_cert "$DAEMON_PROFILE" "$DAEMON_IDENTITY"
   fi
 
   echo ""
-  echo "Signed with: $IDENTITY"
+  echo "Signed GUI with:    $GUI_IDENTITY"
+  echo "Signed daemon with: $DAEMON_IDENTITY"
   echo "  GUI app:        $GUI_APP"
   echo "  Daemon bundle:  $DAEMON_BUNDLE"
 }

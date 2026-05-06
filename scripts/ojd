@@ -42,6 +42,7 @@ Commands:
   diagnose pcsx2-live [--seconds N]
                               Run PCSX2 SDL3 probe for live input events
   diagnose gamecontroller     Run GameController.framework probe
+  diagnose catalina [app]     Check a macOS 10.15 test app bundle
   diagnose pcsx2-latency      Compare native SDL3 vs PCSX2/Rosetta SDL3 input timing
   diagnose backends           Run current backend acceptance loop
   repair stale-dext           Kill stale DriverKit process copies after upgrade
@@ -54,6 +55,7 @@ Commands:
   notarize status [id]        Show notarization status (release only)
   notarize log <id>           Fetch notarization log (release only)
   notarize history            List notarization history (release only)
+  notarize store-credentials  Store notarytool credentials in Keychain
   package tester              Build, notarize, staple, and zip a tester app (release only)
 
   lint                        Run SwiftLint (requires swiftlint)
@@ -176,6 +178,9 @@ case "$cmd" in
       gamecontroller)
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" gamecontroller "$@"
         ;;
+      catalina)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-catalina-smoke.sh" "$@"
+        ;;
       pcsx2-latency)
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" pcsx2-latency "$@"
         ;;
@@ -183,7 +188,7 @@ case "$cmd" in
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" backends "$@"
         ;;
       *)
-        die "Unknown: diagnose $sub (expected: dext | sdl3 | pcsx2-sdl3 | pcsx2-live | gamecontroller | pcsx2-latency | backends)"
+        die "Unknown: diagnose $sub (expected: dext | sdl3 | pcsx2-sdl3 | pcsx2-live | gamecontroller | catalina | pcsx2-latency | backends)"
         ;;
     esac
     ;;
@@ -249,6 +254,9 @@ case "$cmd" in
       submit|"")
         exec env OJD_ENV=release /usr/bin/env bash "$SCRIPT_DIR/ojd-notarize.sh" submit "$@"
         ;;
+      help|-h|--help)
+        exec env OJD_ENV=release /usr/bin/env bash "$SCRIPT_DIR/ojd-notarize.sh" help
+        ;;
       status)
         exec env OJD_ENV=release /usr/bin/env bash "$SCRIPT_DIR/ojd-notarize.sh" status "$@"
         ;;
@@ -258,8 +266,11 @@ case "$cmd" in
       log)
         exec env OJD_ENV=release /usr/bin/env bash "$SCRIPT_DIR/ojd-notarize.sh" log "$@"
         ;;
+      store-credentials)
+        exec env OJD_ENV=release /usr/bin/env bash "$SCRIPT_DIR/ojd-notarize.sh" store-credentials "$@"
+        ;;
       *)
-        die "Unknown: notarize $sub (expected: submit | status | history | log)"
+        die "Unknown: notarize $sub (expected: submit | status | history | log | store-credentials)"
         ;;
     esac
     ;;

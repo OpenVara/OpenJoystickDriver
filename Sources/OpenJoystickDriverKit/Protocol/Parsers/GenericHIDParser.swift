@@ -1,13 +1,13 @@
 import Foundation
 import SwiftUSB
-import os
 
 /// Fallback parser for unrecognized HID game controllers.
 ///
 /// Uses IOHIDDevice element queries to discover buttons and axes.
-public final class GenericHIDParser: InputParser, Sendable {
+public final class GenericHIDParser: InputParser, @unchecked Sendable {
   private let identifier: DeviceIdentifier
-  private let didLogParseWarning = OSAllocatedUnfairLock(initialState: false)
+  private let warningLock = NSLock()
+  private var didLogParseWarning = false
 
   /// Creates a new GenericHIDParser for the given device identifier.
   public init(identifier: DeviceIdentifier) {
@@ -22,14 +22,14 @@ public final class GenericHIDParser: InputParser, Sendable {
 
   /// Returns an empty event list; generic HID input parsing is not yet implemented.
   public func parse(data: Data) throws -> [ControllerEvent] {
-    didLogParseWarning.withLock { warned in
-      if !warned {
-        print(
-          "[GenericHIDParser] Dropping input from \(identifier)"
-            + " — no parser implemented for this controller"
-        )
-        warned = true
-      }
+    warningLock.lock()
+    defer { warningLock.unlock() }
+    if !didLogParseWarning {
+      print(
+        "[GenericHIDParser] Dropping input from \(identifier)"
+          + " — no parser implemented for this controller"
+      )
+      didLogParseWarning = true
     }
     return []
   }

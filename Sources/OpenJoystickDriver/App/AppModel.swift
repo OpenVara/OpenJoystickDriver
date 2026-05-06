@@ -1,7 +1,7 @@
 import Foundation
 import OpenJoystickDriverKit
 
-private let appModelPollInterval = Duration.seconds(2)
+private let appModelPollNanoseconds: UInt64 = 2_000_000_000
 
 /// Parsed, displayable representation of connected controller.
 struct DeviceViewModel: Identifiable, Hashable, Sendable {
@@ -97,7 +97,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       daemonError = error.localizedDescription
       return
     }
-    try? await Task.sleep(for: .seconds(0.5))
+    try? await Task.sleep(nanoseconds: 500_000_000)
     client.disconnect()
     client.connect()
     await syncFromDaemonNow()
@@ -114,7 +114,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       daemonError = error.localizedDescription
       return
     }
-    try? await Task.sleep(for: .seconds(0.5))
+    try? await Task.sleep(nanoseconds: 500_000_000)
     client.disconnect()
     client.connect()
     await syncFromDaemonNow()
@@ -140,7 +140,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       return
     }
     client.disconnect()
-    try? await Task.sleep(for: .seconds(1))
+    try? await Task.sleep(nanoseconds: 1_000_000_000)
     client.connect()
     await syncFromDaemonNow()
     daemonRestarting = false
@@ -384,7 +384,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   private func startPolling() {
     pollTask = Task { [weak self] in
       while !Task.isCancelled {
-        try? await Task.sleep(for: appModelPollInterval)
+        try? await Task.sleep(nanoseconds: appModelPollNanoseconds)
         await self?.poll()
       }
     }

@@ -50,10 +50,10 @@ struct CLI {
         compat     Set compatibility identity (generic-hid/sdl-macos/x360-hid/xone-hid)
         selftest   Count input events on virtual devices
         sysext     Manage DriverKit system extension
-        install    Register daemon LaunchAgent (SMAppService)
+        install    Register daemon LaunchAgent
         uninstall  Unregister daemon LaunchAgent
         start      Start daemon (register if needed)
-        restart    Restart daemon (unregister+register)
+        restart    Restart daemon
         reset-settings Reset daemon settings (mode/identity/output)
 
       Options:

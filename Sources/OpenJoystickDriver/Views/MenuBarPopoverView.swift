@@ -30,20 +30,18 @@ struct MenuBarPopoverView: View {
         model.extensionManager.refreshInstallState()
       }
     }
-    .confirmationDialog(
-      "Uninstall LaunchAgent?",
-      isPresented: $showUninstallConfirm,
-      titleVisibility: .visible
-    ) {
-      SwiftUI.Button("Uninstall", role: .destructive) {
-        Task {
-          await model.uninstallDaemon()
-          await model.syncFromDaemonNow()
-        }
-      }
-      SwiftUI.Button("Cancel", role: .cancel) {}
-    } message: {
-      Text("This removes the LaunchAgent plist. You can reinstall later.")
+    .alert(isPresented: $showUninstallConfirm) {
+      Alert(
+        title: Text("Uninstall LaunchAgent?"),
+        message: Text("This removes the LaunchAgent plist. You can reinstall later."),
+        primaryButton: .destructive(Text("Uninstall")) {
+          Task {
+            await model.uninstallDaemon()
+            await model.syncFromDaemonNow()
+          }
+        },
+        secondaryButton: .cancel()
+      )
     }
   }
 
@@ -69,11 +67,11 @@ struct MenuBarPopoverView: View {
         Spacer()
         Text(daemonStatusLabel)
           .font(.caption)
-          .foregroundStyle(daemonStatusColor)
+          .foregroundColor(daemonStatusColor)
       }
 
-      Text("Controllers: \(model.devices.count)").font(.caption2).foregroundStyle(.secondary)
-      Text("Input Monitoring: \(model.inputMonitoring)").font(.caption2).foregroundStyle(.secondary)
+      Text("Controllers: \(model.devices.count)").font(.caption).foregroundColor(.secondary)
+      Text("Input Monitoring: \(model.inputMonitoring)").font(.caption).foregroundColor(.secondary)
 
       if let h = model.daemonHealth, h.installed {
         let state = h.state ?? "unknown"
@@ -85,15 +83,14 @@ struct MenuBarPopoverView: View {
           Text(
             "launchd: state=\(state), pid=\(pid), active=\(active), runs=\(runs)\(reason.map { ", \($0)" } ?? "")"
           )
-            .font(.caption2)
-            .foregroundStyle(h.isInefficientKillLoop ? .orange : .secondary)
+            .font(.caption)
+            .foregroundColor(h.isInefficientKillLoop ? .orange : .secondary)
             .lineLimit(2)
           Spacer()
           SwiftUI.Button("↻") {
             Task { await model.refreshDaemonHealth() }
           }
           .buttonStyle(.borderless)
-          .help("Refresh launchd status")
         }
       }
 
@@ -105,7 +102,7 @@ struct MenuBarPopoverView: View {
               await model.syncFromDaemonNow()
             }
           }
-          .buttonStyle(.borderedProminent)
+          .buttonStyle(.borderless)
           .controlSize(.small)
         } else {
           SwiftUI.Button("Start") {
@@ -114,7 +111,7 @@ struct MenuBarPopoverView: View {
               await model.syncFromDaemonNow()
             }
           }
-          .buttonStyle(.borderedProminent)
+          .buttonStyle(.borderless)
           .controlSize(.small)
           .disabled(model.daemonConnected)
           SwiftUI.Button("Restart") {
@@ -123,12 +120,12 @@ struct MenuBarPopoverView: View {
               await model.syncFromDaemonNow()
             }
           }
-          .buttonStyle(.bordered)
+          .buttonStyle(.borderless)
           .controlSize(.small)
           .disabled(model.daemonRestarting)
 
-          SwiftUI.Button("Uninstall", role: .destructive) { showUninstallConfirm = true }
-            .buttonStyle(.bordered)
+          SwiftUI.Button("Uninstall") { showUninstallConfirm = true }
+            .buttonStyle(.borderless)
             .controlSize(.small)
             .disabled(model.daemonRestarting)
         }
@@ -136,7 +133,7 @@ struct MenuBarPopoverView: View {
       }
 
       if let err = model.daemonError {
-        Text(err).font(.caption2).foregroundStyle(.red)
+        Text(err).font(.caption).foregroundColor(.red)
       }
     }
   }
@@ -147,49 +144,46 @@ struct MenuBarPopoverView: View {
       HStack(spacing: 8) {
         Text("DriverKit").font(.subheadline)
         Spacer()
-        Text(state.label).font(.caption).foregroundStyle(state.isInstalled ? .green : .secondary)
+        Text(state.label).font(.caption).foregroundColor(state.isInstalled ? .green : .secondary)
         SwiftUI.Button("Install") { model.extensionManager.installExtension() }
-          .buttonStyle(.bordered)
+          .buttonStyle(.borderless)
           .controlSize(.small)
           .disabled(state.isInstalled || state.isPending)
       }
       if case .failed(let msg) = state {
         Text(msg)
-          .font(.caption2)
-          .foregroundStyle(.red)
+          .font(.caption)
+          .foregroundColor(.red)
           .fixedSize(horizontal: false, vertical: true)
 
         if !model.extensionManager.lastInstallDetails.isEmpty {
-          DisclosureGroup("Details") {
-            VStack(alignment: .leading, spacing: 2) {
-              ForEach(model.extensionManager.lastInstallDetails, id: \.self) { line in
-                Text(line).font(.caption2).foregroundStyle(.secondary)
-                  .textSelection(.enabled)
-              }
+          VStack(alignment: .leading, spacing: 2) {
+            Text("Details").font(.caption)
+            ForEach(model.extensionManager.lastInstallDetails, id: \.self) { line in
+              Text(line).font(.caption).foregroundColor(.secondary)
             }
-            .padding(.top, 4)
           }
-          .font(.caption2)
+          .padding(.top, 4)
         }
       }
       if let w = model.extensionManager.installWarning, state.isInstalled {
         Text(w)
-          .font(.caption2)
-          .foregroundStyle(.orange)
+          .font(.caption)
+          .foregroundColor(.orange)
           .fixedSize(horizontal: false, vertical: true)
       }
       if let s = model.virtualDeviceDiagnostics?.driverKitOutputStats {
         let last = s.lastErrorHex ?? "none"
         Text("setReport: ok \(s.successes) / fail \(s.failures) (last \(last))")
-          .font(.caption2)
-          .foregroundStyle(.secondary)
+          .font(.caption)
+          .foregroundColor(.secondary)
       }
     }
   }
 
   private var modeRow: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text("Mode").font(.caption).foregroundStyle(.secondary)
+      Text("Mode").font(.caption).foregroundColor(.secondary)
       Picker(
         "Mode",
         selection: Binding(
@@ -217,8 +211,8 @@ struct MenuBarPopoverView: View {
         }
       }()
       Text("Requested mode: \(requestedLabel)")
-        .font(.caption2)
-        .foregroundStyle(.secondary)
+        .font(.caption)
+        .foregroundColor(.secondary)
 
       let activeLabel: String = {
         switch model.outputMode {
@@ -228,7 +222,7 @@ struct MenuBarPopoverView: View {
         default: return "unknown"
         }
       }()
-      Text("Active output: \(activeLabel)").font(.caption2).foregroundStyle(.secondary)
+      Text("Active output: \(activeLabel)").font(.caption).foregroundColor(.secondary)
 
       let compatSelected = model.virtualDeviceMode == VirtualDeviceMode.compatUserSpace.rawValue
       Picker(
@@ -243,16 +237,15 @@ struct MenuBarPopoverView: View {
         Text("Xbox 360 HID").tag(CompatibilityIdentity.x360HID.rawValue)
         Text("Xbox One HID").tag(CompatibilityIdentity.xoneHID.rawValue)
       }
-      .pickerStyle(.menu)
       .disabled(!model.daemonConnected || !compatSelected)
 
       Text("Used only in Compatibility mode. SDL macOS is the default for Steam, PCSX2, and SDL apps.")
-        .font(.caption2)
-        .foregroundStyle(.secondary)
+        .font(.caption)
+        .foregroundColor(.secondary)
 
       Text("Compatibility backend: \(model.userSpaceVirtualDeviceStatus)")
-        .font(.caption2)
-        .foregroundStyle(
+        .font(.caption)
+        .foregroundColor(
           model.userSpaceVirtualDeviceStatus.hasPrefix("error:") ? .orange : .secondary
         )
     }
@@ -277,29 +270,29 @@ struct MenuBarPopoverView: View {
             runningSelfTest = false
           }
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.borderless)
         .controlSize(.small)
         .disabled(!model.daemonConnected || runningSelfTest)
       }
       if let t = model.virtualDeviceSelfTest {
         Text("DriverKit: value \(t.driverKitValueEvents), report \(t.driverKitReportEvents)")
-          .font(.caption2)
-          .foregroundStyle(.secondary)
+          .font(.caption)
+          .foregroundColor(.secondary)
         if let delta = t.driverKitInputReportDelta {
           Text("DriverKit (ioreg): input report Δ \(delta)")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
+            .font(.caption)
+            .foregroundColor(.secondary)
         }
         if let delta = t.driverKitSetReportSuccessDelta {
           Text("DriverKit (daemon): setReport ok Δ \(delta)")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
+            .font(.caption)
+            .foregroundColor(.secondary)
         }
         Text("User-space: value \(t.userSpaceValueEvents), report \(t.userSpaceReportEvents)")
-          .font(.caption2)
-          .foregroundStyle(.secondary)
+          .font(.caption)
+          .foregroundColor(.secondary)
       } else {
-        Text("Press buttons while it runs.").font(.caption2).foregroundStyle(.secondary)
+        Text("Press buttons while it runs.").font(.caption).foregroundColor(.secondary)
       }
     }
   }
@@ -312,14 +305,13 @@ struct MenuBarPopoverView: View {
         SwiftUI.Button("Open") {
           inputTester.show(model: model)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.borderless)
         .controlSize(.small)
         .disabled(!model.daemonConnected)
-        .accessibilityLabel("Open input test window")
       }
       Text("Live physical input, packet log, and physical rumble test.")
-        .font(.caption2)
-        .foregroundStyle(.secondary)
+        .font(.caption)
+        .foregroundColor(.secondary)
     }
   }
 
@@ -379,6 +371,8 @@ private struct InputTestWindowView: View {
   @State private var rumbleLT = 0.0
   @State private var rumbleRT = 0.0
   @State private var rumbleDurationMs = 450.0
+  @State private var stateTask: Task<Void, Never>?
+  @State private var packetLogTask: Task<Void, Never>?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -397,13 +391,10 @@ private struct InputTestWindowView: View {
         }
       } else {
         VStack(spacing: 10) {
-          Image(systemName: "gamecontroller")
-            .font(.system(size: 42))
-            .foregroundStyle(.secondary)
           Text("No controller selected").font(.headline)
           Text("Connect a controller or restart the daemon, then refresh.")
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
@@ -412,19 +403,13 @@ private struct InputTestWindowView: View {
     .frame(minWidth: 700, minHeight: 560)
     .onAppear {
       selectedDeviceID = selectedDeviceID ?? model.devices.first?.id
+      startRefreshTasks()
     }
-    .task(id: selectedDevice?.id ?? "") {
-      while !Task.isCancelled {
-        await refreshState()
-        try? await Task.sleep(for: .milliseconds(33))
-      }
-    }
-    .task(id: selectedDevice?.id ?? "") {
-      await refreshPacketLog()
-      while !Task.isCancelled {
-        try? await Task.sleep(for: .seconds(1))
-        await refreshPacketLog()
-      }
+    .onDisappear {
+      stateTask?.cancel()
+      packetLogTask?.cancel()
+      stateTask = nil
+      packetLogTask = nil
     }
   }
 
@@ -437,7 +422,7 @@ private struct InputTestWindowView: View {
 
   private var header: some View {
     HStack(spacing: 10) {
-      Text("Input Test").font(.title2.weight(.semibold))
+      Text("Input Test").font(.title.weight(.semibold))
       Spacer()
       Picker("Controller", selection: Binding(get: {
         selectedDevice?.id ?? ""
@@ -461,38 +446,35 @@ private struct InputTestWindowView: View {
   }
 
   private func deviceSummary(_ device: DeviceViewModel) -> some View {
-    Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 16, verticalSpacing: 6) {
-      GridRow {
-        Text("Device").foregroundStyle(.secondary)
-        Text(device.name)
-      }
-      GridRow {
-        Text("VID:PID").foregroundStyle(.secondary)
-        Text(String(format: "%04X:%04X", device.vendorID, device.productID))
-      }
-      GridRow {
-        Text("Parser").foregroundStyle(.secondary)
-        Text(device.parser)
-      }
-      GridRow {
-        Text("Connection").foregroundStyle(.secondary)
-        Text(device.connection)
-      }
+    VStack(alignment: .leading, spacing: 6) {
+      summaryRow("Device", device.name)
+      summaryRow("VID:PID", String(format: "%04X:%04X", device.vendorID, device.productID))
+      summaryRow("Parser", device.parser)
+      summaryRow("Connection", device.connection)
     }
     .font(.caption)
   }
 
+  private func summaryRow(_ label: String, _ value: String) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 16) {
+      Text(label)
+        .foregroundColor(.secondary)
+        .frame(width: 72, alignment: .leading)
+      Text(value)
+    }
+  }
+
   private var axesGrid: some View {
-    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 8) {
-      GridRow {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(spacing: 18) {
         AxisMeter(label: "LX", value: state?.leftStickX ?? 0, range: -1...1)
         AxisMeter(label: "LY", value: state?.leftStickY ?? 0, range: -1...1)
       }
-      GridRow {
+      HStack(spacing: 18) {
         AxisMeter(label: "RX", value: state?.rightStickX ?? 0, range: -1...1)
         AxisMeter(label: "RY", value: state?.rightStickY ?? 0, range: -1...1)
       }
-      GridRow {
+      HStack(spacing: 18) {
         AxisMeter(label: "LT", value: state?.leftTrigger ?? 0, range: 0...1)
         AxisMeter(label: "RT", value: state?.rightTrigger ?? 0, range: 0...1)
       }
@@ -501,36 +483,49 @@ private struct InputTestWindowView: View {
 
   private var buttonGrid: some View {
     let pressed = Set(state?.pressedButtons ?? [])
+    let buttons = Button.allCases
+    let rowCount = (buttons.count + 2) / 3
     return VStack(alignment: .leading, spacing: 8) {
       Text("Buttons").font(.headline)
-      LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 8)], alignment: .leading, spacing: 8) {
-        ForEach(Button.allCases, id: \.rawValue) { button in
-          let isDown = pressed.contains(button.rawValue)
-          Text(button.displayName)
-            .font(.caption)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .frame(maxWidth: .infinity, minHeight: 30)
-            .background(isDown ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.14))
-            .foregroundStyle(isDown ? .white : .primary)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .accessibilityLabel(button.displayName)
-            .accessibilityValue(isDown ? "pressed" : "released")
+      VStack(alignment: .leading, spacing: 8) {
+        ForEach(0..<rowCount, id: \.self) { row in
+          HStack(spacing: 8) {
+            ForEach(0..<3, id: \.self) { column in
+              let index = row * 3 + column
+              if index < buttons.count {
+                let button = buttons[index]
+                buttonPill(button: button, isDown: pressed.contains(button.rawValue))
+              } else {
+                Spacer().frame(maxWidth: .infinity, minHeight: 30)
+              }
+            }
+          }
         }
       }
     }
+  }
+
+  private func buttonPill(button: OpenJoystickDriverKit.Button, isDown: Bool) -> some View {
+    Text(button.displayName)
+      .font(.caption)
+      .lineLimit(1)
+      .minimumScaleFactor(0.8)
+      .frame(maxWidth: .infinity, minHeight: 30)
+      .background(isDown ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.14))
+      .foregroundColor(isDown ? .white : .primary)
+      .clipShape(RoundedRectangle(cornerRadius: 6))
   }
 
   private func outputTestRow(_ device: DeviceViewModel) -> some View {
     let canRumble = device.supportsPhysicalRumble
     return VStack(alignment: .leading, spacing: 8) {
       Text("Physical output").font(.headline)
-      Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
-        GridRow {
+      VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 14) {
           RumbleSlider(label: "L", value: $rumbleLeft)
           RumbleSlider(label: "R", value: $rumbleRight)
         }
-        GridRow {
+        HStack(spacing: 14) {
           RumbleSlider(label: "LT", value: $rumbleLT)
           RumbleSlider(label: "RT", value: $rumbleRT)
         }
@@ -577,23 +572,23 @@ private struct InputTestWindowView: View {
           Divider().frame(height: 16)
           Text("Range: 0...255")
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundColor(.secondary)
         }
         HStack(spacing: 10) {
         Text("Rumble: \(canRumble ? "supported" : "not supported")")
           .font(.caption)
-          .foregroundStyle(.secondary)
+          .foregroundColor(.secondary)
         Text("LED: not exposed")
           .font(.caption)
-          .foregroundStyle(.secondary)
+          .foregroundColor(.secondary)
         if let rumbleResult {
-          Text("Rumble: \(rumbleResult)").font(.caption).foregroundStyle(.secondary)
+          Text("Rumble: \(rumbleResult)").font(.caption).foregroundColor(.secondary)
         }
         }
       }
       Text("LED needs a verified per-protocol command surface before it becomes a live control.")
-        .font(.caption2)
-        .foregroundStyle(.secondary)
+        .font(.caption)
+        .foregroundColor(.secondary)
     }
   }
 
@@ -633,13 +628,32 @@ private struct InputTestWindowView: View {
     VStack(alignment: .leading, spacing: 8) {
       Text("Recent packets").font(.headline)
       if packetLog.isEmpty {
-        Text("No packets captured yet.").font(.caption).foregroundStyle(.secondary)
+        Text("No packets captured yet.").font(.caption).foregroundColor(.secondary)
       } else {
         ForEach(Array(packetLog.suffix(12).enumerated()), id: \.offset) { _, entry in
           Text("\(entry.direction) \(entry.length)b \(entry.hex)")
-            .font(.system(.caption2, design: .monospaced))
-            .textSelection(.enabled)
+            .font(.system(.caption, design: .monospaced))
             .lineLimit(2)
+        }
+      }
+    }
+  }
+
+  private func startRefreshTasks() {
+    if stateTask == nil {
+      stateTask = Task {
+        while !Task.isCancelled {
+          await refreshState()
+          try? await Task.sleep(nanoseconds: 33_000_000)
+        }
+      }
+    }
+    if packetLogTask == nil {
+      packetLogTask = Task {
+        await refreshPacketLog()
+        while !Task.isCancelled {
+          try? await Task.sleep(nanoseconds: 1_000_000_000)
+          await refreshPacketLog()
         }
       }
     }
@@ -678,8 +692,6 @@ private struct RumbleSlider: View {
         .frame(width: 34, alignment: .trailing)
     }
     .accessibilityElement(children: .combine)
-    .accessibilityLabel("\(label) rumble")
-    .accessibilityValue("\(Int(value))")
   }
 }
 
@@ -709,8 +721,6 @@ private struct AxisMeter: View {
       .transaction { transaction in
         transaction.animation = nil
       }
-        .accessibilityLabel(label)
-        .accessibilityValue(String(format: "%.3f", value))
     }
   }
 

@@ -229,7 +229,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     func copyServiceDevices() -> [IOHIDDevice] {
       var iterator: io_iterator_t = 0
       let kr = IOServiceGetMatchingServices(
-        kIOMainPortDefault,
+        kIOMasterPortDefault,
         IOServiceMatching("AppleUserHIDDevice"),
         &iterator
       )
@@ -271,7 +271,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
     func findServiceDevice(openOptions: IOOptionBits) -> (IOHIDDevice, IOReturn)? {
       var iterator: io_iterator_t = 0
       let kr = IOServiceGetMatchingServices(
-        kIOMainPortDefault,
+        kIOMasterPortDefault,
         IOServiceMatching("AppleUserHIDDevice"),
         &iterator
       )

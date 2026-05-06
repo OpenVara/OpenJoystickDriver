@@ -6,8 +6,8 @@ struct InstallCommand {
   func run() {
     requireApplicationsBundleOrExit()
     requireValidBundleSignatureOrExit(action: "Install")
-    // Ensure we are running from inside OpenJoystickDriver.app so SMAppService can
-    // find the embedded LaunchAgent plist.
+    // Ensure we are running from inside OpenJoystickDriver.app so daemon registration
+    // can find the embedded LaunchAgent plist.
     let exeURL = URL(fileURLWithPath: CommandLine.arguments[0])
     let contentsDir = exeURL.deletingLastPathComponent().deletingLastPathComponent()
     let agentPlist = contentsDir.appendingPathComponent(

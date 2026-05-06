@@ -33,6 +33,7 @@ Usage:
   OJD_ENV=release ./scripts/ojd notarize status [submission-id]
   OJD_ENV=release ./scripts/ojd notarize log <submission-id>
   OJD_ENV=release ./scripts/ojd notarize history
+  OJD_ENV=release ./scripts/ojd notarize store-credentials [profile-name]
 TXT
   exit 0
 fi
@@ -42,7 +43,22 @@ if [[ "$OJD_ENV" != "release" ]]; then
   exit 1
 fi
 
-if [[ -z "${NOTARIZE_APPLE_ID:-}" || -z "${NOTARIZE_PASSWORD:-}" ]]; then
+if [[ "$subcmd" == "store-credentials" ]]; then
+  profile="${1:-${NOTARIZE_KEYCHAIN_PROFILE:-OpenJoystickDriver}}"
+  if [[ -z "${NOTARIZE_APPLE_ID:-}" ]]; then
+    echo "ERROR: NOTARIZE_APPLE_ID is required."
+    exit 1
+  fi
+  args=(store-credentials "$profile" --apple-id "$NOTARIZE_APPLE_ID" --team-id "$DEVELOPMENT_TEAM")
+  if [[ -n "${NOTARIZE_PASSWORD:-}" ]]; then
+    args+=(--password "$NOTARIZE_PASSWORD")
+  fi
+  xcrun notarytool "${args[@]}"
+  echo "Stored notarytool profile: $profile"
+  exit 0
+fi
+
+if [[ -z "${NOTARIZE_KEYCHAIN_PROFILE:-}" && ( -z "${NOTARIZE_APPLE_ID:-}" || -z "${NOTARIZE_PASSWORD:-}" ) ]]; then
   echo "ERROR: Notarization credentials not set in scripts/.env.release"
   echo ""
   echo "  NOTARIZE_APPLE_ID  = your Apple ID email"
@@ -64,11 +80,18 @@ if [[ ! -d "$APP" ]]; then
   exit 1
 fi
 
-AUTH_ARGS=(
-  --apple-id "$NOTARIZE_APPLE_ID"
-  --password "$NOTARIZE_PASSWORD"
-  --team-id "$DEVELOPMENT_TEAM"
-)
+if [[ -n "${NOTARIZE_KEYCHAIN_PROFILE:-}" ]]; then
+  AUTH_ARGS=(--keychain-profile "$NOTARIZE_KEYCHAIN_PROFILE")
+  if [[ -n "${NOTARIZE_KEYCHAIN:-}" ]]; then
+    AUTH_ARGS+=(--keychain "$NOTARIZE_KEYCHAIN")
+  fi
+else
+  AUTH_ARGS=(
+    --apple-id "$NOTARIZE_APPLE_ID"
+    --password "$NOTARIZE_PASSWORD"
+    --team-id "$DEVELOPMENT_TEAM"
+  )
+fi
 
 if [[ "$subcmd" == "history" ]]; then
   echo "Recent notarization history:"

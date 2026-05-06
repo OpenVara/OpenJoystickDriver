@@ -55,7 +55,7 @@ If Keychain Access shows “not trusted” but `security find-identity` says the
 If `security find-identity` shows **0 valid identities**, you’re missing Apple’s intermediate CA certificates (WWDR / Developer ID).
 Get them from Apple’s Certificate Authority page and import them in Keychain Access (System keychain is fine), then re-check `find-identity`:
 
-```text
+```bash
 https://www.apple.com/certificateauthority/
 ```
 
@@ -118,7 +118,7 @@ certificate’s **CN** (the `(...)` part of the display name). If those disagree
 
 This repo’s `./scripts/ojd signing configure` writes `CODESIGN_IDENTITY` as a 40‑hex SHA1 for that reason.
 
-### 3) Generate `scripts/.env.dev` and `scripts/.env.release`
+### 3) Generate `.env.dev` and `.env.release`
 
 This repo has a helper that reads your Keychain + installed profiles and writes both env files:
 
@@ -128,10 +128,11 @@ This repo has a helper that reads your Keychain + installed profiles and writes 
 
 ## Common tasks
 
-### Daemon install / restart (no launchctl)
+### Daemon install / restart
 
-Daemon lifecycle is managed via macOS ServiceManagement (`SMAppService`) from inside the app bundle.
-Do not use `launchctl bootstrap` manually.
+On macOS 13 and newer, daemon lifecycle is managed through `SMAppService` from
+inside the app bundle. On macOS 10.15 through 12, OJD installs the bundled
+LaunchAgent plist through `launchctl`.
 
 Commands (run the app-bundled binary):
 
@@ -171,16 +172,15 @@ Fix:
 
 ## Notarization
 
-Create an app-specific password:
+Store notarization credentials in the macOS Keychain:
 
-```text
-https://account.apple.com/  → Sign-In and Security → App-Specific Passwords
+```bash
+OJD_ENV=release ./scripts/ojd notarize store-credentials OJDNotary
 ```
 
-Put these into `scripts/.env.release`:
+Put these into `.env.release`:
 
-- `NOTARIZE_APPLE_ID` (your Apple ID email)
-- `NOTARIZE_PASSWORD` (the app-specific password)
+- `NOTARIZE_KEYCHAIN_PROFILE` (the notarytool Keychain profile name)
 
 Then:
 

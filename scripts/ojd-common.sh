@@ -5,15 +5,17 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-# Load environment: scripts/.env.dev or scripts/.env.release
+# Load environment: legacy script-local files first, then central project files.
 # Override with OJD_ENV=release or OJD_ENV=dev (default: dev)
 OJD_ENV="${OJD_ENV:-dev}"
-_ENV_FILE="$SCRIPT_DIR/.env.$OJD_ENV"
-if [[ -f "$_ENV_FILE" ]]; then
-  set -a
-  source "$_ENV_FILE"
-  set +a
-fi
+for _ENV_FILE in   "$SCRIPT_DIR/.env.$OJD_ENV"   "$PROJECT_DIR/.env"   "$PROJECT_DIR/.env.$OJD_ENV"
+do
+  if [[ -f "$_ENV_FILE" ]]; then
+    set -a
+    source "$_ENV_FILE"
+    set +a
+  fi
+done
 unset _ENV_FILE
 
 # Prefer full Xcode toolchain when installed, even if `xcode-select` still
@@ -41,6 +43,8 @@ unset _DEFAULT_SDKROOT
 unset XCODE_SELECT_PATH
 
 IDENTITY="${CODESIGN_IDENTITY:--}"
+GUI_IDENTITY="${GUI_CODESIGN_IDENTITY:-$IDENTITY}"
+DAEMON_IDENTITY="${DAEMON_CODESIGN_IDENTITY:-$IDENTITY}"
 DAEMON_DEBUG="$PROJECT_DIR/.build/debug/OpenJoystickDriverDaemon"
 GUI_DEBUG="$PROJECT_DIR/.build/debug/OpenJoystickDriver"
 DAEMON_RELEASE="$PROJECT_DIR/.build/apple/Products/Release/OpenJoystickDriverDaemon"
@@ -98,8 +102,8 @@ build_universal_libusb() {
     cd "$tmpdir/src-arm64"
     ./configure \
       CC="clang" \
-      CFLAGS="-arch arm64 -target arm64-apple-macos13.0 -isysroot $SDK_PATH" \
-      LDFLAGS="-arch arm64 -target arm64-apple-macos13.0" \
+      CFLAGS="-arch arm64 -target arm64-apple-macos10.15 -isysroot $SDK_PATH" \
+      LDFLAGS="-arch arm64 -target arm64-apple-macos10.15" \
       --host=aarch64-apple-darwin \
       --prefix="$tmpdir/install-arm64" \
       --disable-shared --enable-static \
@@ -114,8 +118,8 @@ build_universal_libusb() {
     cd "$tmpdir/src-x86_64"
     ./configure \
       CC="clang" \
-      CFLAGS="-arch x86_64 -target x86_64-apple-macos13.0 -isysroot $SDK_PATH" \
-      LDFLAGS="-arch x86_64 -target x86_64-apple-macos13.0" \
+      CFLAGS="-arch x86_64 -target x86_64-apple-macos10.15 -isysroot $SDK_PATH" \
+      LDFLAGS="-arch x86_64 -target x86_64-apple-macos10.15" \
       --host=x86_64-apple-darwin \
       --prefix="$tmpdir/install-x86_64" \
       --disable-shared --enable-static \
@@ -196,7 +200,7 @@ verify_profile_cert() {
     | sed 's/.*=//;s/://g' | tr '[:upper:]' '[:lower:]')
 
   keychain_sha1=$(security find-identity -v -p codesigning 2>/dev/null \
-    | grep "$identity" | head -1 \
+    | grep -i "$identity" | head -1 \
     | awk '{print $2}' | tr '[:upper:]' '[:lower:]')
 
   if [[ -z "$profile_sha1" || -z "$keychain_sha1" ]]; then
@@ -205,15 +209,6 @@ verify_profile_cert() {
   fi
 
   if [[ "$profile_sha1" != "$keychain_sha1" ]]; then
-    local profile_serial keychain_serial
-    profile_serial=$(openssl x509 -inform DER -in "$tmpder" -noout -serial 2>/dev/null \
-      | sed 's/serial=//')
-
-    # Export keychain cert as PEM to extract its serial
-    keychain_serial=$(security find-certificate -c "$identity" -p 2>/dev/null \
-      | openssl x509 -noout -serial 2>/dev/null \
-      | sed 's/serial=//')
-
     echo ""
     echo "ERROR: Provisioning profile cert does not match signing identity!"
     echo ""
@@ -237,6 +232,7 @@ verify_profile_cert() {
 # When OJD_ENV=release, adds hardened runtime (required for notarization).
 ojd_sign() {
   local binary="$1"
+  local identity="${OJD_ACTIVE_SIGN_IDENTITY:-$IDENTITY}"
   local extra_args=()
   if [[ "${2:-}" == "--entitlements" && -n "${3:-}" ]]; then
     extra_args=(--entitlements "$3")
@@ -244,7 +240,17 @@ ojd_sign() {
   if [[ "$OJD_ENV" == "release" ]]; then
     extra_args+=(--options runtime --timestamp)
   fi
-  codesign --sign "$IDENTITY" --force --generate-entitlement-der "${extra_args[@]}" "$binary"
+  codesign --sign "$identity" --force --generate-entitlement-der "${extra_args[@]}" "$binary"
+}
+
+ojd_sign_resource_bundle() {
+  local bundle="$1"
+  local identity="${OJD_ACTIVE_SIGN_IDENTITY:-$IDENTITY}"
+  local extra_args=()
+  if [[ "$OJD_ENV" == "release" ]]; then
+    extra_args+=(--timestamp)
+  fi
+  codesign --sign "$identity" --force "${extra_args[@]}" "$bundle"
 }
 
 # Resolve entitlements templates: replace ${DEVELOPMENT_TEAM} with actual value.

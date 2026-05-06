@@ -314,8 +314,93 @@ cmd_doctor() {
   echo "2) Profiles audit:"
   cmd_audit
   echo ""
-  echo "Next:"
-  echo "  ./scripts/ojd signing configure"
+  echo "3) Release signing match:"
+  set +e
+  python3 - <<'PY'
+import os, plistlib, subprocess, sys
+
+profiles_dir = os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles")
+gui = os.path.join(profiles_dir, "OpenJoystickDriver_DevID.provisionprofile")
+daemon = os.path.join(profiles_dir, "OpenJoystickDriverDaemon_DevID.provisionprofile")
+
+def decode_profile(path: str) -> bytes:
+    p = subprocess.run(["security", "cms", "-D", "-i", path], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    if p.returncode == 0 and p.stdout:
+        return p.stdout
+    p = subprocess.run(["openssl", "smime", "-inform", "der", "-verify", "-noverify", "-in", path],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    return p.stdout if p.returncode == 0 and p.stdout else b""
+
+def profile_sha1(path: str) -> str:
+    raw = decode_profile(path)
+    if not raw or b"<?xml" not in raw:
+        raise RuntimeError(f"could not decode {path}")
+    raw = raw[raw.index(b"<?xml"):]
+    obj = plistlib.loads(raw)
+    certs = obj.get("DeveloperCertificates") or []
+    if not certs:
+        raise RuntimeError(f"missing DeveloperCertificates in {path}")
+    p = subprocess.run(["openssl", "x509", "-inform", "DER", "-noout", "-fingerprint", "-sha1"],
+        input=certs[0], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True)
+    return p.stdout.decode().strip().split("=", 1)[1].replace(":", "").lower()
+
+def developer_id_identities() -> set[str]:
+    p = subprocess.run(["security", "find-identity", "-v", "-p", "codesigning"],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    found: set[str] = set()
+    for line in p.stdout.splitlines():
+        if '"Developer ID Application:' not in line:
+            continue
+        parts = line.split()
+        if len(parts) >= 2 and len(parts[1]) == 40:
+            found.add(parts[1].lower())
+    return found
+
+try:
+    gui_sha = profile_sha1(gui)
+    daemon_sha = profile_sha1(daemon)
+except Exception as e:
+    print(f"  [FAIL] {e}")
+    sys.exit(1)
+
+ids = developer_id_identities()
+print(f"  GUI DevID profile cert:    {gui_sha}")
+print(f"  daemon DevID profile cert: {daemon_sha}")
+print(f"  keychain Developer IDs:    {', '.join(sorted(ids)) if ids else 'none'}")
+
+missing = [sha for sha in [gui_sha, daemon_sha] if sha not in ids]
+if missing:
+    print("  [FAIL] one or more Developer ID profile certificates are not available as signing identities in Keychain.")
+    print("  Need: a Developer ID Application signing identity whose SHA1 matches each profile's embedded certificate.")
+    print("  Note: matching Team ID is necessary, but not enough; codesign also needs the matching certificate private key.")
+    print("  Fix: install the missing Developer ID Application certificate/private key, or regenerate that profile for an installed Developer ID identity.")
+    sys.exit(1)
+
+if gui_sha != daemon_sha:
+    print("  [OK] GUI and daemon profiles use different Developer ID certs, and both are installed signing identities.")
+else:
+    print("  [OK] release Developer ID profiles match an installed signing identity")
+PY
+  local release_status=$?
+  set -e
+  echo ""
+  if [[ "$release_status" -eq 0 ]]; then
+    echo "Next:"
+    echo "  ./scripts/ojd signing configure"
+    echo "  ./scripts/ojd build release"
+    echo "  ./scripts/ojd notarize submit"
+  else
+    echo "STATUS BLOCKED"
+    echo "Release signing/notarization cannot be proven until the missing Developer ID signing identity above is fixed."
+    echo ""
+    echo "Resolution:"
+    echo "  Option A: install/import the Developer ID Application certificate + private key whose SHA1 matches the daemon profile."
+    echo "  Option B: regenerate OpenJoystickDriverDaemon_DevID.provisionprofile and select an installed Developer ID Application identity."
+    echo "  In both options, ensure com.apple.developer.hid.virtual.device is present."
+    echo "  Then install profiles: ./scripts/ojd signing install-profiles \"$HOME/Documents/Profiles\""
+    echo "  Then re-run: ./scripts/ojd signing doctor"
+    return "$release_status"
+  fi
 }
 
 case "$cmd" in
@@ -329,8 +414,8 @@ case "$cmd" in
   *) die "Unknown signing command: $cmd" ;;
 esac
 
-DEV_ENV="$SCRIPT_DIR/.env.dev"
-REL_ENV="$SCRIPT_DIR/.env.release"
+DEV_ENV="${DEV_ENV:-$PROJECT_DIR/.env.dev}"
+REL_ENV="${REL_ENV:-$PROJECT_DIR/.env.release}"
 
 GUI_DEV_PROFILE="${GUI_DEV_PROFILE:-$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver.provisionprofile}"
 GUI_DEVID_PROFILE="${GUI_DEVID_PROFILE:-$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver_DevID.provisionprofile}"
@@ -350,8 +435,8 @@ Reads:
   - Provisioning profiles from ~/Library/MobileDevice/Provisioning Profiles/
 
 Writes:
-  - scripts/.env.dev
-  - scripts/.env.release
+  - .env.dev
+  - .env.release
 
 Environment overrides (optional):
   GUI_DEV_PROFILE, GUI_DEVID_PROFILE, DAEMON_DEV_PROFILE, DAEMON_DEVID_PROFILE, DEXT_PROFILE
@@ -594,6 +679,11 @@ def pick_identity_matching_profile(prefix: str, profile_path: str) -> str:
         f"  profile_embedded_cert_sha1: {want}\n"
         f"  keychain_{prefix.replace(' ', '_').lower()}_sha1s: {sha1_str}\n"
         "\n"
+        "What is being looked for:\n"
+        f"  A valid Keychain signing identity named '{prefix}: ...' whose SHA1 is exactly profile_embedded_cert_sha1.\n"
+        "  Team ID matching is required, but not sufficient; codesign needs the matching private key.\n"
+        "  Apple Development identities do not satisfy Developer ID Application profiles.\n"
+        "\n"
         "Fix (no guessing):\n"
         f"  1) Show what certificate this profile embeds:\n"
         f"       ./scripts/ojd signing profile-info --full \"$HOME/Library/MobileDevice/Provisioning Profiles/{profile_base}\"\n"
@@ -615,15 +705,50 @@ apple_dev_identity = pick_identity_matching_profile("Apple Development", dext_pr
 
 dext_build_profile_name = profile_name(dext_profile) or "OpenJoystickDriver (VirtualHIDDevice)"
 
-dev_env.write_text(
-    "# Development signing (generated)\n"
-    f'CODESIGN_IDENTITY="{apple_dev_identity}"\n'
-    f'DEVELOPMENT_TEAM="{dev_team}"\n'
-    f'DEXT_BUILD_PROFILE="{dext_build_profile_name}"\n',
-    encoding="utf-8",
+def shell_quote(value: str) -> str:
+    return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+
+def update_env_file(path: pathlib.Path, header: str, values: dict[str, str]) -> None:
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    lines = existing.splitlines()
+    seen: set[str] = set()
+    next_lines: list[str] = []
+    for line in lines:
+        stripped = line.lstrip()
+        matched_key = None
+        for key in values:
+            if stripped.startswith(f"{key}=") or stripped.startswith(f"export {key}="):
+                matched_key = key
+                break
+        if matched_key is None:
+            next_lines.append(line)
+            continue
+        next_lines.append(f"{matched_key}={shell_quote(values[matched_key])}")
+        seen.add(matched_key)
+    missing = [key for key in values if key not in seen]
+    if missing:
+        if next_lines and next_lines[-1] != "":
+            next_lines.append("")
+        if header and header not in next_lines:
+            next_lines.append(header)
+        for key in missing:
+            next_lines.append(f"{key}={shell_quote(values[key])}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(next_lines).rstrip() + "\n", encoding="utf-8")
+
+
+update_env_file(
+    dev_env,
+    "# Development signing (managed by ./scripts/ojd signing configure)",
+    {
+        "CODESIGN_IDENTITY": apple_dev_identity,
+        "DEVELOPMENT_TEAM": dev_team,
+        "DEXT_BUILD_PROFILE": dext_build_profile_name,
+    },
 )
 
-print("Wrote scripts/.env.dev")
+print(f"Updated {dev_env}")
 
 try:
     devid_app_identity = pick_identity_matching_profile("Developer ID Application", gui_devid_profile)
@@ -633,19 +758,32 @@ except SystemExit as e:
     print("WARN: Release signing is NOT configured; Developer ID identity/profile mismatch:", file=sys.stderr)
     print(str(e), file=sys.stderr)
     print("", file=sys.stderr)
-    print("Wrote scripts/.env.dev (OK).", file=sys.stderr)
+    print(f"Updated {dev_env} (OK).", file=sys.stderr)
     raise SystemExit(0)
 
-rel_env.write_text(
-    "# Release signing (generated). Add notarization credentials separately.\n"
-    f'CODESIGN_IDENTITY="{devid_app_identity}"\n'
-    f'DEVELOPMENT_TEAM="{rel_team}"\n'
-    f'DEXT_BUILD_IDENTITY="{apple_dev_identity}"\n'
-    f'DEXT_BUILD_PROFILE="{dext_build_profile_name}"\n'
-    f'GUI_PROVISIONING_PROFILE="$HOME/Library/MobileDevice/Provisioning Profiles/{pathlib.Path(gui_devid_profile).name}"\n'
-    f'DAEMON_PROVISIONING_PROFILE="$HOME/Library/MobileDevice/Provisioning Profiles/{pathlib.Path(daemon_devid_profile).name}"\n',
-    encoding="utf-8",
+try:
+    daemon_devid_identity = pick_identity_matching_profile("Developer ID Application", daemon_devid_profile)
+except SystemExit as e:
+    print("", file=sys.stderr)
+    print("WARN: Release signing is NOT configured; daemon Developer ID profile mismatch:", file=sys.stderr)
+    print("Need: daemon profile embedded certificate must match an installed Developer ID Application signing identity.", file=sys.stderr)
+    print(str(e), file=sys.stderr)
+    raise SystemExit(0)
+
+update_env_file(
+    rel_env,
+    "# Release signing (managed by ./scripts/ojd signing configure)",
+    {
+        "CODESIGN_IDENTITY": devid_app_identity,
+        "GUI_CODESIGN_IDENTITY": devid_app_identity,
+        "DAEMON_CODESIGN_IDENTITY": daemon_devid_identity,
+        "DEVELOPMENT_TEAM": rel_team,
+        "DEXT_BUILD_IDENTITY": apple_dev_identity,
+        "DEXT_BUILD_PROFILE": dext_build_profile_name,
+        "GUI_PROVISIONING_PROFILE": f"$HOME/Library/MobileDevice/Provisioning Profiles/{pathlib.Path(gui_devid_profile).name}",
+        "DAEMON_PROVISIONING_PROFILE": f"$HOME/Library/MobileDevice/Provisioning Profiles/{pathlib.Path(daemon_devid_profile).name}",
+    },
 )
 
-print("Wrote scripts/.env.release")
+print(f"Updated {rel_env}")
 PY

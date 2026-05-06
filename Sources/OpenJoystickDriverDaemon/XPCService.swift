@@ -718,21 +718,21 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       )
     Task {
       let userSpace = userSpaceLock.withLock { userSpaceDispatcher }
-      try? await Task.sleep(for: .milliseconds(250))
+      try? await Task.sleep(nanoseconds: 250_000_000)
       await dextDispatcher.dispatch(events: [.buttonPressed(.a)], from: syntheticIdentifier)
       await userSpace?.dispatch(events: [.buttonPressed(.a)], from: syntheticIdentifier)
-      try? await Task.sleep(for: .milliseconds(250))
+      try? await Task.sleep(nanoseconds: 250_000_000)
       await dextDispatcher.dispatch(events: [.buttonReleased(.a)], from: syntheticIdentifier)
       await userSpace?.dispatch(events: [.buttonReleased(.a)], from: syntheticIdentifier)
-      try? await Task.sleep(for: .milliseconds(250))
+      try? await Task.sleep(nanoseconds: 250_000_000)
       await dextDispatcher.dispatch(events: [.leftStickChanged(x: 0.75, y: 0)], from: syntheticIdentifier)
       await userSpace?.dispatch(events: [.leftStickChanged(x: 0.75, y: 0)], from: syntheticIdentifier)
-      try? await Task.sleep(for: .milliseconds(250))
+      try? await Task.sleep(nanoseconds: 250_000_000)
       await dextDispatcher.dispatch(events: [.leftStickChanged(x: 0, y: 0)], from: syntheticIdentifier)
       await userSpace?.dispatch(events: [.leftStickChanged(x: 0, y: 0)], from: syntheticIdentifier)
     }
 
-    try? await Task.sleep(for: .seconds(Double(seconds)))
+    try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
 
     IOHIDManagerUnscheduleFromRunLoop(mgr, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
     IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
@@ -776,7 +776,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
   private static func readDriverKitInputReportCount() -> Int? {
     var iterator: io_iterator_t = 0
     let matching = IOServiceMatching("AppleUserHIDDevice")
-    let kr = IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator)
+    let kr = IOServiceGetMatchingServices(kIOMasterPortDefault, matching, &iterator)
     if kr != KERN_SUCCESS { return nil }
     defer { IOObjectRelease(iterator) }
 

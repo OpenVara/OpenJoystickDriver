@@ -39,7 +39,7 @@ let appleTestingFrameworkLinkerSettings: [LinkerSetting] = [
 
 let package = Package(
   name: "OpenJoystickDriver",
-  platforms: [.macOS(.v13)],
+  platforms: [.macOS(.v10_15)],
   products: [
     .library(name: "OpenJoystickDriverKit", targets: ["OpenJoystickDriverKit"]),
   ],
@@ -73,6 +73,7 @@ let package = Package(
         "App/Info.plist",
         "App/com.openjoystickdriver.daemon.plist",
       ],
+      resources: [.copy("Resources")],
       linkerSettings: [
         .linkedFramework("SystemExtensions"),
       ]

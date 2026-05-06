@@ -38,7 +38,7 @@ XPC status/control APIs.
 
 ## Package and Runtime Surfaces
 
-- `Package.swift`: Swift tools version 6.2; macOS 13 minimum.
+- `Package.swift`: Swift tools version 6.2; macOS 10.15 minimum.
 - `../SwiftUSB/`: external SwiftUSB libusb wrapper package.
 - `Sources/OpenJoystickDriverKit/`: parser, profile, virtual backend, service,
   and shared daemon logic.

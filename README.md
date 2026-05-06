@@ -14,7 +14,7 @@ new controller profiles.
 
 | Area                                    | Current state                                                                             |
 | --------------------------------------- | ----------------------------------------------------------------------------------------- |
-| macOS support                           | macOS 13 or later                                                                         |
+| macOS support                           | macOS 10.15 or later                                                                      |
 | Xbox One / Series class USB controllers | Working through the GIP protocol                                                          |
 | GameSir G7 SE                           | Hardware verified, including Xbox One HID compatibility reports                           |
 | Flydigi Vader 5S                        | Supported with a per-device schema, endpoint config, and `setConfiguration(1)` quirk      |
@@ -53,7 +53,7 @@ compatibility mode as a standard `Xbox Wireless Controller` (`VID 045e`,
 
 ## Requirements
 
-- macOS 13 or later
+- macOS 10.15 or later
 - Xcode Command Line Tools or full Xcode
 - `libusb`
 
@@ -77,8 +77,9 @@ cd OpenJoystickDriver
 ```
 
 The dev rebuild creates a signed app bundle and installs it to
-`/Applications/OpenJoystickDriver.app`. The daemon is managed through
-`SMAppService`; do not bootstrap it manually with `launchctl`.
+`/Applications/OpenJoystickDriver.app`. On macOS 13 and newer, the daemon is
+managed through `SMAppService`; on macOS 10.15 through 12, OJD installs the
+bundled LaunchAgent plist through `launchctl`.
 
 ## Permissions
 
@@ -259,6 +260,11 @@ and copyrighted by Linux kernel contributors. OpenJoystickDriver does not copy
 Linux driver implementation code for these profiles; it expresses controller
 metadata and named GIP startup packet selections as OpenJoystickDriver JSON
 profiles for the existing parser surfaces.
+
+The OpenJoystickDriver app icon is adapted from the Enjoyable app icon in
+[`MacThings/enjoyable`](https://github.com/MacThings/enjoyable). Enjoyable's
+README credits the joystick icon to the Tango icon set and notes that the icon
+is public domain.
 
 ## Star History
 

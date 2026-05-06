@@ -15,6 +15,7 @@ import SwiftUI
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.accessory)
+    configureApplicationIcon()
     setupStatusItem()
     requestPermissions()
     Task { @MainActor in await model.start() }
@@ -27,15 +28,27 @@ import SwiftUI
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
+  private func configureApplicationIcon() {
+    if let url = Bundle.main.url(forResource: "OpenJoystickDriver", withExtension: "icns"),
+       let image = NSImage(contentsOf: url)
+    {
+      NSApp.applicationIconImage = image
+    }
+  }
+
   // MARK: - Status Item
 
   private func setupStatusItem() {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     if let button = item.button {
-      button.image = NSImage(
-        systemSymbolName: "gamecontroller.fill",
-        accessibilityDescription: "OpenJoystickDriver"
-      )
+      if #available(macOS 11.0, *) {
+        button.image = NSImage(
+          systemSymbolName: "gamecontroller.fill",
+          accessibilityDescription: "OpenJoystickDriver"
+        )
+      } else {
+        button.image = NSImage(named: NSImage.actionTemplateName)
+      }
       button.target = self
       button.action = #selector(togglePopover(_:))
     }

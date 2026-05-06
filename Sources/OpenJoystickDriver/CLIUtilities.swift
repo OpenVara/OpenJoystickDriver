@@ -68,7 +68,7 @@ func requireApplicationsBundleOrExit() {
 /// Ensures the app bundle is validly signed.
 ///
 /// This catches the common dev failure mode where a `.dext` is copied into the app bundle
-/// after signing, which breaks the signature and causes SMAppService registration to fail.
+/// after signing, which breaks the signature and causes daemon registration to fail.
 func requireValidBundleSignatureOrExit(action: String) {
   let appPath = Bundle.main.bundlePath
   let process = Process()

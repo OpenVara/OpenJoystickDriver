@@ -3,8 +3,8 @@ import ServiceManagement
 
 /// Manages daemon LaunchAgent lifecycle.
 ///
-/// Uses ServiceManagement (`SMAppService`) so installs/restarts do not rely on
-/// `launchctl bootstrap` (which can fail with "Input/output error" in some shells).
+/// Uses ServiceManagement (`SMAppService`) on macOS 13 and newer, with a
+/// launchd plist fallback for macOS 10.15 through 12.
 public enum DaemonManager: Sendable {
   /// Launchd job label.
   public static let label = "com.openjoystickdriver.daemon"
@@ -15,16 +15,20 @@ public enum DaemonManager: Sendable {
   ///   `OpenJoystickDriver.app/Contents/Library/LaunchAgents/<plistName>`
   public static let agentPlistName = "\(label).plist"
 
+  @available(macOS 13.0, *)
   private static var appService: SMAppService {
     SMAppService.agent(plistName: agentPlistName)
   }
 
   /// Whether the daemon LaunchAgent is registered for the current user.
   public static var isInstalled: Bool {
-    switch appService.status {
-    case .notRegistered: return false
-    default: return true
+    if #available(macOS 13.0, *) {
+      switch appService.status {
+      case .notRegistered: return false
+      default: return true
+      }
     }
+    return legacyIsInstalled
   }
 
   /// Registers the daemon LaunchAgent.
@@ -32,8 +36,13 @@ public enum DaemonManager: Sendable {
   /// - Important: The LaunchAgent plist must be embedded in the app bundle.
   public static func install() throws {
     do {
-      try appService.register()
-      print("[DaemonManager] Installed (SMAppService)")
+      if #available(macOS 13.0, *) {
+        try appService.register()
+        print("[DaemonManager] Installed (SMAppService)")
+      } else {
+        try legacyInstall()
+        print("[DaemonManager] Installed (launchctl)")
+      }
     } catch {
       throw wrap(error, hint: installHint())
     }
@@ -42,8 +51,13 @@ public enum DaemonManager: Sendable {
   /// Unregisters the daemon LaunchAgent.
   public static func uninstall() throws {
     do {
-      try appService.unregister()
-      print("[DaemonManager] Uninstalled (SMAppService)")
+      if #available(macOS 13.0, *) {
+        try appService.unregister()
+        print("[DaemonManager] Uninstalled (SMAppService)")
+      } else {
+        try legacyUninstall()
+        print("[DaemonManager] Uninstalled (launchctl)")
+      }
     } catch {
       throw wrap(error, hint: uninstallHint())
     }
@@ -52,16 +66,21 @@ public enum DaemonManager: Sendable {
   /// Starts the daemon (idempotent).
   ///
   /// ServiceManagement does not have a separate "start" primitive; registering
-  /// an agent with `RunAtLoad` starts it.
+  /// or bootstrapping an agent with `RunAtLoad` starts it.
   public static func start() throws { try install() }
 
   /// Restarts the daemon (best-effort).
   public static func restart() throws {
     do {
-      // Unregister+register is the most reliable cross-shell restart path.
-      try? appService.unregister()
-      try appService.register()
-      print("[DaemonManager] Restarted (SMAppService)")
+      if #available(macOS 13.0, *) {
+        // Unregister+register is the most reliable cross-shell restart path.
+        try? appService.unregister()
+        try appService.register()
+        print("[DaemonManager] Restarted (SMAppService)")
+      } else {
+        try legacyRestart()
+        print("[DaemonManager] Restarted (launchctl)")
+      }
     } catch {
       throw wrap(error, hint: restartHint())
     }
@@ -163,6 +182,69 @@ public enum DaemonManager: Sendable {
 
   // MARK: - Private
 
+  private static var launchdDomain: String { "gui/\(getuid())" }
+  private static var launchdTarget: String { "\(launchdDomain)/\(label)" }
+
+  private static var bundledLaunchAgentURL: URL {
+    Bundle.main.bundleURL
+      .appendingPathComponent("Contents", isDirectory: true)
+      .appendingPathComponent("Library", isDirectory: true)
+      .appendingPathComponent("LaunchAgents", isDirectory: true)
+      .appendingPathComponent(agentPlistName)
+  }
+
+  private static var installedLaunchAgentURL: URL {
+    FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library", isDirectory: true)
+      .appendingPathComponent("LaunchAgents", isDirectory: true)
+      .appendingPathComponent(agentPlistName)
+  }
+
+  private static var legacyIsInstalled: Bool {
+    if (try? launchctl(["print", launchdTarget])) != nil { return true }
+    return FileManager.default.fileExists(atPath: installedLaunchAgentURL.path)
+  }
+
+  private static func legacyInstall() throws {
+    try installLaunchAgentPlist()
+    _ = try? launchctl(["bootout", launchdTarget])
+    try launchctl(["bootstrap", launchdDomain, installedLaunchAgentURL.path])
+  }
+
+  private static func legacyUninstall() throws {
+    _ = try? launchctl(["bootout", launchdTarget])
+    if FileManager.default.fileExists(atPath: installedLaunchAgentURL.path) {
+      try FileManager.default.removeItem(at: installedLaunchAgentURL)
+    }
+  }
+
+  private static func legacyRestart() throws {
+    try installLaunchAgentPlist()
+    _ = try? launchctl(["bootout", launchdTarget])
+    try launchctl(["bootstrap", launchdDomain, installedLaunchAgentURL.path])
+    _ = try? launchctl(["kickstart", "-k", launchdTarget])
+  }
+
+  private static func installLaunchAgentPlist() throws {
+    let fm = FileManager.default
+    guard fm.fileExists(atPath: bundledLaunchAgentURL.path) else {
+      throw NSError(
+        domain: "OpenJoystickDriver.DaemonManager",
+        code: 2,
+        userInfo: [
+          NSLocalizedDescriptionKey:
+            "LaunchAgent plist not found at \(bundledLaunchAgentURL.path)."
+        ]
+      )
+    }
+    let directory = installedLaunchAgentURL.deletingLastPathComponent()
+    try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+    if fm.fileExists(atPath: installedLaunchAgentURL.path) {
+      try fm.removeItem(at: installedLaunchAgentURL)
+    }
+    try fm.copyItem(at: bundledLaunchAgentURL, to: installedLaunchAgentURL)
+  }
+
   private static func wrap(_ error: Error, hint: String) -> NSError {
     NSError(
       domain: "OpenJoystickDriver.DaemonManager",
@@ -176,7 +258,7 @@ public enum DaemonManager: Sendable {
     Fix checklist:
       1) Run the /Applications copy: `/Applications/OpenJoystickDriver.app` (not `.build/...`).
       2) Ensure the app bundle contains: `Contents/Library/LaunchAgents/\(agentPlistName)`.
-      3) If you previously installed via launchctl scripts, uninstall first: `OpenJoystickDriver --headless uninstall`.
+      3) If a previous daemon is stuck, uninstall first: `OpenJoystickDriver --headless uninstall`.
     """
   }
 
@@ -228,4 +310,3 @@ public enum DaemonManager: Sendable {
     return out
   }
 }
-
