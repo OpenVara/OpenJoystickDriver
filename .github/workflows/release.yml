@@ -20,6 +20,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 360
     env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
       APPLE_DEVELOPMENT_CERT_BASE64: ${{ secrets.APPLE_DEVELOPMENT_CERT_BASE64 }}
       DEVELOPER_ID_APPLICATION_CERT_BASE64: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_BASE64 }}
       CERTIFICATE_SECRET: ${{ secrets.CERTIFICATE_SECRET }}
