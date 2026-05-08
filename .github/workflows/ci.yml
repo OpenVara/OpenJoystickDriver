@@ -19,10 +19,6 @@ jobs:
     name: macOS SwiftPM
     runs-on: macos-26
     timeout-minutes: 45
-    env:
-      DEVELOPER_DIR: /Library/Developer/CommandLineTools
-      SDKROOT: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6
