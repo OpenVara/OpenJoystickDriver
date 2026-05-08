@@ -45,8 +45,8 @@ write_base64_file APPLE_DEVELOPMENT_CERT_BASE64 "$apple_dev_payload"
 write_base64_file DEVELOPER_ID_APPLICATION_CERT_BASE64 "$developer_id_payload"
 
 echo "Importing signing certificates..."
-security import "$apple_dev_payload" -k "$keychain_path" -P "$CERTIFICATE_SECRET" -T /usr/bin/codesign -T /usr/bin/security
-security import "$developer_id_payload" -k "$keychain_path" -P "$CERTIFICATE_SECRET" -T /usr/bin/codesign -T /usr/bin/security
+security import "$apple_dev_payload" -f pkcs12 -k "$keychain_path" -P "$CERTIFICATE_SECRET" -T /usr/bin/codesign -T /usr/bin/security
+security import "$developer_id_payload" -f pkcs12 -k "$keychain_path" -P "$CERTIFICATE_SECRET" -T /usr/bin/codesign -T /usr/bin/security
 security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_SECRET" "$keychain_path"
 
 echo "Installing provisioning profiles..."
