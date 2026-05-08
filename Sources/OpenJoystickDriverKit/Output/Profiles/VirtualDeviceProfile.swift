@@ -24,7 +24,7 @@ public struct VirtualDeviceProfile: Equatable, Sendable {
     manufacturer: "OpenJoystickDriver"
   )
 
-  public static let openJoystickDriverSDLMacOS = VirtualDeviceProfile(
+  public static let openJoystickDriverSDL2_3 = Self(
     vendorID: 0x4F4A,
     productID: 0x4448,
     versionNumber: 0x0408,
@@ -64,13 +64,13 @@ public struct VirtualDeviceProfile: Equatable, Sendable {
     manufacturer: "Microsoft"
   )
 
-  /// SDL macOS compatibility identity.
+  /// SDL 2/3 compatibility identity.
   ///
   /// This profile is intentionally not exposed in the Compatibility UI. macOS GameController
   /// claims SDL-known third-party controller identities before SDL's IOKit backend can use
   /// them, so the generic OpenJoystickDriver user-space identity is the consumer-facing
   /// SDL/PCSX2 path.
-  public static let sdlMacGamepad = VirtualDeviceProfile(
+  public static let sdlGamepad = Self(
     vendorID: 0x1BAD,
     productID: 0xF901,
     versionNumber: 0x0000,

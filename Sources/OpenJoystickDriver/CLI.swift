@@ -47,7 +47,7 @@ struct CLI {
         diagnose   Hardware diagnostics
         userspace  Toggle user-space virtual gamepad (IOHIDUserDevice)
         output     Set output routing mode (DriverKit/user-space)
-        compat     Set compatibility identity (generic-hid/sdl-macos/x360-hid/xone-hid)
+        compat     Set compatibility identity (generic-hid/sdl2-3/x360-hid/xone-hid)
         selftest   Count input events on virtual devices
         sysext     Manage DriverKit system extension
         install    Register daemon LaunchAgent

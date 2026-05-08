@@ -8,20 +8,20 @@ public let xpcServiceName = "com.openjoystickdriver.xpc"
 /// Which identity/protocol the user-space Compatibility virtual device should publish.
 ///
 /// IMPORTANT:
-/// - `sdl-macos` is the mature macOS SDL/Steam/PCSX2 path: OJD-owned identity plus
+/// - `sdl2-3` is the mature SDL/Steam/PCSX2 path: OJD-owned identity plus
 ///   an explicit SDL mapping.
 /// - `generic-hid` is a plain OJD HID GamePad for consumers that inspect descriptors directly.
 /// - `xone-hid` and `x360-hid` are hardware-spoof profiles. They are only correct for
 ///   consumers whose expected descriptor/report layout exactly matches the selected profile.
 public enum CompatibilityIdentity: Codable, CaseIterable, Sendable, Equatable {
   case genericHID
-  case sdlMacOS
+  case sdl2_3
   case x360HID
   case xoneHID
 
   public static let allCases: [CompatibilityIdentity] = [
     .genericHID,
-    .sdlMacOS,
+    .sdl2_3,
     .x360HID,
     .xoneHID,
   ]
@@ -30,8 +30,8 @@ public enum CompatibilityIdentity: Codable, CaseIterable, Sendable, Equatable {
     switch rawValue {
     case "generic-hid":
       self = .genericHID
-    case "sdl-macos":
-      self = .sdlMacOS
+    case "sdl2-3":
+      self = .sdl2_3
     case "x360-hid":
       self = .x360HID
     case "xone-hid":
@@ -44,7 +44,7 @@ public enum CompatibilityIdentity: Codable, CaseIterable, Sendable, Equatable {
   public var rawValue: String {
     switch self {
     case .genericHID: "generic-hid"
-    case .sdlMacOS: "sdl-macos"
+    case .sdl2_3: "sdl2-3"
     case .x360HID: "x360-hid"
     case .xoneHID: "xone-hid"
     }
@@ -67,7 +67,7 @@ public enum CompatibilityIdentity: Codable, CaseIterable, Sendable, Equatable {
 
   public var disablesDriverKitMirror: Bool {
     switch self {
-    case .genericHID, .sdlMacOS:
+    case .genericHID, .sdl2_3:
       true
     case .xoneHID, .x360HID:
       false
@@ -157,7 +157,7 @@ public enum VirtualDeviceMode: String, Codable, CaseIterable, Sendable {
 
   /// Sets which identity/protocol to emulate in Compatibility mode (user-space IOHIDUserDevice).
   ///
-  /// Values: "generic-hid", "sdl-macos", "x360-hid", "xone-hid".
+  /// Values: "generic-hid", "sdl2-3", "x360-hid", "xone-hid".
   @objc func setCompatibilityIdentity(_ raw: String, reply: @escaping (Bool) -> Void)
 
   /// Gets which identity/protocol is configured for Compatibility mode.

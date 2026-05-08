@@ -37,10 +37,15 @@ jobs:
       - name: Install dependencies
         run: |
           brew install libusb
+          brew install swiftlint
 
       - name: Validate controller profiles
         run: |
           bash scripts/ojd validate profiles
+
+      - name: Lint Swift
+        run: |
+          bash scripts/ojd lint
 
       - name: Build package
         run: |

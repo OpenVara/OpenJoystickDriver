@@ -36,12 +36,12 @@ public enum CompatibilityOutputProfileCatalog {
         isHardwareSpoof: false,
         emitsXboxGuideReport: false
       )
-    case .sdlMacOS:
+    case .sdl2_3:
       CompatibilityOutputProfile(
         identity: identity,
-        deviceProfile: .openJoystickDriverSDLMacOS,
-        displayName: "SDL macOS",
-        notes: "OJD-owned macOS SDL/Steam/PCSX2 identity backed by an explicit SDL mapping.",
+        deviceProfile: .openJoystickDriverSDL2_3,
+        displayName: "SDL 2/3",
+        notes: "OJD-owned SDL/Steam/PCSX2 identity backed by an explicit SDL mapping.",
         isHardwareSpoof: false,
         emitsXboxGuideReport: false
       )
@@ -59,7 +59,7 @@ public enum CompatibilityOutputProfileCatalog {
         identity: identity,
         deviceProfile: .xboxOneS,
         displayName: "Xbox One HID",
-        notes: "Experimental Microsoft hardware-spoof profile; macOS SDL may remap this through Xbox-specific paths.",
+        notes: "Experimental Microsoft hardware-spoof profile; SDL may use Xbox-specific paths.",
         isHardwareSpoof: true,
         emitsXboxGuideReport: true
       )

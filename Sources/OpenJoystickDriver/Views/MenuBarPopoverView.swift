@@ -232,14 +232,14 @@ struct MenuBarPopoverView: View {
           set: { v in Task { await model.setCompatibilityIdentity(v) } }
         )
       ) {
-        Text("SDL macOS").tag(CompatibilityIdentity.sdlMacOS.rawValue)
+        Text("SDL 2/3").tag(CompatibilityIdentity.sdl2_3.rawValue)
         Text("Generic HID").tag(CompatibilityIdentity.genericHID.rawValue)
         Text("Xbox 360 HID").tag(CompatibilityIdentity.x360HID.rawValue)
         Text("Xbox One HID").tag(CompatibilityIdentity.xoneHID.rawValue)
       }
       .disabled(!model.daemonConnected || !compatSelected)
 
-      Text("Used only in Compatibility mode. SDL macOS is the default for Steam, PCSX2, and SDL apps.")
+      Text("Used only in Compatibility mode. SDL 2/3 is the default for Steam, PCSX2, and SDL.")
         .font(.caption)
         .foregroundColor(.secondary)
 

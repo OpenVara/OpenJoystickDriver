@@ -30,7 +30,7 @@ Use the non-invasive launcher instead:
 
 That launch path sets SDL_GAMECONTROLLERCONFIG_FILE and also switches
 OpenJoystickDriver to the validated PCSX2 route:
-compat sdl-macos
+compat sdl2-3
   output secondary
 
 To make normal PCSX2 launches use this mapping, re-run this installer from

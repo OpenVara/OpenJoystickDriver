@@ -179,20 +179,20 @@ copy under `/Library/SystemExtensions`.
 
 Compatibility mode has four first-class user-space HID profiles:
 
-- `sdl-macos`: default for macOS SDL consumers such as Steam and PCSX2. It uses
+- `sdl2-3`: default for SDL consumers such as Steam and PCSX2. It uses
   an OJD-owned identity plus an explicit SDL mapping.
 - `generic-hid`: OJD-owned HID GamePad identity for apps that inspect the HID
   descriptor directly.
 - `x360-hid`: experimental Xbox 360 HID hardware-spoof profile.
 - `xone-hid`: experimental Xbox One HID hardware-spoof profile.
 
-SDL consumers need a game controller mapping for the SDL macOS user-space identity.
+SDL consumers need a game controller mapping for the SDL 2/3 user-space identity.
 The repo ships the known-good mapping at
 `Resources/SDL/openjoystickdriver.gamecontrollerdb.txt`. Use `platform:macOS`
 for SDL3 consumers such as current PCSX2 builds; older `platform:Mac OS X`
 mapping lines can be ignored by SDL 3.2.x.
 
-For PCSX2, use SDL macOS Compatibility with user-space-only output.
+For PCSX2, use SDL 2/3 Compatibility with user-space-only output.
 The SDL mapping targets the user-space PID `0x4448`, not the DriverKit PID `0x4447`.
 Do not spoof an SDL-known third-party controller VID/PID for this path: on macOS,
 GameController.framework can claim those identities before SDL's IOKit backend
@@ -213,7 +213,7 @@ with the repo mapping override:
 
 This sets `SDL_GAMECONTROLLERCONFIG` and `SDL_GAMECONTROLLERCONFIG_FILE` for
 PCSX2 without modifying the signed app bundle. It also sets the installed daemon
-to the known-good PCSX2 routing (`compat sdl-macos`, `output secondary`) before launch.
+to the known-good PCSX2 routing (`compat sdl2-3`, `output secondary`) before launch.
 For normal PCSX2 launches, install the merged user-data SDL database and the
 stale-index-tolerant input profile:
 

@@ -125,11 +125,11 @@ The xpad.c Xbox batches are attributed in README.md to Linux
 `drivers/input/joystick/xpad.c`; preserve that attribution when adding more
 xpad-derived controller metadata or GIP startup-packet selections.
 
-Compatibility profiles are `sdl-macos`, `generic-hid`, `x360-hid`, and
-`xone-hid`. `sdl-macos` is the default OJD-owned identity for macOS SDL
+Compatibility profiles are `sdl2-3`, `generic-hid`, `x360-hid`, and
+`xone-hid`. `sdl2-3` is the default OJD-owned identity for SDL
 consumers such as Steam and PCSX2. `generic-hid` is for descriptor-driven apps.
 `x360-hid` and `xone-hid` are experimental hardware-spoof profiles.
-PCSX2 should use SDL macOS Compatibility with user-space-only output. The mapped
+PCSX2 should use SDL 2/3 Compatibility with user-space-only output. The mapped
 user-space PID differs from DriverKit so stale dext copies stay unmapped.
 Do not replace this with an SDL-known third-party VID/PID: macOS
 GameController.framework can claim those virtual identities before SDL's IOKit
@@ -144,7 +144,7 @@ hat-only D-pad, and no Guide/vibration/headset semantics.
 If the PCSX2 app bundle database lacks the OJD mapping, launch it through
 `./scripts/ojd launch pcsx2`; this sets `SDL_GAMECONTROLLERCONFIG` and
 `SDL_GAMECONTROLLERCONFIG_FILE` without modifying the signed app bundle, and
-best-effort applies `compat sdl-macos` plus `output secondary` before launch.
+best-effort applies `compat sdl2-3` plus `output secondary` before launch.
 For normal PCSX2 launches, `./scripts/ojd install pcsx2-sdl-db` installs a
 merged user-data SDL database at `~/Library/Application Support/PCSX2`, and
 `./scripts/ojd install pcsx2-profile` installs an `OpenJoystickDriver` input

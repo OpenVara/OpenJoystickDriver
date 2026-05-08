@@ -50,7 +50,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     self.dextDispatcher = dextDispatcher
     self.userSpaceEnabled = UserDefaults.standard.bool(forKey: Self.userSpaceEnabledDefaultsKey)
     let savedCompat = UserDefaults.standard.string(forKey: Self.compatibilityIdentityDefaultsKey)
-    self.compatibilityIdentity = CompatibilityIdentity(rawValue: savedCompat ?? "") ?? .sdlMacOS
+    self.compatibilityIdentity = CompatibilityIdentity(rawValue: savedCompat ?? "") ?? .sdl2_3
     let savedVirtual = UserDefaults.standard.string(forKey: Self.virtualDeviceModeDefaultsKey)
     if let raw = savedVirtual, let mode = VirtualDeviceMode(rawValue: raw) {
       self.virtualDeviceMode = mode
@@ -436,7 +436,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       userSpaceStatus = "off"
     }
 
-    compatibilityIdentity = .sdlMacOS
+    compatibilityIdentity = .sdl2_3
     virtualDeviceMode = .compatUserSpace
     effectiveOutputMode = .primaryOnly
     applyMode(.compatUserSpace)
@@ -462,7 +462,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     switch identity {
     case .genericHID:
       format = OJDGenericGamepadFormat()
-    case .sdlMacOS:
+    case .sdl2_3:
       format = OJDGenericGamepadFormat(includesDpadButtonBits: false)
     case .xoneHID:
       // Xbox One identity for SDL/Steam/PCSX2:

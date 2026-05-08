@@ -139,7 +139,7 @@ public enum GamepadHIDDescriptor {
 
   /// Button bit assignments matching Xbox One S Bluetooth HID order.
   ///
-  /// SDL macOS mapping for 045E:02EA:
+  /// SDL 2/3 mapping for 045E:02EA:
   /// a:b0, b:b1, x:b2, y:b3, leftshoulder:b4, rightshoulder:b5,
   /// leftstick:b6, rightstick:b7, start:b8, back:b9, guide:b10,
   /// dpup:b11, dpdown:b12, dpleft:b13, dpright:b14, misc1:b15

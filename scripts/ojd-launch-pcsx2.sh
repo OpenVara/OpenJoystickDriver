@@ -36,8 +36,8 @@ export SDL_JOYSTICK_HIDAPI_XBOX_ONE=0
 export SDL_JOYSTICK_HIDAPI_GIP=0
 
 if [[ "${OJD_SKIP_PCSX2_ROUTING:-0}" != "1" && -x "$OJD_CLI" ]]; then
-  "$OJD_CLI" --headless compat sdl-macos >/dev/null || {
-    echo "WARN: could not set OpenJoystickDriver compatibility identity to sdl-macos" >&2
+  "$OJD_CLI" --headless compat sdl2-3 >/dev/null || {
+    echo "WARN: could not set OpenJoystickDriver compatibility identity to sdl2-3" >&2
   }
   "$OJD_CLI" --headless output secondary >/dev/null || {
     echo "WARN: could not set OpenJoystickDriver output mode to secondary" >&2

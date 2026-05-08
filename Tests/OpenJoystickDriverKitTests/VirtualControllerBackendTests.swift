@@ -26,7 +26,7 @@ import Testing
   @Test("Compatibility identities expose stable architecture ids only")
   func compatibilityIdentityIDs() {
     #expect(CompatibilityIdentity(rawValue: "generic-hid") == .genericHID)
-    #expect(CompatibilityIdentity(rawValue: "sdl-macos") == .sdlMacOS)
+    #expect(CompatibilityIdentity(rawValue: "sdl2-3") == .sdl2_3)
     #expect(CompatibilityIdentity(rawValue: "x360-hid") == .x360HID)
     #expect(CompatibilityIdentity(rawValue: "xone-hid") == .xoneHID)
 
@@ -36,7 +36,7 @@ import Testing
   @Test("Compatibility profile catalog separates SDL, generic HID, and hardware spoof modes")
   func compatibilityProfileCatalog() {
     let generic = CompatibilityOutputProfileCatalog.profile(for: .genericHID)
-    let sdl = CompatibilityOutputProfileCatalog.profile(for: .sdlMacOS)
+    let sdl = CompatibilityOutputProfileCatalog.profile(for: .sdl2_3)
     let x360 = CompatibilityOutputProfileCatalog.profile(for: .x360HID)
     let xone = CompatibilityOutputProfileCatalog.profile(for: .xoneHID)
 
@@ -61,9 +61,10 @@ import Testing
     #expect((UInt16(generic[1]) & 0x88) == 0x88)
     #expect((generic[14] & 0x0F) == GamepadHIDDescriptor.Hat.north.rawValue)
 
-    let sdlMacOS = OJDGenericGamepadFormat(includesDpadButtonBits: false).buildInputReport(from: state)
-    #expect((UInt16(sdlMacOS[1]) & 0x78) == 0)
-    #expect((UInt16(sdlMacOS[1]) & 0x80) == 0x80)
-    #expect((sdlMacOS[14] & 0x0F) == GamepadHIDDescriptor.Hat.north.rawValue)
+    let sdl2_3 = OJDGenericGamepadFormat(includesDpadButtonBits: false)
+      .buildInputReport(from: state)
+    #expect((UInt16(sdl2_3[1]) & 0x78) == 0)
+    #expect((UInt16(sdl2_3[1]) & 0x80) == 0x80)
+    #expect((sdl2_3[14] & 0x0F) == GamepadHIDDescriptor.Hat.north.rawValue)
   }
 }

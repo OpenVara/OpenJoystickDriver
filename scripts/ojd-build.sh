@@ -797,7 +797,7 @@ rebuild_full() {
 run_lint() {
   command -v swiftlint >/dev/null 2>&1 || die "swiftlint not found (brew install swiftlint)"
   cd "$PROJECT_DIR"
-  swiftlint lint --strict
+  swiftlint lint --strict --baseline .swiftlint-baseline.json
 }
 
 cmd="${1:-}"

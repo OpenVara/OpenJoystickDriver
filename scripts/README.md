@@ -190,12 +190,12 @@ OJD_ENV=release ./scripts/ojd notarize submit
 OJD_ENV=release ./scripts/ojd notarize status
 ```
 
-### Tester package
+### Release package
 
-For a tester build that does not install anything on the build machine:
+For a release build that does not install anything on the build machine:
 
 ```bash
-./scripts/ojd package tester 0.1.0-test.1
+./scripts/ojd package release 0.1.0
 ```
 
 This command uses release signing, embeds the DriverKit extension into the app
@@ -210,11 +210,13 @@ The package command does not register the LaunchAgent and does not submit a
 system-extension activation request on the build machine. Testers still need to
 install and approve the app/system extension locally.
 
-## GitHub Actions tester release
+## GitHub Actions release
 
-`.github/workflows/release-tester.yml` runs on `v*` tags and by manual dispatch.
+`.github/workflows/release.yml` runs on plain SemVer tags such as `0.1.0` and
+by manual dispatch.
 It installs `libusb`, validates profiles, imports signing material, builds a
-release app, notarizes it, and uploads the tester zip as a workflow artifact.
+release app, notarizes it, uploads the release zip as a workflow artifact, and
+publishes the GitHub Release.
 
 Required repository secrets:
 
@@ -233,7 +235,7 @@ The profile secrets are base64-encoded `.provisionprofile` files.
 
 ### Generate GitHub secrets locally
 
-To collect all tester-release secrets in one local step:
+To collect all release secrets in one local step:
 
 ```bash
 ./scripts/ojd signing export-github-secrets --repo xsyetopz/OpenJoystickDriver

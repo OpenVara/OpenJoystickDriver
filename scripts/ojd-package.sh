@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Release packaging helper for notarized tester builds.
+# Release packaging helper for notarized app builds.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,7 +10,7 @@ die() { echo "ERROR: $*" >&2; exit 2; }
 usage() {
   cat <<'TXT'
 Usage:
-  OJD_ENV=release ./scripts/ojd package tester [version]
+  OJD_ENV=release ./scripts/ojd package release [version]
 
 Builds a release-signed app, embeds the DriverKit extension, submits it for
 notarization, staples the accepted ticket, and writes:
@@ -30,8 +30,8 @@ if [[ "$cmd" == "-h" || "$cmd" == "--help" || "$cmd" == "help" ]]; then
   exit 0
 fi
 
-[[ "$cmd" == "tester" ]] || die "Unknown package command: ${cmd:-<empty>} (expected: tester)"
-[[ "$OJD_ENV" == "release" ]] || die "package tester requires OJD_ENV=release"
+[[ "$cmd" == "release" ]] || die "Unknown package command: ${cmd:-<empty>} (expected: release)"
+[[ "$OJD_ENV" == "release" ]] || die "package $cmd requires OJD_ENV=release"
 
 version="${1:-${GITHUB_REF_NAME:-$(date -u +%Y%m%d%H%M%S)}}"
 safe_version="$(printf '%s' "$version" | tr -c 'A-Za-z0-9._-' '-')"
@@ -67,10 +67,10 @@ echo "=== Verify notarized app ==="
 /usr/sbin/spctl --assess --type execute --verbose=4 "$app_path"
 
 echo ""
-echo "=== Create tester zip ==="
+echo "=== Create release zip ==="
 /usr/bin/ditto -c -k --keepParent "$app_path" "$artifact_zip"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
 
 echo ""
-echo "Tester artifact ready:"
+echo "Release artifact ready:"
 echo "  $artifact_zip"
