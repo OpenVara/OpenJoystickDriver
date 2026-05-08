@@ -6,6 +6,11 @@ import Testing
 
 private let gamesirVID: UInt16 = 13623  // 0x3537
 private let gamesirPID: UInt16 = 4112  // 0x1010
+private let hardwareTestsEnabled =
+  ProcessInfo.processInfo.environment["OJD_HARDWARE_TESTS"] == "1"
+  || ProcessInfo.processInfo.environment["CI"] != "true"
+private let hardwareSkipMessage =
+  "[HardwareTest] Skipping USB hardware test in CI; set OJD_HARDWARE_TESTS=1 to require it."
 
 /// Shared USBContext for all hardware tests.
 ///
@@ -16,6 +21,10 @@ private let sharedContext: USBContext? = try? USBContext()
 @Suite("Hardware Pipeline Tests", .serialized) struct HardwarePipelineTests {
 
   @Test("Gamesir G7 SE is enumerated by SwiftUSB") func deviceEnumeration() async throws {
+    guard hardwareTestsEnabled else {
+      print(hardwareSkipMessage)
+      return
+    }
     guard let context = sharedContext else {
       Issue.record("Failed to create USBContext")
       return
@@ -35,6 +44,10 @@ private let sharedContext: USBContext? = try? USBContext()
   }
 
   @Test("GIP handshake and single input report read") func gipHandshakeAndInput() async throws {
+    guard hardwareTestsEnabled else {
+      print(hardwareSkipMessage)
+      return
+    }
     guard let context = sharedContext else {
       Issue.record("Failed to create USBContext")
       return
