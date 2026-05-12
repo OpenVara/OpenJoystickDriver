@@ -81,7 +81,7 @@ jobs:
           retention-days: 14
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release.outputs.tag }}
           name: OpenJoystickDriver ${{ steps.release.outputs.tag }}
