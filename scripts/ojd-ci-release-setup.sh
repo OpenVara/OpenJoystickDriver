@@ -57,7 +57,9 @@ write_base64_file OPENJOYSTICKDRIVER_DEXT_PROFILE_BASE64 "$profiles_dir/OpenJoys
 echo "Generating release signing environment..."
 (
   cd "$PROJECT_DIR"
-  ./scripts/ojd signing configure
+  GUI_DEV_PROFILE="$profiles_dir/OpenJoystickDriver_DevID.provisionprofile" \
+    DAEMON_DEV_PROFILE="$profiles_dir/OpenJoystickDriverDaemon_DevID.provisionprofile" \
+    ./scripts/ojd signing configure
 )
 
 echo "Release signing setup complete."
