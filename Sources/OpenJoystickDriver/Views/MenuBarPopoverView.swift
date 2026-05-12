@@ -229,7 +229,11 @@ struct MenuBarPopoverView: View {
         .font(.caption)
         .foregroundColor(.secondary)
 
-      Text("ⓘ Compatibility is the normal app/game mode. DriverKit is for the system extension path; Both is only for debugging duplicate-output issues.")
+      Text(
+        "ⓘ Compatibility is the normal app/game mode. " +
+          "DriverKit is for the system extension path; " +
+          "Both is only for debugging duplicate-output issues."
+      )
         .font(.caption)
         .foregroundColor(.secondary)
         .fixedSize(horizontal: false, vertical: true)
@@ -260,7 +264,11 @@ struct MenuBarPopoverView: View {
       }
       .disabled(!model.daemonConnected || !compatSelected)
 
-      Text("ⓘ Pick SDL 2/3 for Steam, PCSX2, DuckStation, or Moonlight/SDL. Pick Apple GameController for native macOS GCController apps. Pick Generic HID for descriptor-driven apps.")
+      Text(
+        "ⓘ Pick SDL 2/3 for Steam, PCSX2, DuckStation, or Moonlight/SDL. " +
+          "Pick Apple GameController for native macOS GCController apps. " +
+          "Pick Generic HID for descriptor-driven apps."
+      )
         .font(.caption)
         .foregroundColor(.secondary)
         .fixedSize(horizontal: false, vertical: true)

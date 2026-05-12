@@ -492,21 +492,20 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     let ud = try UserSpaceOutputDispatcher(
       profile: profile,
       format: format,
-      emitsXboxGuideReport: compatibilityProfile.emitsXboxGuideReport,
-      onRumbleCommand: { [weak self] identifier, command in
-        guard let self else { return }
-        Task {
-          _ = await self.deviceManager.sendRumble(
-            for: identifier,
-            left: command.left,
-            right: command.right,
-            lt: command.leftTrigger,
-            rt: command.rightTrigger,
-            durationMs: command.durationMs
-          )
-        }
+      emitsXboxGuideReport: compatibilityProfile.emitsXboxGuideReport
+    ) { [weak self] identifier, command in
+      guard let self else { return }
+      Task {
+        _ = await self.deviceManager.sendRumble(
+          for: identifier,
+          left: command.left,
+          right: command.right,
+          lt: command.leftTrigger,
+          rt: command.rightTrigger,
+          durationMs: command.durationMs
+        )
       }
-    )
+    }
     return (ud, ud.status)
   }
 
@@ -572,7 +571,12 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
   private func currentUserSpaceStatus() -> String {
     userSpaceLock.withLock {
       guard let dispatcher = userSpaceDispatcher else { return userSpaceStatus }
-      let rumble = dispatcher.lastRumbleStatus == "none" ? "" : ", rumble: \(dispatcher.lastRumbleStatus)"
+      let rumble: String
+      if dispatcher.lastRumbleStatus == "none" {
+        rumble = ""
+      } else {
+        rumble = ", rumble: \(dispatcher.lastRumbleStatus)"
+      }
       return "\(dispatcher.status)\(rumble)"
     }
   }

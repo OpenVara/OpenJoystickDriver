@@ -35,7 +35,11 @@ func looksLikeGamepad(_ device: IOHIDDevice) -> Bool {
   {
     return true
   }
-  guard let pairs = IOHIDDeviceGetProperty(device, kIOHIDDeviceUsagePairsKey as CFString) as? [[String: Any]]
+  let rawPairs = IOHIDDeviceGetProperty(
+    device,
+    kIOHIDDeviceUsagePairsKey as CFString
+  )
+  guard let pairs = rawPairs as? [[String: Any]]
   else {
     return false
   }

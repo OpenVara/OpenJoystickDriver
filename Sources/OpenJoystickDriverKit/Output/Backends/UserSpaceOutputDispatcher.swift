@@ -13,6 +13,8 @@ import Darwin
 /// The user-space device uses Transport="USB" and a non-zero LocationID so it
 /// looks like a normal controller to consumers.
 public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Sendable {
+  public typealias RumbleCommandHandler =
+    @Sendable (DeviceIdentifier, VirtualRumbleCommand) -> Void
 
   public enum CreationError: Error, CustomStringConvertible, Sendable {
     case createFailed
@@ -59,13 +61,14 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
   /// Last creation error (human-readable), for UI display.
   public private(set) var status: String = "off"
   public private(set) var lastRumbleStatus: String = "none"
-  private let onRumbleCommand: (@Sendable (DeviceIdentifier, VirtualRumbleCommand) -> Void)?
+  private let onRumbleCommand: RumbleCommandHandler?
 
+  @preconcurrency
   public init(
     profile: VirtualDeviceProfile = .default,
     format: any VirtualGamepadReportFormat = OJDGenericGamepadFormat(),
     emitsXboxGuideReport: Bool = false,
-    onRumbleCommand: (@Sendable (DeviceIdentifier, VirtualRumbleCommand) -> Void)? = nil
+    onRumbleCommand: RumbleCommandHandler? = nil
   ) throws {
     self.profile = profile
     self.format = format
@@ -182,17 +185,27 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       status = "error: \(CreationError.createFailed)"
       throw CreationError.createFailed
     }
-    let queue = DispatchQueue(label: "com.openjoystickdriver.userspace-hid.\(identifier.vendorID).\(identifier.productID)")
+    let queue = DispatchQueue(
+      label: "com.openjoystickdriver.userspace-hid.\(identifier.vendorID).\(identifier.productID)"
+    )
     if let onRumbleCommand {
-      IOHIDUserDeviceRegisterSetReportBlock(dev) { [weak self] type, reportID, report, reportLength in
+      IOHIDUserDeviceRegisterSetReportBlock(dev) {
+        [weak self] type, reportID, report, reportLength in
         let length = max(0, Int(reportLength))
         let bytes = Array(UnsafeBufferPointer(start: report, count: length))
-        guard let command = VirtualRumbleOutputReportParser.parse(type: type, reportID: reportID, bytes: bytes) else {
+        let command = VirtualRumbleOutputReportParser.parse(
+          type: type,
+          reportID: reportID,
+          bytes: bytes
+        )
+        guard let command else {
           return kIOReturnUnsupported
         }
         self?.lastRumbleStatus =
-          "app report id=\(reportID) L=\(command.left) R=\(command.right) LT=\(command.leftTrigger) RT=\(command.rightTrigger)"
-        print("[UserSpaceOutputDispatcher] App rumble report: \(identifier) \(self?.lastRumbleStatus ?? "")")
+          "app report id=\(reportID) L=\(command.left) R=\(command.right) " +
+          "LT=\(command.leftTrigger) RT=\(command.rightTrigger)"
+        let status = self?.lastRumbleStatus ?? ""
+        print("[UserSpaceOutputDispatcher] App rumble report: \(identifier) \(status)")
         onRumbleCommand(identifier, command)
         return kIOReturnSuccess
       }

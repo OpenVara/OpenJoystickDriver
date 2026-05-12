@@ -8,7 +8,13 @@ public struct VirtualRumbleCommand: Equatable, Sendable {
   public let rightTrigger: UInt8
   public let durationMs: Int
 
-  public init(left: UInt8, right: UInt8, leftTrigger: UInt8 = 0, rightTrigger: UInt8 = 0, durationMs: Int = 250) {
+  public init(
+    left: UInt8,
+    right: UInt8,
+    leftTrigger: UInt8 = 0,
+    rightTrigger: UInt8 = 0,
+    durationMs: Int = 250
+  ) {
     self.left = left
     self.right = right
     self.leftTrigger = leftTrigger
@@ -18,7 +24,11 @@ public struct VirtualRumbleCommand: Equatable, Sendable {
 }
 
 public enum VirtualRumbleOutputReportParser {
-  public static func parse(type: IOHIDReportType, reportID: UInt32, bytes: [UInt8]) -> VirtualRumbleCommand? {
+  public static func parse(
+    type: IOHIDReportType,
+    reportID: UInt32,
+    bytes: [UInt8]
+  ) -> VirtualRumbleCommand? {
     guard type == kIOHIDReportTypeOutput || type == kIOHIDReportTypeFeature else { return nil }
 
     if let command = parseXboxOneReport(reportID: reportID, bytes: bytes) {
@@ -33,7 +43,10 @@ public enum VirtualRumbleOutputReportParser {
     return nil
   }
 
-  private static func parseXboxOneReport(reportID: UInt32, bytes: [UInt8]) -> VirtualRumbleCommand? {
+  private static func parseXboxOneReport(
+    reportID: UInt32,
+    bytes: [UInt8]
+  ) -> VirtualRumbleCommand? {
     let payload: [UInt8]
     if reportID == 3 {
       payload = bytes
@@ -58,7 +71,10 @@ public enum VirtualRumbleOutputReportParser {
     )
   }
 
-  private static func parseXbox360Report(reportID: UInt32, bytes: [UInt8]) -> VirtualRumbleCommand? {
+  private static func parseXbox360Report(
+    reportID: UInt32,
+    bytes: [UInt8]
+  ) -> VirtualRumbleCommand? {
     let payload: [UInt8]
     if reportID == 0 {
       payload = bytes

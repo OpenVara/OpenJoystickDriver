@@ -55,7 +55,14 @@ import IOKit.hid
       bytes: [0x0F, 10, 20, 30, 40, 5, 0, 0]
     )
 
-    #expect(command == VirtualRumbleCommand(left: 30, right: 40, leftTrigger: 10, rightTrigger: 20, durationMs: 50))
+    let expected = VirtualRumbleCommand(
+      left: 30,
+      right: 40,
+      leftTrigger: 10,
+      rightTrigger: 20,
+      durationMs: 50
+    )
+    #expect(command == expected)
   }
 
   @Test("Virtual output report parser accepts Xbox 360 rumble reports")
@@ -77,7 +84,14 @@ import IOKit.hid
       bytes: [0x4F, 1, 2, 3, 4, 0x2C, 0x01]
     )
 
-    #expect(command == VirtualRumbleCommand(left: 1, right: 2, leftTrigger: 3, rightTrigger: 4, durationMs: 300))
+    let expected = VirtualRumbleCommand(
+      left: 1,
+      right: 2,
+      leftTrigger: 3,
+      rightTrigger: 4,
+      durationMs: 300
+    )
+    #expect(command == expected)
   }
 
   private func hasPhysicalRumble(_ parser: any InputParser) -> Bool {

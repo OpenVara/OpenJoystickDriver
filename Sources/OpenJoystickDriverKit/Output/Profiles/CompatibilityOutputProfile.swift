@@ -50,7 +50,8 @@ public enum CompatibilityOutputProfileCatalog {
         identity: identity,
         deviceProfile: .xbox360Wired,
         displayName: "Apple GameController",
-        notes: "Xbox-compatible HID surface accepted by Apple's GameController.framework as a native GCController.",
+        notes: "Xbox-compatible HID surface accepted by Apple's " +
+          "GameController.framework as a native GCController.",
         isHardwareSpoof: true,
         emitsXboxGuideReport: false
       )

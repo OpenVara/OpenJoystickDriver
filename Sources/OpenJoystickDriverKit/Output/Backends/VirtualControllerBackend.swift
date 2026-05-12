@@ -59,7 +59,8 @@ public enum VirtualControllerBackendCatalog {
     supportsMultiplePhysicalControllers: true,
     requiresEntitlement: true,
     isImplemented: true,
-    notes: "Apple GameController.framework support uses the user-space HID backend with the apple-gamecontroller identity."
+    notes: "Apple GameController.framework support uses the user-space HID " +
+      "backend with the apple-gamecontroller identity."
   )
 }
 
