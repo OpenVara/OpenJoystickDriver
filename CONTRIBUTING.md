@@ -3,29 +3,31 @@
 ## Setup
 
 ```bash
-git clone https://github.com/OpenVara/OpenJoystickDriver.git
+git clone https://github.com/xsyetopz/OpenJoystickDriver.git
 cd OpenJoystickDriver
 brew install libusb
 swift build
 ```
 
-Tests that don't require hardware:
+Tests that do not require hardware:
 
 ```bash
-swift test --filter OpenJoystickDriverKitTests
+swift test
 ```
 
-Hardware integration tests require a USB controller plugged in:
+Hardware-facing tests and diagnostics require a USB controller plugged in. Use
+the focused diagnostics that match your change, for example:
 
 ```bash
-swift test --filter HardwareTests
+./scripts/ojd diagnose backends --seconds 5
+./scripts/ojd diagnose sdl3 --seconds 5
 ```
 
 ---
 
 ## What needs work
 
-Check the [issue tracker](https://github.com/OpenVara/OpenJoystickDriver/issues) for open tasks. The most common contribution is adding support for a new controller.
+Check the [issue tracker](https://github.com/xsyetopz/OpenJoystickDriver/issues) for open tasks. The most common contribution is adding support for a new controller.
 
 ---
 
@@ -41,20 +43,12 @@ system_profiler SPUSBDataType
 
 Look for `bDeviceClass`. If it's `0xff` (255), the controller uses a vendor-specific protocol (likely GIP for Xbox-compatible hardware). If it's `0x03` (3), it's a standard HID device.
 
-**Step 2 - Add the device to the catalog.**
+**Step 2 - Add the runtime profile.**
 
-Edit `Sources/OpenJoystickDriverKit/Resources/devices.json`. VID and PID must be **decimal integers**, not hex strings.
-
-```json
-{
-  "vendor_id": 13623,
-  "product_id": 4112,
-  "name": "Gamesir G7 SE",
-  "parser": "gip"
-}
-```
-
-Valid parser values: `"gip"`, `"ds4"`, `"generic_hid"`.
+Add one runtime profile under
+`Sources/OpenJoystickDriverKit/Resources/Controllers/`. VID, PID, endpoint, and
+packet values must be decimal integers. Use existing profiles such as
+`gamesir-g7-se.json` and `flydigi-vader-5s.json` as current format examples.
 
 **Step 3 - Add a device schema (optional but useful).**
 
@@ -62,11 +56,15 @@ Create `Resources/Schemas/Devices/YourDevice.json` documenting the button layout
 
 **Step 4 - If the controller uses a new protocol, implement a parser.**
 
-New parsers go in `Sources/OpenJoystickDriverKit/Protocol/` and must conform to the `InputParser` protocol. Look at `GIPParser.swift` and `DS4Parser.swift` as references.
+New parsers go in `Sources/OpenJoystickDriverKit/Protocol/Parsers/` and must
+conform to the `InputParser` protocol. Look at `GIPParser.swift`,
+`Xbox360Parser.swift`, and `DS4Parser.swift` as references.
 
 **Step 5 - Add tests.**
 
-Add test cases to `Tests/OpenJoystickDriverKitTests/`. Tests that require SwiftUSB hardware access should live in `../SwiftUSB/Tests/HardwareTests/` and use the `.serialized` trait.
+Add parser, profile, or report-format tests under
+`Tests/OpenJoystickDriverKitTests/`. Hardware-only checks should be guarded or
+expressed as diagnostics so they can skip cleanly without local device access.
 
 ---
 
@@ -77,7 +75,7 @@ Add test cases to `Tests/OpenJoystickDriverKitTests/`. Tests that require SwiftU
 - **No hex numbers in JSON files.** Use decimal integers for VID/PID, command codes, and all other numeric values.
 - **`debugPrint` only.** Don't use `print` or `swift-log`.
 - **One parser error must not affect other controllers.** Each `DevicePipeline` is isolated. Errors in a parser should be logged and skipped, not propagated upward.
-- **macOS 13 minimum.** Don't add `#available` guards or fallbacks for older versions.
+- **macOS 10.15 runtime target.** Avoid broad availability rewrites unless the touched API requires it.
 
 ---
 
@@ -98,11 +96,9 @@ There's no formal PR template. Just be clear about what changed and why.
 Sources/OpenJoystickDriverKit/    Shared library: parsers, device management, output, XPC
 Sources/OpenJoystickDriverDaemon/ Background daemon executable
 Sources/OpenJoystickDriver/       GUI app (SwiftUI, menu bar) + CLI (--headless)
-../SwiftUSB/                      External libusb wrapper package
 Tests/OpenJoystickDriverKitTests/ Unit tests (no hardware required)
-../SwiftUSB/Tests/HardwareTests/  SwiftUSB hardware integration tests
-Resources/Schemas/                JSON schemas for IDE validation (not bundled at runtime)
-docs/                             Protocol reference docs
+Resources/Schemas/                JSON schemas and per-device schema files
+COMPATIBILITY_LAYERS.md           Consumer-visible compatibility mappings
 scripts/                          Build, sign, install, uninstall helpers
 ```
 

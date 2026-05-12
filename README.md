@@ -29,27 +29,8 @@ new controller profiles.
 
 GameSir G7 SE was manually verified in browser Gamepad API Xbox One HID
 compatibility mode as a standard `Xbox Wireless Controller` (`VID 045e`,
-`PID 02ea`). The verified button layout is:
-
-| Button | Meaning     |
-| ------ | ----------- |
-| `B0`   | A           |
-| `B1`   | B           |
-| `B2`   | X           |
-| `B3`   | Y           |
-| `B4`   | LB          |
-| `B5`   | RB          |
-| `B6`   | LT          |
-| `B7`   | RT          |
-| `B8`   | View        |
-| `B9`   | Menu        |
-| `B10`  | L3          |
-| `B11`  | R3          |
-| `B12`  | D-pad Up    |
-| `B13`  | D-pad Down  |
-| `B14`  | D-pad Left  |
-| `B15`  | D-pad Right |
-| `B16`  | Xbox/Home   |
+`PID 02ea`). Browser, SDL, Generic HID, and Xbox HID compatibility mappings are
+kept in `COMPATIBILITY_LAYERS.md`.
 
 ## Requirements
 
@@ -177,14 +158,42 @@ The repair command only kills `OpenJoystickVirtualHID` processes whose executabl
 path does not match the newest installed `com.openjoystickdriver.VirtualHIDDevice`
 copy under `/Library/SystemExtensions`.
 
-Compatibility mode has four first-class user-space HID profiles:
+Compatibility mode has five first-class user-space HID profiles:
 
 - `sdl2-3`: default for SDL consumers such as Steam and PCSX2. It uses
   an OJD-owned identity plus an explicit SDL mapping.
+- `apple-gamecontroller`: Xbox-compatible HID surface accepted by Apple's
+  GameController.framework as a native `GCController`.
 - `generic-hid`: OJD-owned HID GamePad identity for apps that inspect the HID
   descriptor directly.
 - `x360-hid`: experimental Xbox 360 HID hardware-spoof profile.
 - `xone-hid`: experimental Xbox One HID hardware-spoof profile.
+
+How the SDL vs Apple switch works:
+
+- OJD publishes one user-space compatibility identity at a time.
+- Use `sdl2-3` for SDL apps such as PCSX2, Steam, DuckStation, Moonlight/SDL
+  builds, and Parsec host paths.
+- Use `apple-gamecontroller` for native macOS apps that read controllers through
+  Apple's GameController.framework, including native game/app code that expects
+  a `GCController`.
+- Browser Gamepad API and direct HID consumers can still read the virtual
+  `IOHIDUserDevice`; they do not need SDL's mapping database.
+
+Application rumble works through the Compatibility `IOHIDUserDevice` set-report
+callback. OJD accepts common Xbox One, Xbox 360, and compact OJD rumble output
+reports, then forwards them to the connected physical controller when that
+controller supports physical rumble. Local validation physically felt rumble
+from an app-style HID output report.
+
+CLI switch examples:
+
+```bash
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless output secondary
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless compat sdl2-3
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless compat apple-gamecontroller
+./scripts/ojd diagnose gamecontroller --seconds 5
+```
 
 SDL consumers need a game controller mapping for the SDL 2/3 user-space identity.
 The repo ships the known-good mapping at
@@ -198,11 +207,14 @@ Do not spoof an SDL-known third-party controller VID/PID for this path: on macOS
 GameController.framework can claim those identities before SDL's IOKit backend
 can enumerate them. The custom OJD PID plus explicit SDL mapping is intentional.
 Xbox 360 compatibility is exposed as an experimental user-space HID identity
-using Microsoft's XUSB-to-DirectInput HID mapping. It is descriptor-backed, but
-it is not true Windows XInput/XUSB emulation: macOS cannot publish XUSB device
-interfaces or XInput IOCTLs through IOHIDUserDevice. The DirectInput-style
-surface has combined triggers, hat-only D-pad, and no Guide/vibration/headset
-semantics, so validate it per app.
+using the macOS Xbox 360 HID mapping. It is descriptor-backed, but it is not
+true Windows XInput/XUSB emulation: macOS cannot publish XUSB device interfaces
+or XInput IOCTLs through IOHIDUserDevice. The surface has independent LT/RT
+trigger axes, button-backed D-pad, and Guide/Home; vibration/headset semantics
+remain unsupported, so validate it per app.
+
+Detailed Browser Gamepad API and SDL mapping tables live in
+`COMPATIBILITY_LAYERS.md`.
 
 If PCSX2's bundled SDL database does not include the OJD mapping, launch PCSX2
 with the repo mapping override:

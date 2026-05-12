@@ -108,10 +108,11 @@ belongs in consumer profiles and launch/diagnostic tooling, not in parser code.
    SDL3 probes, and GameController.framework should remain separate validation
    surfaces.
 
-3. Treat Xbox hardware spoofing as explicit and narrow.
-   `x360-hid` and `xone-hid` are useful probes and may be useful for specific
-   consumers, but they are not the default long-term macOS answer. The current
-   PCSX2/Rosetta wedging means `sdl2-3` stays the recommended route there.
+3. Treat Apple GameController and Xbox hardware spoofing as explicit paths.
+   `apple-gamecontroller` is for native GameController.framework consumers.
+   `x360-hid` and `xone-hid` remain useful probes and may be useful for specific
+   consumers. The current PCSX2/Rosetta wedging means `sdl2-3` stays the
+   recommended route there.
 
 4. Treat DS4 output as a future protocol implementation, not a mapping rename.
    A DS4 backend needs report descriptors, special buttons, d-pad hat semantics,
@@ -136,8 +137,8 @@ belongs in consumer profiles and launch/diagnostic tooling, not in parser code.
 - Add a PCSX2 stuck-state preflight before launching PCSX2 or Rosetta SDL
   probes. The script should refuse to run when `PCSX2` or `ojd-sdl3-probe`
   processes are stuck in `U` or `?E` state.
-- Add tests that assert `sdl2-3` keeps hat d-pad mapping and Share on the
-  expected SDL `misc1`/button path.
+- Keep tests that assert `sdl2-3` and `generic-hid` expose D-pad through button
+  bits and keep Share on the expected `misc1`/button path.
 - Add a DS4-output design document before implementation. It must list feature
   reports, input report layout, output report layout, and what local hardware
   can verify.

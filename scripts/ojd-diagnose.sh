@@ -21,7 +21,7 @@ if [[ "$cmd" == "-h" || "$cmd" == "--help" || "$cmd" == "help" ]]; then
   cat <<'TXT'
 Usage:
   ./scripts/ojd diagnose dext
-  ./scripts/ojd diagnose sdl3 [--seconds N] [other args]
+  ./scripts/ojd diagnose sdl3 [--seconds N] [--rumble] [other args]
   ./scripts/ojd diagnose pcsx2-sdl3 [--seconds N] [other args]
   ./scripts/ojd diagnose pcsx2-live [--seconds N]
   ./scripts/ojd diagnose gamecontroller [--seconds N]

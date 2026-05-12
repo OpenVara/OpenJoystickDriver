@@ -52,7 +52,7 @@ XPC status/control APIs.
   for the generic user-space OJD device. SDL3/PCSX2 needs `platform:macOS`;
   `platform:Mac OS X` is SDL2-era and can be ignored by SDL 3.2.x.
 - `Tests/OpenJoystickDriverKitTests/`: package tests for core behavior.
-- `../SwiftUSB/Tests/HardwareTests/`: SwiftUSB hardware integration tests.
+- Hardware-facing checks live in package tests or `./scripts/ojd diagnose ...` commands and should skip cleanly without local device access.
 
 ## Controller and Schema Model
 
@@ -125,10 +125,12 @@ The xpad.c Xbox batches are attributed in README.md to Linux
 `drivers/input/joystick/xpad.c`; preserve that attribution when adding more
 xpad-derived controller metadata or GIP startup-packet selections.
 
-Compatibility profiles are `sdl2-3`, `generic-hid`, `x360-hid`, and
-`xone-hid`. `sdl2-3` is the default OJD-owned identity for SDL
-consumers such as Steam and PCSX2. `generic-hid` is for descriptor-driven apps.
-`x360-hid` and `xone-hid` are experimental hardware-spoof profiles.
+Compatibility profiles are `sdl2-3`, `apple-gamecontroller`, `generic-hid`,
+`x360-hid`, and `xone-hid`. `sdl2-3` is the default OJD-owned identity for SDL
+consumers such as Steam and PCSX2. `apple-gamecontroller` is the Xbox-compatible
+HID surface accepted by Apple's GameController.framework as a native
+`GCController`. `generic-hid` is for descriptor-driven apps. `x360-hid` and
+`xone-hid` are experimental hardware-spoof profiles.
 PCSX2 should use SDL 2/3 Compatibility with user-space-only output. The mapped
 user-space PID differs from DriverKit so stale dext copies stay unmapped.
 Do not replace this with an SDL-known third-party VID/PID: macOS
@@ -138,9 +140,8 @@ If a stale DriverKit process remains after sysext upgrade, run
 `./scripts/ojd repair stale-dext`; it kills only OJD dext processes whose
 executable path does not match the newest installed system-extension copy.
 Xbox 360 compatibility is exposed as an experimental user-space HID identity
-using Microsoft's XUSB-to-DirectInput HID mapping. It is descriptor-backed, but
-it is not true Windows XInput/XUSB emulation. Expect combined triggers,
-hat-only D-pad, and no Guide/vibration/headset semantics.
+using the macOS Xbox 360 HID mapping. It is descriptor-backed, but
+it is not true Windows XInput/XUSB emulation. It exposes independent LT/RT trigger axes, button-backed D-pad, and Guide/Home; vibration/headset semantics remain unsupported. Detailed mappings live in `COMPATIBILITY_LAYERS.md`.
 If the PCSX2 app bundle database lacks the OJD mapping, launch it through
 `./scripts/ojd launch pcsx2`; this sets `SDL_GAMECONTROLLERCONFIG` and
 `SDL_GAMECONTROLLERCONFIG_FILE` without modifying the signed app bundle, and
@@ -152,25 +153,10 @@ profile that binds both `SDL-0` and `SDL-1`.
 
 GameSir G7 SE was manually verified through hardwaretester.com Gamepad API in
 Xbox One HID compatibility mode as a standard `Xbox Wireless Controller`
-(`VID 045e`, `PID 02ea`). Verified buttons:
-
-- `B0`: A
-- `B1`: B
-- `B2`: X
-- `B3`: Y
-- `B4`: LB
-- `B5`: RB
-- `B6`: LT
-- `B7`: RT
-- `B8`: View
-- `B9`: Menu
-- `B10`: L3
-- `B11`: R3
-- `B16`: Xbox/Home
-
-The D-pad is expected to report through the standard gamepad directional path in
-compatibility output. If D-pad is missing, inspect backend report generation and
-consumer mapping before changing the physical controller GIP profile.
+(`VID 045e`, `PID 02ea`). Detailed Browser Gamepad API and SDL compatibility
+mappings live in `COMPATIBILITY_LAYERS.md`. If a mapping is wrong, inspect the
+selected compatibility report format and consumer mapping before changing the
+physical controller GIP profile.
 
 ## Flydigi Vader 5S Notes
 

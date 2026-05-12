@@ -25,8 +25,10 @@ DriverKit HID or IOHIDUserDevice compatibility mode.
 
 - GameSir G7 SE: GIP USB path works; Xbox One HID compatibility reports are
   hardware verified through browser Gamepad API.
-- Compatibility profiles are `sdl2-3`, `generic-hid`, `x360-hid`, and
-  `xone-hid`. `sdl2-3` is the default for SDL consumers.
+- Compatibility profiles are `sdl2-3`, `apple-gamecontroller`, `generic-hid`,
+  `x360-hid`, and `xone-hid`. `sdl2-3` is the default for SDL consumers;
+  `apple-gamecontroller` is for native GameController.framework consumers.
+  Detailed Browser Gamepad API and SDL mappings live in `COMPATIBILITY_LAYERS.md`.
 - PCSX2 should use SDL 2/3 Compatibility with user-space-only output.
   The mapped user-space PID differs from DriverKit so stale dext copies stay unmapped.
   SDL-known third-party VID/PIDs are avoided because macOS GameController can
@@ -35,9 +37,8 @@ DriverKit HID or IOHIDUserDevice compatibility mode.
   `./scripts/ojd repair stale-dext`; it kills only OJD dext processes whose
   executable path does not match the newest installed system-extension copy.
 - Xbox 360 compatibility is exposed as an experimental user-space HID identity
-  using Microsoft's XUSB-to-DirectInput HID mapping. It is descriptor-backed,
-  but it is not true Windows XInput/XUSB emulation. Expect combined triggers,
-  hat-only D-pad, and no Guide/vibration/headset semantics.
+  using the macOS Xbox 360 HID mapping. It is descriptor-backed,
+  but it is not true Windows XInput/XUSB emulation. It exposes independent LT/RT trigger axes, button-backed D-pad, and Guide/Home; vibration/headset semantics remain unsupported. Detailed mappings live in `COMPATIBILITY_LAYERS.md`.
 - Use `./scripts/ojd launch pcsx2` when PCSX2's bundled SDL database lacks the
   OJD mapping; it sets SDL mapping override environment variables and applies
   the known-good daemon routing before launch.

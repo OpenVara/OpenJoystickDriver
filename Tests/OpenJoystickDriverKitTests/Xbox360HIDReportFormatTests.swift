@@ -120,3 +120,67 @@ import Testing
     #expect(guide[1] == 0x00)
   }
 }
+
+
+@Suite("Xbox 360 macOS HID Report Format Tests") struct Xbox360MacHIDReportFormatTests {
+  private func format() -> Xbox360MacHIDReportFormat { Xbox360MacHIDReportFormat() }
+
+  @Test("Xbox 360 macOS format exposes 14-byte report with independent triggers")
+  func exposesIndependentTriggers() throws {
+    let f = format()
+    let parsed = try HIDDescriptorReportFormat(descriptor: f.descriptor)
+    let neutral = f.buildInputReport(from: VirtualGamepadState())
+    let left = f.buildInputReport(from: VirtualGamepadState(leftTrigger: 32_767))
+    let right = f.buildInputReport(from: VirtualGamepadState(rightTrigger: 32_767))
+
+    #expect(f.inputReportID == nil)
+    #expect(f.inputReportPayloadSize == 14)
+    #expect(parsed.inputReportID == nil)
+    #expect(parsed.inputReportPayloadSize == 14)
+    #expect(neutral[4] == 0)
+    #expect(neutral[5] == 0)
+    #expect(left[4] == 255)
+    #expect(left[5] == 0)
+    #expect(right[4] == 0)
+    #expect(right[5] == 255)
+  }
+
+  @Test("Xbox 360 macOS format descriptor fields match report packing")
+  func descriptorFieldsMatchReportPacking() throws {
+    let state = VirtualGamepadState(
+      buttons: GamepadHIDDescriptor.dpadButtonBits(for: .north)
+        | (1 << GamepadHIDDescriptor.ButtonBit.guide.rawValue)
+        | (1 << GamepadHIDDescriptor.ButtonBit.a.rawValue),
+      leftStickX: 12_345,
+      leftStickY: -12_345,
+      rightStickX: 23_456,
+      rightStickY: -23_456,
+      leftTrigger: 32_767,
+      rightTrigger: 16_384
+    )
+
+    let descriptorPacked = try HIDDescriptorReportFormat(descriptor: format().descriptor)
+      .buildInputReport(from: state)
+    let bespokePacked = format().buildInputReport(from: state)
+
+    #expect(descriptorPacked == bespokePacked)
+  }
+
+  @Test("Xbox 360 macOS format maps D-pad guide controls and face buttons")
+  func mapsXInputButtonOrder() {
+    let buttons = GamepadHIDDescriptor.dpadButtonBits(for: .north)
+      | (1 << GamepadHIDDescriptor.ButtonBit.start.rawValue)
+      | (1 << GamepadHIDDescriptor.ButtonBit.back.rawValue)
+      | (1 << GamepadHIDDescriptor.ButtonBit.leftStick.rawValue)
+      | (1 << GamepadHIDDescriptor.ButtonBit.rightStick.rawValue)
+      | (1 << GamepadHIDDescriptor.ButtonBit.guide.rawValue)
+      | (1 << GamepadHIDDescriptor.ButtonBit.a.rawValue)
+      | (1 << GamepadHIDDescriptor.ButtonBit.b.rawValue)
+      | (1 << GamepadHIDDescriptor.ButtonBit.x.rawValue)
+      | (1 << GamepadHIDDescriptor.ButtonBit.y.rawValue)
+    let report = format().buildInputReport(from: VirtualGamepadState(buttons: buttons))
+
+    #expect(report[2] == 0xF1)
+    #expect(report[3] == 0xF4)
+  }
+}

@@ -11,17 +11,20 @@ public let xpcServiceName = "com.openjoystickdriver.xpc"
 /// - `sdl2-3` is the mature SDL/Steam/PCSX2 path: OJD-owned identity plus
 ///   an explicit SDL mapping.
 /// - `generic-hid` is a plain OJD HID GamePad for consumers that inspect descriptors directly.
+/// - `apple-gamecontroller` publishes the HID surface accepted by Apple's GameController.framework.
 /// - `xone-hid` and `x360-hid` are hardware-spoof profiles. They are only correct for
 ///   consumers whose expected descriptor/report layout exactly matches the selected profile.
 public enum CompatibilityIdentity: Codable, CaseIterable, Sendable, Equatable {
   case genericHID
   case sdl2_3
+  case appleGameController
   case x360HID
   case xoneHID
 
   public static let allCases: [CompatibilityIdentity] = [
     .genericHID,
     .sdl2_3,
+    .appleGameController,
     .x360HID,
     .xoneHID,
   ]
@@ -32,6 +35,8 @@ public enum CompatibilityIdentity: Codable, CaseIterable, Sendable, Equatable {
       self = .genericHID
     case "sdl2-3":
       self = .sdl2_3
+    case "apple-gamecontroller":
+      self = .appleGameController
     case "x360-hid":
       self = .x360HID
     case "xone-hid":
@@ -45,6 +50,7 @@ public enum CompatibilityIdentity: Codable, CaseIterable, Sendable, Equatable {
     switch self {
     case .genericHID: "generic-hid"
     case .sdl2_3: "sdl2-3"
+    case .appleGameController: "apple-gamecontroller"
     case .x360HID: "x360-hid"
     case .xoneHID: "xone-hid"
     }
@@ -69,6 +75,8 @@ public enum CompatibilityIdentity: Codable, CaseIterable, Sendable, Equatable {
     switch self {
     case .genericHID, .sdl2_3:
       true
+    case .appleGameController:
+      false
     case .xoneHID, .x360HID:
       false
     }
@@ -203,6 +211,8 @@ public struct XPCHIDGamepadSnapshot: Codable, Sendable, Hashable {
   public let isOJDDriverKit: Bool
   /// True if this looks like our user-space IOHIDUserDevice.
   public let isOJDUserSpace: Bool
+  /// True if Apple's GameController.framework says this HID device gets a GCController.
+  public let isGameControllerSupported: Bool?
 
   public init(
     vendorID: UInt16,
@@ -213,7 +223,8 @@ public struct XPCHIDGamepadSnapshot: Codable, Sendable, Hashable {
     serialKind: XPCSerialKind,
     ioUserClass: String?,
     isOJDDriverKit: Bool,
-    isOJDUserSpace: Bool
+    isOJDUserSpace: Bool,
+    isGameControllerSupported: Bool? = nil
   ) {
     self.vendorID = vendorID
     self.productID = productID
@@ -224,6 +235,7 @@ public struct XPCHIDGamepadSnapshot: Codable, Sendable, Hashable {
     self.ioUserClass = ioUserClass
     self.isOJDDriverKit = isOJDDriverKit
     self.isOJDUserSpace = isOJDUserSpace
+    self.isGameControllerSupported = isGameControllerSupported
   }
 }
 

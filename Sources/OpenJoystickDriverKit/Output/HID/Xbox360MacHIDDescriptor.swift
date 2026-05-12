@@ -18,6 +18,7 @@ import Foundation
 ///   Bytes 8-9: Left stick Y, Int16 LE
 ///   Bytes 10-11: Right stick X, Int16 LE
 ///   Bytes 12-13: Right stick Y, Int16 LE
+///   Output: 8-byte Xbox 360 rumble packet `[0x00, 0x08, 0x00, left, right, 0, 0, 0]`
 public enum Xbox360MacHIDDescriptor {
   public static let descriptor: [UInt8] = [
     0x05, 0x01,  // Usage Page: Generic Desktop
@@ -130,7 +131,76 @@ public enum Xbox360MacHIDDescriptor {
     0x81, 0x02,
     0xC0,
 
+    // Xbox 360 rumble output report. SDL HIDAPI and other Xbox-style callers
+    // commonly send `[0x00, 0x08, 0x00, left, right, 0, 0, 0]`.
+    0x09, 0x01,
+    0x15, 0x00,
+    0x26, 0xFF, 0x00,
+    0x75, 0x08,
+    0x95, 0x08,
+    0x91, 0x02,
+
     0xC0,
     0xC0,
   ]
+}
+
+public struct Xbox360MacHIDReportFormat: VirtualGamepadReportFormat {
+  public let descriptor: [UInt8] = Xbox360MacHIDDescriptor.descriptor
+  public let inputReportPayloadSize: Int = 14
+  public let inputReportID: UInt8? = nil
+
+  public init() {}
+
+  public func buildInputReport(from state: VirtualGamepadState) -> [UInt8] {
+    var r = [UInt8](repeating: 0, count: inputReportPayloadSize)
+    let mask = xinputButtonMask(from: state.buttons)
+    r[2] = UInt8(mask & 0xFF)
+    r[3] = UInt8((mask >> 8) & 0xFF)
+    r[4] = triggerByte(state.leftTrigger)
+    r[5] = triggerByte(state.rightTrigger)
+    write(state.leftStickX, to: &r, at: 6)
+    write(state.leftStickY, to: &r, at: 8)
+    write(state.rightStickX, to: &r, at: 10)
+    write(state.rightStickY, to: &r, at: 12)
+    return r
+  }
+
+  private func xinputButtonMask(from normalized: UInt32) -> UInt16 {
+    var out: UInt16 = 0
+
+    func set(_ sourceBit: Int, _ xinputBit: Int) {
+      if ((normalized >> UInt32(sourceBit)) & 1) != 0 {
+        out |= UInt16(1 << xinputBit)
+      }
+    }
+
+    set(11, 0)
+    set(12, 1)
+    set(13, 2)
+    set(14, 3)
+    set(8, 4)
+    set(9, 5)
+    set(6, 6)
+    set(7, 7)
+    set(4, 8)
+    set(5, 9)
+    set(10, 10)
+    set(0, 12)
+    set(1, 13)
+    set(2, 14)
+    set(3, 15)
+    return out
+  }
+
+  private func triggerByte(_ value: Int16) -> UInt8 {
+    let clamped = max(0, min(32_767, Int(value)))
+    return UInt8(clamped * 255 / 32_767)
+  }
+
+  private func write(_ value: Int16, to report: inout [UInt8], at offset: Int) {
+    let b = value.littleEndianBytes
+    report[offset] = b.0
+    report[offset + 1] = b.1
+  }
 }

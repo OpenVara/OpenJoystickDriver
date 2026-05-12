@@ -89,3 +89,42 @@ public struct OJDGenericGamepadFormat: VirtualGamepadReportFormat {
   }
 }
 
+
+/// SDL/PCSX2-focused HID GamePad format.
+///
+/// This keeps the stable OJD button/axis order but deliberately omits the hat
+/// switch so SDL does not expose D-pad as an extra axis. D-pad directions are
+/// exposed only as buttons 12-15, and triggers are signed axes with zero idle so
+/// SDL2/SDL3 raw joystick axes are neutral at rest.
+public struct OJDSDLGamepadFormat: VirtualGamepadReportFormat {
+  public let descriptor: [UInt8] = SDLGamepadHIDDescriptor.descriptor
+  public let inputReportPayloadSize: Int = SDLGamepadHIDDescriptor.reportSize
+  public let inputReportID: UInt8? = nil
+
+  public init() {}
+
+  public func buildInputReport(from state: VirtualGamepadState) -> [UInt8] {
+    var r = [UInt8](repeating: 0, count: SDLGamepadHIDDescriptor.reportSize)
+    r[0] = UInt8(state.buttons & 0xFF)
+    r[1] = UInt8((state.buttons >> 8) & 0xFF)
+    let lsxB = state.leftStickX.littleEndianBytes
+    r[2] = lsxB.0
+    r[3] = lsxB.1
+    let lsyB = state.leftStickY.littleEndianBytes
+    r[4] = lsyB.0
+    r[5] = lsyB.1
+    let ltB = state.leftTrigger.littleEndianBytes
+    r[6] = ltB.0
+    r[7] = ltB.1
+    let rsxB = state.rightStickX.littleEndianBytes
+    r[8] = rsxB.0
+    r[9] = rsxB.1
+    let rsyB = state.rightStickY.littleEndianBytes
+    r[10] = rsyB.0
+    r[11] = rsyB.1
+    let rtB = state.rightTrigger.littleEndianBytes
+    r[12] = rtB.0
+    r[13] = rtB.1
+    return r
+  }
+}

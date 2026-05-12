@@ -185,6 +185,7 @@ int main(int argc, char **argv) {
     int seconds = parse_seconds(argc, argv);
     const char *mappings_file = parse_mappings_file(argc, argv);
     int expect_single_neutral_ojd = has_flag(argc, argv, "--expect-single-neutral-ojd");
+    int send_rumble = has_flag(argc, argv, "--rumble");
 
     int v = SDL_GetVersion();
     int major = SDL_VERSIONNUM_MAJOR(v);
@@ -260,6 +261,23 @@ int main(int argc, char **argv) {
     }
     if (open_gamepad_count > 0) {
         printf("\nOpened %d gamepad(s) for event listening\n", open_gamepad_count);
+    }
+
+    if (send_rumble) {
+        printf("\nRumble probe:\n");
+        for (int i = 0; i < joy_count; i++) {
+            SDL_Gamepad *gamepad = open_gamepads ? open_gamepads[i] : NULL;
+            if (!gamepad)
+                continue;
+            bool ok = SDL_RumbleGamepad(gamepad, 0x9000, 0x6000, 300);
+            printf(
+                "- id=%u SDL_RumbleGamepad=%s%s%s\n",
+                (unsigned)joy_ids[i],
+                ok ? "ok" : "failed",
+                ok ? "" : " error=",
+                ok ? "" : SDL_GetError());
+            SDL_UpdateGamepads();
+        }
     }
 
     Sint16 *last_axes = NULL;

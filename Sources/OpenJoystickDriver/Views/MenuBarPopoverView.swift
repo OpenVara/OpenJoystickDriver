@@ -8,6 +8,21 @@ struct MenuBarPopoverView: View {
   @State private var showUninstallConfirm = false
   @State private var inputTester = InputTestWindowController()
 
+  private var gameControllerSupportLabel: String {
+    guard let devices = model.virtualDeviceDiagnostics?.hidGamepads else {
+      return "unknown"
+    }
+    let ojdDevices = devices.filter { $0.isOJDUserSpace || $0.isOJDDriverKit }
+    if ojdDevices.isEmpty { return "no OJD virtual device visible" }
+    if ojdDevices.contains(where: { $0.isGameControllerSupported == true }) {
+      return "yes"
+    }
+    if ojdDevices.contains(where: { $0.isGameControllerSupported == nil }) {
+      return "unknown on this macOS version"
+    }
+    return "no"
+  }
+
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 10) {
@@ -214,6 +229,11 @@ struct MenuBarPopoverView: View {
         .font(.caption)
         .foregroundColor(.secondary)
 
+      Text("ⓘ Compatibility is the normal app/game mode. DriverKit is for the system extension path; Both is only for debugging duplicate-output issues.")
+        .font(.caption)
+        .foregroundColor(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+
       let activeLabel: String = {
         switch model.outputMode {
         case CompositeOutputDispatcher.Mode.primaryOnly.rawValue: return "DriverKit"
@@ -233,21 +253,27 @@ struct MenuBarPopoverView: View {
         )
       ) {
         Text("SDL 2/3").tag(CompatibilityIdentity.sdl2_3.rawValue)
+        Text("Apple GameController").tag(CompatibilityIdentity.appleGameController.rawValue)
         Text("Generic HID").tag(CompatibilityIdentity.genericHID.rawValue)
         Text("Xbox 360 HID").tag(CompatibilityIdentity.x360HID.rawValue)
         Text("Xbox One HID").tag(CompatibilityIdentity.xoneHID.rawValue)
       }
       .disabled(!model.daemonConnected || !compatSelected)
 
-      Text("Used only in Compatibility mode. SDL 2/3 is the default for Steam, PCSX2, and SDL.")
+      Text("ⓘ Pick SDL 2/3 for Steam, PCSX2, DuckStation, or Moonlight/SDL. Pick Apple GameController for native macOS GCController apps. Pick Generic HID for descriptor-driven apps.")
         .font(.caption)
         .foregroundColor(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
 
       Text("Compatibility backend: \(model.userSpaceVirtualDeviceStatus)")
         .font(.caption)
         .foregroundColor(
           model.userSpaceVirtualDeviceStatus.hasPrefix("error:") ? .orange : .secondary
         )
+
+      Text("Apple GameController.framework support: \(gameControllerSupportLabel)")
+        .font(.caption)
+        .foregroundColor(gameControllerSupportLabel == "yes" ? .green : .secondary)
     }
   }
 

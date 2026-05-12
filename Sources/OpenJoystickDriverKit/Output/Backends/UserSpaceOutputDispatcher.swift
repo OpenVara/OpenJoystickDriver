@@ -39,10 +39,14 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
 
   private final class Entry {
     let device: IOHIDUserDevice
+    let queue: DispatchQueue
     let lock = NSLock()
     var state = VirtualGamepadState()
 
-    init(device: IOHIDUserDevice) { self.device = device }
+    init(device: IOHIDUserDevice, queue: DispatchQueue) {
+      self.device = device
+      self.queue = queue
+    }
   }
 
   /// One user-space IOHIDUserDevice per connected physical controller.
@@ -54,22 +58,33 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
 
   /// Last creation error (human-readable), for UI display.
   public private(set) var status: String = "off"
+  public private(set) var lastRumbleStatus: String = "none"
+  private let onRumbleCommand: (@Sendable (DeviceIdentifier, VirtualRumbleCommand) -> Void)?
 
   public init(
     profile: VirtualDeviceProfile = .default,
     format: any VirtualGamepadReportFormat = OJDGenericGamepadFormat(),
-    emitsXboxGuideReport: Bool = false
+    emitsXboxGuideReport: Bool = false,
+    onRumbleCommand: (@Sendable (DeviceIdentifier, VirtualRumbleCommand) -> Void)? = nil
   ) throws {
     self.profile = profile
     self.format = format
     self.emitsXboxGuideReport = emitsXboxGuideReport
+    self.onRumbleCommand = onRumbleCommand
     // Device(s) are created lazily on first dispatch for each physical controller.
   }
 
   deinit { close() }
 
   public func close() {
-    registryLock.withLock { entries.removeAll() }
+    let oldEntries = registryLock.withLock { () -> [Entry] in
+      let old = Array(entries.values)
+      entries.removeAll()
+      return old
+    }
+    for entry in oldEntries {
+      IOHIDUserDeviceCancel(entry.device)
+    }
     status = "off"
   }
 
@@ -83,7 +98,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     }
   }
 
-  private func createDevice(for identifier: DeviceIdentifier) throws -> IOHIDUserDevice {
+  private func createDevice(for identifier: DeviceIdentifier) throws -> Entry {
     let descriptor = Data(format.descriptor)
     let serialNumber = UserSpaceVirtualDeviceConstants.serialNumber(for: identifier)
     let locationID = UserSpaceVirtualDeviceConstants.locationID(for: identifier)
@@ -94,7 +109,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       IOHIDUserDeviceCreateWithProperties(
         kCFAllocatorDefault,
         props as CFDictionary,
-        IOOptionBits(kIOHIDOptionsTypeNone)
+        IOOptionBits(1 << 0)
       )
     }
 
@@ -167,7 +182,24 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       status = "error: \(CreationError.createFailed)"
       throw CreationError.createFailed
     }
-    return dev
+    let queue = DispatchQueue(label: "com.openjoystickdriver.userspace-hid.\(identifier.vendorID).\(identifier.productID)")
+    if let onRumbleCommand {
+      IOHIDUserDeviceRegisterSetReportBlock(dev) { [weak self] type, reportID, report, reportLength in
+        let length = max(0, Int(reportLength))
+        let bytes = Array(UnsafeBufferPointer(start: report, count: length))
+        guard let command = VirtualRumbleOutputReportParser.parse(type: type, reportID: reportID, bytes: bytes) else {
+          return kIOReturnUnsupported
+        }
+        self?.lastRumbleStatus =
+          "app report id=\(reportID) L=\(command.left) R=\(command.right) LT=\(command.leftTrigger) RT=\(command.rightTrigger)"
+        print("[UserSpaceOutputDispatcher] App rumble report: \(identifier) \(self?.lastRumbleStatus ?? "")")
+        onRumbleCommand(identifier, command)
+        return kIOReturnSuccess
+      }
+    }
+    IOHIDUserDeviceSetDispatchQueue(dev, queue)
+    IOHIDUserDeviceActivate(dev)
+    return Entry(device: dev, queue: queue)
   }
 
   private static func hasEntitlement(_ entitlement: String) -> Bool {
@@ -187,8 +219,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     var entry: Entry? = registryLock.withLock { entries[identifier] }
     if entry == nil {
       do {
-        let dev = try createDevice(for: identifier)
-        let newEntry = Entry(device: dev)
+        let newEntry = try createDevice(for: identifier)
         registryLock.withLock {
           entries[identifier] = newEntry
           if !status.hasPrefix("error:") { status = "on" }

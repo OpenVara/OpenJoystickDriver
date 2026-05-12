@@ -4,7 +4,7 @@ import Foundation
 public enum VirtualControllerBackendID: String, CaseIterable, Sendable {
   case driverKitHID
   case userSpaceHID
-  case gameControllerVirtual
+  case gameControllerHID
 }
 
 /// Static capability description used by diagnostics and backend acceptance loops.
@@ -54,12 +54,12 @@ public protocol VirtualControllerBackend: OutputDispatcher {
 }
 
 public enum VirtualControllerBackendCatalog {
-  public static let gameControllerVirtualCapabilities = VirtualControllerBackendCapabilities(
-    isSystemWide: false,
-    supportsMultiplePhysicalControllers: false,
-    requiresEntitlement: false,
-    isImplemented: false,
-    notes: "Apple GCVirtualController is documented as a game-local software controller, not a system-wide virtual device."
+  public static let gameControllerHIDCapabilities = VirtualControllerBackendCapabilities(
+    isSystemWide: true,
+    supportsMultiplePhysicalControllers: true,
+    requiresEntitlement: true,
+    isImplemented: true,
+    notes: "Apple GameController.framework support uses the user-space HID backend with the apple-gamecontroller identity."
   )
 }
 

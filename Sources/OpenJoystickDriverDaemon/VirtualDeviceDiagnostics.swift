@@ -1,4 +1,5 @@
 import Foundation
+import GameController
 import IOKit
 import IOKit.hid
 import OpenJoystickDriverKit
@@ -71,7 +72,13 @@ enum VirtualDeviceDiagnostics {
         serialKind: serialKind,
         ioUserClass: ioUserClass,
         isOJDDriverKit: isOJDDriverKit,
-        isOJDUserSpace: isOJDUserSpace
+        isOJDUserSpace: isOJDUserSpace,
+        isGameControllerSupported: {
+          if #available(macOS 11.0, *) {
+            return GCController.supportsHIDDevice(device)
+          }
+          return nil
+        }()
       )
     }.sorted { a, b in
       if a.isOJDDriverKit != b.isOJDDriverKit { return a.isOJDDriverKit && !b.isOJDDriverKit }

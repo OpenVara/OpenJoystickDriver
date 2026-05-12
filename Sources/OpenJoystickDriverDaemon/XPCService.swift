@@ -461,9 +461,11 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     let format: any VirtualGamepadReportFormat
     switch identity {
     case .genericHID:
-      format = OJDGenericGamepadFormat()
+      format = OJDSDLGamepadFormat()
     case .sdl2_3:
-      format = OJDGenericGamepadFormat(includesDpadButtonBits: false)
+      format = OJDSDLGamepadFormat()
+    case .appleGameController:
+      format = Xbox360MacHIDReportFormat()
     case .xoneHID:
       // Xbox One identity for SDL/Steam/PCSX2:
       // - Prefer the physical HID report descriptor exposed by macOS for 045E:02EA (USB).
@@ -484,13 +486,26 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         format = try HIDDescriptorReportFormat(descriptor: XboxOneBluetoothHIDDescriptor.descriptor)
       }
     case .x360HID:
-      format = Xbox360XUSBDirectInputReportFormat()
+      format = Xbox360MacHIDReportFormat()
     }
 
     let ud = try UserSpaceOutputDispatcher(
       profile: profile,
       format: format,
-      emitsXboxGuideReport: compatibilityProfile.emitsXboxGuideReport
+      emitsXboxGuideReport: compatibilityProfile.emitsXboxGuideReport,
+      onRumbleCommand: { [weak self] identifier, command in
+        guard let self else { return }
+        Task {
+          _ = await self.deviceManager.sendRumble(
+            for: identifier,
+            left: command.left,
+            right: command.right,
+            lt: command.leftTrigger,
+            rt: command.rightTrigger,
+            durationMs: command.durationMs
+          )
+        }
+      }
     )
     return (ud, ud.status)
   }
@@ -556,7 +571,9 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
 
   private func currentUserSpaceStatus() -> String {
     userSpaceLock.withLock {
-      userSpaceDispatcher?.status ?? userSpaceStatus
+      guard let dispatcher = userSpaceDispatcher else { return userSpaceStatus }
+      let rumble = dispatcher.lastRumbleStatus == "none" ? "" : ", rumble: \(dispatcher.lastRumbleStatus)"
+      return "\(dispatcher.status)\(rumble)"
     }
   }
 
