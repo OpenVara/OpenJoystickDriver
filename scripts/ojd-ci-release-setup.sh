@@ -62,6 +62,14 @@ echo "Generating release signing environment..."
     ./scripts/ojd signing configure
 )
 
+release_env_file="$PROJECT_DIR/.""env.release"
+if [[ ! -f "$release_env_file" ]] \
+  || ! grep -q '^CODESIGN_IDENTITY=' "$release_env_file" \
+  || ! grep -q '^GUI_CODESIGN_IDENTITY=' "$release_env_file" \
+  || ! grep -q '^DAEMON_CODESIGN_IDENTITY=' "$release_env_file"; then
+  die "Release signing is not configured; fix the certificate/profile mismatch reported above."
+fi
+
 echo "Release signing setup complete."
 echo "Safe identity summary:"
 security find-identity -v -p codesigning "$keychain_path" | awk '/Apple Development:|Developer ID Application:/ {print "  " $2}'

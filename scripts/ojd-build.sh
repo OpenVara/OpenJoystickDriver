@@ -513,6 +513,21 @@ PY
   echo "  Compiler: $("$XCODE_CLANG" --version | head -n 1)"
   mkdir -p "$DEXT_BUILD_DIR/Index.noindex/DataStore"
 
+  local XCODEBUILD_SIGNING_ARGS=(
+    CODE_SIGN_IDENTITY="$DEXT_BUILD_IDENTITY_XCODE"
+    DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"
+    PROVISIONING_PROFILE_SPECIFIER="$DEXT_BUILD_PROFILE"
+    CODE_SIGN_STYLE=Manual
+  )
+  if [[ "$OJD_ENV" == "release" ]]; then
+    XCODEBUILD_SIGNING_ARGS=(
+      CODE_SIGNING_ALLOWED=NO
+      CODE_SIGNING_REQUIRED=NO
+      CODE_SIGN_IDENTITY=
+      PROVISIONING_PROFILE_SPECIFIER=
+    )
+  fi
+
   xcodebuild \
     -project "$DEXT_PROJECT" \
     -scheme "$DEXT_SCHEME" \
@@ -520,10 +535,7 @@ PY
     -derivedDataPath "$DEXT_BUILD_DIR" \
     CC="$XCODE_CLANG" \
     CXX="$XCODE_CLANGXX" \
-    CODE_SIGN_IDENTITY="$DEXT_BUILD_IDENTITY_XCODE" \
-    DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
-    PROVISIONING_PROFILE_SPECIFIER="$DEXT_BUILD_PROFILE" \
-    CODE_SIGN_STYLE=Manual \
+    "${XCODEBUILD_SIGNING_ARGS[@]}" \
     clean build
 
   [[ -d "$DEXT_PRODUCT" ]] || die ".dext not found at expected path: $DEXT_PRODUCT"
@@ -556,8 +568,13 @@ PY
         "$DEXT_SYSEXT/$DEXT_FILENAME/Info.plist"
 
     local DEXT_ENTITLEMENTS_TMP="$PROJECT_DIR/.build/dext-entitlements.plist"
-    codesign -d --entitlements - --xml "$DEXT_SYSEXT/$DEXT_FILENAME" > "$DEXT_ENTITLEMENTS_TMP" 2>/dev/null \
-      || die "Failed to extract entitlements from dext"
+    if ! codesign -d --entitlements - --xml "$DEXT_SYSEXT/$DEXT_FILENAME" > "$DEXT_ENTITLEMENTS_TMP" 2>/dev/null; then
+      if [[ "$OJD_ENV" == "release" ]]; then
+        cp "$DEXT_DIR/OpenJoystickVirtualHID.entitlements" "$DEXT_ENTITLEMENTS_TMP"
+      else
+        die "Failed to extract entitlements from dext"
+      fi
+    fi
 
     if [[ "$OJD_ENV" == "release" ]]; then
       /usr/libexec/PlistBuddy -c "Delete :com.apple.security.get-task-allow" "$DEXT_ENTITLEMENTS_TMP" 2>/dev/null || true
