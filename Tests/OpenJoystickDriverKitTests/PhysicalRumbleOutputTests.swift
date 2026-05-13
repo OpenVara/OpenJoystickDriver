@@ -114,6 +114,41 @@ import IOKit.hid
     #expect(report.bytes.dropFirst(6).allSatisfy { $0 == 0 })
   }
 
+  @Test("DS4 physical rumble report uses Bluetooth report 0x11 after Bluetooth input")
+  func ds4PhysicalRumbleReportUsesBluetoothReportAfterBluetoothInput() throws {
+    let parser = DS4Parser()
+    _ = try parser.parse(
+      data: Data([0x11, 0xC0, 0x00, 128, 128, 128, 128, 0x08, 0, 0, 0, 0]
+        + [UInt8](repeating: 0, count: 64) + [0x7D, 0x0A, 0x5D, 0x0B])
+    )
+
+    let report = parser.physicalRumbleReport(left: 180, right: 90, lt: 255, rt: 64)
+
+    #expect(report.reportID == 0x11)
+    #expect(report.bytes.count == 78)
+    #expect(report.bytes[0] == 0x11)
+    #expect(report.bytes[1] == 0xC0)
+    #expect(report.bytes[3] == 0x0F)
+    #expect(report.bytes[6] == 90)
+    #expect(report.bytes[7] == 180)
+    #expect(report.bytes[74...77].contains { $0 != 0 })
+  }
+
+  @Test("DS4 preferred Bluetooth parser uses Bluetooth physical rumble before input")
+  func ds4PreferredBluetoothParserUsesBluetoothPhysicalRumbleBeforeInput() {
+    let report = DS4Parser(prefersBluetooth: true).physicalRumbleReport(
+      left: 180,
+      right: 90,
+      lt: 255,
+      rt: 64
+    )
+
+    #expect(report.reportID == 0x11)
+    #expect(report.bytes.count == 78)
+    #expect(report.bytes[6] == 90)
+    #expect(report.bytes[7] == 180)
+  }
+
   private func hasPhysicalRumble(_ parser: any InputParser) -> Bool {
     parser is PhysicalRumbleOutput || parser is PhysicalHIDRumbleOutput
   }

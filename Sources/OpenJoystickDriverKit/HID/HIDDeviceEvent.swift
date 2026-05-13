@@ -12,10 +12,11 @@ public enum HIDDeviceEvent: Sendable {
     productID: UInt16,
     serialNumber: String?,
     locationID: UInt32,
-    productName: String?
+    productName: String?,
+    transport: String?
   )
   /// A previously connected HID controller was unplugged.
   case disconnected(vendorID: UInt16, productID: UInt16, locationID: UInt32)
   /// The controller sent a raw input report (button presses, stick positions, etc.).
-  case inputReport(locationID: UInt32, data: Data)
+  case inputReport(locationID: UInt32, reportID: UInt8, data: Data)
 }

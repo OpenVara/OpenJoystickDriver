@@ -5,15 +5,30 @@ private let ds4AxisCenter: Float = 128
 private let ds4AxisDeadzone: Float = 0.08
 private let ds4HatNeutral: UInt8 = 0xFF
 private let ds4TriggerMax: Float = 255
-private let ds4OutputReportID: UInt8 = 0x05
-private let ds4OutputReportLength = 32
+private let ds4USBInputReportID: UInt8 = 0x01
+private let ds4BluetoothInputReportID: UInt8 = 0x11
+private let ds4BluetoothHIDInputTransaction: UInt8 = 0xA1
+private let ds4BluetoothHIDOutputHeader: UInt8 = 0xA2
+private let ds4USBOutputReportID: UInt8 = 0x05
+private let ds4USBOutputReportLength = 32
+private let ds4BluetoothOutputReportID: UInt8 = 0x11
+private let ds4BluetoothOutputReportLength = 78
 private let ds4OutputValidFlagMotor: UInt8 = 0x01
+private let ds4BluetoothOutputHIDAndCRCFlag: UInt8 = 0xC0
+private let ds4BluetoothOutputEnableFlags: UInt8 = 0x0F
 
-/// Parser for Sony DualShock 4 controllers (USB HID, Report ID 0x01).
+private enum DS4ConnectionMode {
+  case usb
+  case bluetooth
+}
+
+/// Parser for Sony DualShock 4 controllers.
 ///
 /// No handshake required — DS4 sends input reports automatically on USB connection.
 /// IOKit reports the DS4 report ID separately, so wired HID input can arrive
 /// either with or without the leading `0x01` report ID byte.
+/// Bluetooth input report `0x11` carries the same controller state after its
+/// transport/control prefix.
 public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked Sendable {
 
   private enum ReportOffset {
@@ -38,9 +53,12 @@ public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked S
   private var prevLSY = UInt8(ds4AxisCenter)
   private var prevRSX = UInt8(ds4AxisCenter)
   private var prevRSY = UInt8(ds4AxisCenter)
+  private var connectionMode: DS4ConnectionMode = .usb
 
   /// Creates a new DS4Parser.
-  public init() {}
+  public init(prefersBluetooth: Bool = false) {
+    connectionMode = prefersBluetooth ? .bluetooth : .usb
+  }
 
   // swiftlint:disable async_without_await
   /// No-op; DS4 requires no handshake.
@@ -96,18 +114,57 @@ public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked S
   public func physicalRumbleReport(left: UInt8, right: UInt8, lt _: UInt8, rt _: UInt8)
     -> PhysicalHIDOutputReport
   {
-    var report = [UInt8](repeating: 0, count: ds4OutputReportLength)
-    report[0] = ds4OutputReportID
-    report[1] = ds4OutputValidFlagMotor
-    report[4] = right
-    report[5] = left
-    return PhysicalHIDOutputReport(reportID: ds4OutputReportID, bytes: report)
+    switch connectionMode {
+    case .usb:
+      var report = [UInt8](repeating: 0, count: ds4USBOutputReportLength)
+      report[0] = ds4USBOutputReportID
+      report[1] = ds4OutputValidFlagMotor
+      report[4] = right
+      report[5] = left
+      return PhysicalHIDOutputReport(reportID: ds4USBOutputReportID, bytes: report)
+    case .bluetooth:
+      var report = [UInt8](repeating: 0, count: ds4BluetoothOutputReportLength)
+      report[0] = ds4BluetoothOutputReportID
+      report[1] = ds4BluetoothOutputHIDAndCRCFlag
+      report[3] = ds4BluetoothOutputEnableFlags
+      report[6] = right
+      report[7] = left
+      let crc = ds4BluetoothCRC32(report: report)
+      report[74] = UInt8(truncatingIfNeeded: crc)
+      report[75] = UInt8(truncatingIfNeeded: crc >> 8)
+      report[76] = UInt8(truncatingIfNeeded: crc >> 16)
+      report[77] = UInt8(truncatingIfNeeded: crc >> 24)
+      return PhysicalHIDOutputReport(reportID: ds4BluetoothOutputReportID, bytes: report)
+    }
   }
 
   private func reportPayload(from data: Data) -> [UInt8] {
     let bytes = Array(data)
-    if bytes.first == 0x01, bytes.count >= 10 {
+    if bytes.first == ds4USBInputReportID, bytes.count >= 10 {
+      if connectionMode != .bluetooth { connectionMode = .usb }
       return Array(bytes.dropFirst())
+    }
+    if bytes.first == ds4BluetoothHIDInputTransaction,
+      bytes.dropFirst().first == ds4USBInputReportID,
+      bytes.count >= 12
+    {
+      connectionMode = .bluetooth
+      return Array(bytes.dropFirst(2))
+    }
+    if bytes.first == ds4BluetoothHIDInputTransaction,
+      bytes.dropFirst().first == ds4BluetoothInputReportID,
+      bytes.count >= 79
+    {
+      connectionMode = .bluetooth
+      return Array(bytes.dropFirst(4).dropLast(4))
+    }
+    if bytes.first == ds4BluetoothInputReportID, bytes.count >= 78 {
+      connectionMode = .bluetooth
+      return Array(bytes.dropFirst(3).dropLast(4))
+    }
+    if bytes.first == ds4BluetoothOutputHIDAndCRCFlag, bytes.count >= 77 {
+      connectionMode = .bluetooth
+      return Array(bytes.dropFirst(2).dropLast(4))
     }
     return bytes
   }
@@ -201,5 +258,25 @@ public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked S
     case 7: .northWest
     default: .neutral
     }
+  }
+
+  private func ds4BluetoothCRC32(report: [UInt8]) -> UInt32 {
+    var crc = updateCRC32(0xFFFF_FFFF, byte: ds4BluetoothHIDOutputHeader)
+    for byte in report.dropLast(4) {
+      crc = updateCRC32(crc, byte: byte)
+    }
+    return ~crc
+  }
+
+  private func updateCRC32(_ current: UInt32, byte: UInt8) -> UInt32 {
+    var crc = current ^ UInt32(byte)
+    for _ in 0..<8 {
+      if crc & 1 == 1 {
+        crc = (crc >> 1) ^ 0xEDB8_8320
+      } else {
+        crc >>= 1
+      }
+    }
+    return crc
   }
 }

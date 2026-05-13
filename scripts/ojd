@@ -24,6 +24,7 @@ Commands:
   build dev                   Build + sign app bundle into `.build/` (no dext)
   build release               Build + sign app bundle for release (no dext)
   build dext                  Build DriverKit `.dext` and embed into `.build/` app
+  bump-version <version>      Update release version references
 
   signing install-profiles    Copy profiles from ~/Documents/Profiles into MobileDevice
   signing configure            Generate scripts/.env.dev + scripts/.env.release from Keychain + profiles
@@ -65,6 +66,7 @@ Examples:
   ./scripts/ojd signing install-profiles
   ./scripts/ojd signing configure
   ./scripts/ojd rebuild-fast dev
+  ./scripts/ojd bump-version 0.1.0-rc.2
 
 Notes:
   - Most commands expect the app to be installed to /Applications.
@@ -126,6 +128,10 @@ case "$cmd" in
         die "Unknown: rebuild-fast $sub (expected: dev)"
         ;;
     esac
+    ;;
+
+  bump-version)
+    exec /usr/bin/env bash "$SCRIPT_DIR/bump-version.sh" "$@"
     ;;
 
   signing)

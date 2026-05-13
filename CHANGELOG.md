@@ -2,6 +2,23 @@
 
 All notable changes to OpenJoystickDriver are documented in this file.
 
+## 0.1.0-rc.2
+
+### Added
+
+- Added hardware-confirmed DualShock 4 Bluetooth input support through Sony HID
+  report `0x11`.
+- Added DualShock 4 Bluetooth physical rumble support through output report
+  `0x11` with CRC framing.
+- Added IOHID transport/report ID propagation so Bluetooth DS4 devices select
+  the Sony Bluetooth report path.
+- Added regression coverage for observed macOS Bluetooth DS4 report bytes.
+
+### Changed
+
+- Updated compatibility docs and LLM context to distinguish DualShock 4
+  Bluetooth support from unsupported non-DS4 Bluetooth controllers.
+
 ## 0.1.0-rc.1
 
 ### Added

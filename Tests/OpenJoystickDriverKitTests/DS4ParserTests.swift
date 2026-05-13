@@ -30,6 +30,32 @@ private func makeDS4Report(
   return Data(report)
 }
 
+private func makeDS4BluetoothReport(
+  includesHIDTransaction: Bool = false,
+  includesReportID: Bool = true,
+  leftStickX: UInt8 = 128,
+  leftStickY: UInt8 = 128,
+  rightStickX: UInt8 = 128,
+  rightStickY: UInt8 = 128,
+  buttons0: UInt8 = 0x08,
+  buttons1: UInt8 = 0,
+  buttons2: UInt8 = 0,
+  leftTrigger: UInt8 = 0,
+  rightTrigger: UInt8 = 0
+) -> Data {
+  var report: [UInt8] = []
+  if includesHIDTransaction { report.append(0xA1) }
+  if includesReportID { report.append(0x11) }
+  report.append(contentsOf: [0xC0, 0x00])
+  report.append(contentsOf: [
+    leftStickX, leftStickY, rightStickX, rightStickY, buttons0, buttons1, buttons2, leftTrigger,
+    rightTrigger,
+  ])
+  report.append(contentsOf: [UInt8](repeating: 0, count: 64))
+  report.append(contentsOf: [0x7D, 0x0A, 0x5D, 0x0B])
+  return Data(report)
+}
+
 private func containsEvent(_ events: [ControllerEvent], _ expected: ControllerEvent) -> Bool {
   events.contains(expected)
 }
@@ -55,6 +81,89 @@ private func containsEvent(_ events: [ControllerEvent], _ expected: ControllerEv
     )
 
     #expect(containsEvent(events, .buttonPressed(.cross)))
+  }
+
+  @Test("Bluetooth report 0x11 parses face buttons")
+  func bluetoothReport11ParsesFaceButtons() throws {
+    let parser = DS4Parser()
+    _ = try parser.parse(data: makeDS4BluetoothReport())
+
+    let events = try parser.parse(data: makeDS4BluetoothReport(buttons0: 0x28))
+
+    #expect(containsEvent(events, .buttonPressed(.cross)))
+  }
+
+  @Test("Bluetooth HID transaction report parses sticks triggers and system buttons")
+  func bluetoothHIDTransactionReportParsesSticksTriggersAndSystemButtons() throws {
+    let parser = DS4Parser()
+    _ = try parser.parse(data: makeDS4BluetoothReport(includesHIDTransaction: true))
+
+    let events = try parser.parse(
+      data: makeDS4BluetoothReport(
+        includesHIDTransaction: true,
+        leftStickX: 255,
+        leftStickY: 0,
+        rightStickX: 0,
+        rightStickY: 255,
+        buttons1: 0x30,
+        buttons2: 0x03,
+        leftTrigger: 255,
+        rightTrigger: 128
+      )
+    )
+
+    #expect(containsEvent(events, .leftStickChanged(x: 127.0 / 128.0, y: 1.0)))
+    #expect(containsEvent(events, .rightStickChanged(x: -1.0, y: -127.0 / 128.0)))
+    #expect(containsEvent(events, .leftTriggerChanged(1.0)))
+    #expect(containsEvent(events, .rightTriggerChanged(128.0 / 255.0)))
+    #expect(containsEvent(events, .buttonPressed(.share)))
+    #expect(containsEvent(events, .buttonPressed(.options)))
+    #expect(containsEvent(events, .buttonPressed(.ps)))
+    #expect(containsEvent(events, .buttonPressed(.touchpad)))
+  }
+
+  @Test("Bluetooth payload without report ID parses D-pad")
+  func bluetoothPayloadWithoutReportIDParsesDpad() throws {
+    let parser = DS4Parser()
+    _ = try parser.parse(data: makeDS4BluetoothReport(includesReportID: false))
+
+    let events = try parser.parse(
+      data: makeDS4BluetoothReport(includesReportID: false, buttons0: 0x02)
+    )
+
+    #expect(containsEvent(events, .dpadChanged(.east)))
+  }
+
+  @Test("Bluetooth short report 0x01 with HID transaction parses face buttons")
+  func bluetoothShortReportWithHIDTransactionParsesFaceButtons() throws {
+    let parser = DS4Parser(prefersBluetooth: true)
+    _ = try parser.parse(data: Data([0xA1] + Array(makeDS4Report(includesReportID: true))))
+
+    let events = try parser.parse(
+      data: Data([0xA1] + Array(makeDS4Report(includesReportID: true, buttons0: 0x28)))
+    )
+
+    #expect(containsEvent(events, .buttonPressed(.cross)))
+  }
+
+  @Test("Observed macOS Bluetooth report 0x11 parses stick state")
+  func observedMacOSBluetoothReport11ParsesStickState() throws {
+    let parser = DS4Parser(prefersBluetooth: true)
+    let observedPrefix: [UInt8] = [
+      0x11, 0xC0, 0x00, 0x7A, 0x81, 0x81, 0x82, 0x08, 0x00, 0xCC, 0x00, 0x00,
+      0xF5, 0xD1, 0x0C, 0xF6, 0xFF, 0x0B, 0x00, 0xF3, 0xFF, 0x78, 0x00, 0x8E,
+    ]
+    let observedReport = Data(observedPrefix + [UInt8](repeating: 0, count: 54))
+
+    let events = try parser.parse(data: observedReport)
+
+    #expect(containsEvent(events, .leftStickChanged(x: 0, y: 0)))
+    #expect(containsEvent(events, .rightStickChanged(x: 0, y: 0)))
+    #expect(containsEvent(events, .dpadChanged(.neutral)))
+    #expect(!events.contains { event in
+      if case .buttonPressed = event { return true }
+      return false
+    })
   }
 
   @Test("Wired IOHID reports parse sticks triggers and system buttons")

@@ -301,17 +301,18 @@ public actor DeviceManager {
     print("[DeviceManager] HID detection started" + " (class 0x03)")
     for await event in hidManager.deviceEvents() {
       switch event {
-      case .connected(let vid, let pid, let serial, let loc, let productName):
+      case .connected(let vid, let pid, let serial, let loc, let productName, let transport):
         handleHIDDeviceConnected(
           vendorID: vid,
           productID: pid,
           serialNumber: serial,
           locationID: loc,
-          productName: productName
+          productName: productName,
+          transport: transport
         )
       case .disconnected(let vid, let pid, let loc):
         await handleHIDDeviceDisconnected(vendorID: vid, productID: pid, locationID: loc)
-      case .inputReport(let loc, let data): await routeHIDInputReport(locationID: loc, data: data)
+      case .inputReport(let loc, _, let data): await routeHIDInputReport(locationID: loc, data: data)
       }
     }
   }
@@ -321,7 +322,8 @@ public actor DeviceManager {
     productID: UInt16,
     serialNumber: String?,
     locationID: UInt32,
-    productName: String?
+    productName: String?,
+    transport: String?
   ) {
     let identifier = DeviceIdentifier(
       vendorID: vendorID,
@@ -333,9 +335,15 @@ public actor DeviceManager {
     guard pipelines[identifier] == nil else { return }
 
     let name = productName ?? "Controller"
-    deviceInfos[identifier] = DeviceInfo(name: name, connection: "HID", serialNumber: serialNumber)
+    let connection = transport ?? "HID"
+    deviceInfos[identifier] = DeviceInfo(name: name, connection: connection, serialNumber: serialNumber)
     print("[DeviceManager] HID device connected:" + " \(name) (\(identifier))")
-    let parser = parserRegistry.parser(for: identifier)
+    let parser: any InputParser
+    if parserRegistry.parserName(for: identifier) == "DS4", connection == "Bluetooth" {
+      parser = DS4Parser(prefersBluetooth: true)
+    } else {
+      parser = parserRegistry.parser(for: identifier)
+    }
     let pipeline = DevicePipeline(
       identifier: identifier,
       transport: .hid(locationID: locationID),

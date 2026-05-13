@@ -12,12 +12,12 @@ app, or native macOS app.
 
 - ✅ GameSir G7 SE: hardware verified through GIP and Xbox One HID compatibility.
 - ✅ Flydigi Vader 5S: supported through GIP with its required USB setup quirk.
-- ✅ Sony DualShock 4 USB: input and physical rumble are implemented.
+- ✅ Sony DualShock 4 USB/Bluetooth: input and physical rumble are implemented.
 - ✅ Xbox 360 USB profiles: supported through Xbox 360 HID-style parsing.
 - ✅ App-facing compatibility modes: SDL 2/3, Apple GameController, Generic HID,
   Xbox 360 HID, and Xbox One HID.
 - 🚧 More xpad-derived Xbox profiles exist but still need local hardware checks.
-- ❌ Sony DualShock 3, Sony DualSense, Bluetooth, and Switch Pro are not implemented.
+- ❌ Sony DualShock 3, Sony DualSense, non-DS4 Bluetooth, and Switch Pro are not implemented.
 
 For the full feature matrix, mapping notes, and per-mode caveats, see
 [COMPATIBILITY_LAYERS.md](COMPATIBILITY_LAYERS.md).
@@ -164,7 +164,7 @@ Input:
 
 ```text
 USB vendor-specific devices -> LibUSB / SwiftUSB -> GIPParser
-USB HID devices             -> IOHIDManager      -> DualShock 4 parser or GenericHIDParser
+USB/Bluetooth HID devices   -> IOHIDManager      -> DualShock 4 parser or GenericHIDParser
 ```
 
 Output:

@@ -148,7 +148,8 @@ public final class HIDDeviceStream: @unchecked Sendable {
         productID: UInt16(truncatingIfNeeded: pid),
         serialNumber: serial,
         locationID: locationID,
-        productName: productName
+        productName: productName,
+        transport: transport.isEmpty ? nil : transport
       )
     )
   }
@@ -176,11 +177,15 @@ public final class HIDDeviceStream: @unchecked Sendable {
   /// Copies raw report bytes and yields an `.inputReport` event.
   private func handleInputReport(
     locationID: UInt32,
+    reportID: UInt8,
     report: UnsafePointer<UInt8>,
     reportLength: CFIndex
   ) {
-    let data = Data(bytes: report, count: reportLength)
-    continuation?.yield(.inputReport(locationID: locationID, data: data))
+    var bytes = [UInt8](UnsafeBufferPointer(start: report, count: reportLength))
+    if reportID != 0, bytes.first != reportID {
+      bytes.insert(reportID, at: 0)
+    }
+    continuation?.yield(.inputReport(locationID: locationID, reportID: reportID, data: Data(bytes)))
   }
 
   /// Reads an integer property from an IOKit HID device.
@@ -207,7 +212,7 @@ public final class HIDDeviceStream: @unchecked Sendable {
     _,
     sender,
     _,
-    _,
+    reportID,
     report,
     length in
     guard let context, let sender else { return }
@@ -215,6 +220,7 @@ public final class HIDDeviceStream: @unchecked Sendable {
     let loc = IOHIDDeviceGetProperty(device, kIOHIDLocationIDKey as CFString) as? Int ?? 0
     Unmanaged<HIDDeviceStream>.fromOpaque(context).takeUnretainedValue().handleInputReport(
       locationID: UInt32(truncatingIfNeeded: loc),
+      reportID: UInt8(truncatingIfNeeded: reportID),
       report: report,
       reportLength: length
     )

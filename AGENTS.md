@@ -21,9 +21,9 @@ manual hardware notes in this repo support it.
   compatibility mode.
 - Flydigi Vader 5S is supported through the GIP path and needs
   `setConfiguration(1)` before claim plus a post-handshake settle delay.
-- DualShock 4 USB parser support exists, but this repo does not currently have
+- DualShock 4 USB/Bluetooth parser support exists, but this repo does not currently have
   local hardware verification for it.
-- Bluetooth, DualSense, and Switch Pro support are not implemented.
+- Non-DS4 Bluetooth, DualSense, and Switch Pro support are not implemented.
 
 ## Edit Rules
 

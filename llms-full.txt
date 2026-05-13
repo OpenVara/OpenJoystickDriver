@@ -21,7 +21,7 @@ Input:
 
 ```text
 USB vendor-specific class 0xff -> LibUSB / SwiftUSB -> GIPParser
-USB HID class 0x03             -> IOHIDManager      -> DS4Parser or GenericHIDParser
+USB/Bluetooth HID class 0x03   -> IOHIDManager      -> DS4Parser or GenericHIDParser
 ```
 
 Output:
@@ -118,8 +118,8 @@ Edit `AGENTS.md` only for agent instructions. Keep the symlinks intact.
 | Flydigi Vader 5S | 14295 | 10241 | GIP, xboxOne variant | Supported with device-specific USB config |
 | xpad.c Xbox 360 batch | varies | varies | Xbox360 | Profiled, not locally hardware verified |
 | xpad.c Xbox One batch | varies | varies | GIP, xboxOne variant | Profiled with source-backed startup packets, not locally hardware verified |
-| DualShock 4 v1 | 1356 | 1476 | DS4 USB HID | Implemented, not locally hardware verified |
-| DualShock 4 v2 | 1356 | 2508 | DS4 USB HID | Implemented, not locally hardware verified |
+| DualShock 4 v1 | 1356 | 1476 | DS4 USB/Bluetooth HID | Implemented, not locally hardware verified |
+| DualShock 4 v2 | 1356 | 2508 | DS4 USB/Bluetooth HID | Implemented, not locally hardware verified |
 
 The xpad.c Xbox batches are attributed in README.md to Linux
 `drivers/input/joystick/xpad.c`; preserve that attribution when adding more
