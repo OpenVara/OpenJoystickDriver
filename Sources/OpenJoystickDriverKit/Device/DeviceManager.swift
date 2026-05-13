@@ -312,7 +312,8 @@ public actor DeviceManager {
         )
       case .disconnected(let vid, let pid, let loc):
         await handleHIDDeviceDisconnected(vendorID: vid, productID: pid, locationID: loc)
-      case .inputReport(let loc, _, let data): await routeHIDInputReport(locationID: loc, data: data)
+      case .inputReport(let loc, _, let data):
+        await routeHIDInputReport(locationID: loc, data: data)
       }
     }
   }
@@ -336,7 +337,11 @@ public actor DeviceManager {
 
     let name = productName ?? "Controller"
     let connection = transport ?? "HID"
-    deviceInfos[identifier] = DeviceInfo(name: name, connection: connection, serialNumber: serialNumber)
+    deviceInfos[identifier] = DeviceInfo(
+      name: name,
+      connection: connection,
+      serialNumber: serialNumber
+    )
     print("[DeviceManager] HID device connected:" + " \(name) (\(identifier))")
     let parser: any InputParser
     if parserRegistry.parserName(for: identifier) == "DS4", connection == "Bluetooth" {
