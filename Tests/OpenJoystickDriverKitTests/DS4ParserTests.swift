@@ -30,6 +30,10 @@ private func makeDS4Report(
   return Data(report)
 }
 
+private func containsEvent(_ events: [ControllerEvent], _ expected: ControllerEvent) -> Bool {
+  events.contains(expected)
+}
+
 @Suite("DS4 Parser Tests") struct DS4ParserTests {
   @Test("Wired IOHID reports without report ID parse face buttons")
   func wiredIOHIDReportWithoutReportIDParsesFaceButtons() throws {
@@ -38,7 +42,7 @@ private func makeDS4Report(
 
     let events = try parser.parse(data: makeDS4Report(buttons0: 0x28))
 
-    #expect(events.contains(.buttonPressed(.cross)))
+    #expect(containsEvent(events, .buttonPressed(.cross)))
   }
 
   @Test("Raw USB reports with report ID parse face buttons")
@@ -50,7 +54,7 @@ private func makeDS4Report(
       data: makeDS4Report(includesReportID: true, buttons0: 0x28)
     )
 
-    #expect(events.contains(.buttonPressed(.cross)))
+    #expect(containsEvent(events, .buttonPressed(.cross)))
   }
 
   @Test("Wired IOHID reports parse sticks triggers and system buttons")
@@ -71,14 +75,14 @@ private func makeDS4Report(
       )
     )
 
-    #expect(events.contains(.leftStickChanged(x: 127.0 / 128.0, y: 1.0)))
-    #expect(events.contains(.rightStickChanged(x: -1.0, y: -127.0 / 128.0)))
-    #expect(events.contains(.leftTriggerChanged(1.0)))
-    #expect(events.contains(.rightTriggerChanged(128.0 / 255.0)))
-    #expect(events.contains(.buttonPressed(.share)))
-    #expect(events.contains(.buttonPressed(.options)))
-    #expect(events.contains(.buttonPressed(.ps)))
-    #expect(events.contains(.buttonPressed(.touchpad)))
+    #expect(containsEvent(events, .leftStickChanged(x: 127.0 / 128.0, y: 1.0)))
+    #expect(containsEvent(events, .rightStickChanged(x: -1.0, y: -127.0 / 128.0)))
+    #expect(containsEvent(events, .leftTriggerChanged(1.0)))
+    #expect(containsEvent(events, .rightTriggerChanged(128.0 / 255.0)))
+    #expect(containsEvent(events, .buttonPressed(.share)))
+    #expect(containsEvent(events, .buttonPressed(.options)))
+    #expect(containsEvent(events, .buttonPressed(.ps)))
+    #expect(containsEvent(events, .buttonPressed(.touchpad)))
   }
 
   @Test("Wired IOHID reports parse D-pad directions")
@@ -91,10 +95,10 @@ private func makeDS4Report(
     let downEvents = try parser.parse(data: makeDS4Report(buttons0: 0x04))
     let leftEvents = try parser.parse(data: makeDS4Report(buttons0: 0x06))
 
-    #expect(upEvents.contains(.dpadChanged(.north)))
-    #expect(rightEvents.contains(.dpadChanged(.east)))
-    #expect(downEvents.contains(.dpadChanged(.south)))
-    #expect(leftEvents.contains(.dpadChanged(.west)))
+    #expect(containsEvent(upEvents, .dpadChanged(.north)))
+    #expect(containsEvent(rightEvents, .dpadChanged(.east)))
+    #expect(containsEvent(downEvents, .dpadChanged(.south)))
+    #expect(containsEvent(leftEvents, .dpadChanged(.west)))
   }
 
   @Test("Small DS4 stick jitter is normalized to idle")
@@ -106,8 +110,8 @@ private func makeDS4Report(
       data: makeDS4Report(leftStickX: 123, leftStickY: 126, rightStickX: 126, rightStickY: 130)
     )
 
-    #expect(events.contains(.leftStickChanged(x: 0, y: 0)))
-    #expect(events.contains(.rightStickChanged(x: 0, y: 0)))
+    #expect(containsEvent(events, .leftStickChanged(x: 0, y: 0)))
+    #expect(containsEvent(events, .rightStickChanged(x: 0, y: 0)))
   }
 
   @Test("Observed DS4 left-stick X drift is normalized to idle")
@@ -117,7 +121,7 @@ private func makeDS4Report(
 
     let events = try parser.parse(data: makeDS4Report(leftStickX: 120))
 
-    #expect(events.contains(.leftStickChanged(x: 0, y: 0)))
+    #expect(containsEvent(events, .leftStickChanged(x: 0, y: 0)))
   }
 
   @Test("DS4 stick reports raw HID normalized range")
@@ -129,8 +133,8 @@ private func makeDS4Report(
       data: makeDS4Report(leftStickX: 254, leftStickY: 2, rightStickX: 2, rightStickY: 254)
     )
 
-    #expect(events.contains(.leftStickChanged(x: 126.0 / 128.0, y: 126.0 / 128.0)))
-    #expect(events.contains(.rightStickChanged(x: -126.0 / 128.0, y: -126.0 / 128.0)))
+    #expect(containsEvent(events, .leftStickChanged(x: 126.0 / 128.0, y: 126.0 / 128.0)))
+    #expect(containsEvent(events, .rightStickChanged(x: -126.0 / 128.0, y: -126.0 / 128.0)))
   }
 
   @Test("Observed DS4 right-stick Y shortfall remains visible")
@@ -140,7 +144,7 @@ private func makeDS4Report(
 
     let events = try parser.parse(data: makeDS4Report(rightStickY: 8))
 
-    #expect(events.contains(.rightStickChanged(x: 0, y: 120.0 / 128.0)))
+    #expect(containsEvent(events, .rightStickChanged(x: 0, y: 120.0 / 128.0)))
   }
 
   @Test("Device input state exposes DS4 D-pad as held buttons")
