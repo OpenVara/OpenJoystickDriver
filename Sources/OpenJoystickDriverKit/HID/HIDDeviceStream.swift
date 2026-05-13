@@ -79,6 +79,31 @@ public final class HIDDeviceStream: @unchecked Sendable {
     continuation = nil
   }
 
+  public func setOutputReport(locationID: UInt32, report: PhysicalHIDOutputReport) -> Bool {
+    let device = seizeLock.withLock { seizedByLocation[locationID] }
+    guard let device else { return false }
+
+    var bytes = report.bytes
+    let reportLength = bytes.count
+    let result = bytes.withUnsafeMutableBufferPointer { pointer in
+      guard let baseAddress = pointer.baseAddress else { return kIOReturnBadArgument }
+      return IOHIDDeviceSetReport(
+        device,
+        kIOHIDReportTypeOutput,
+        CFIndex(report.reportID),
+        baseAddress,
+        reportLength
+      )
+    }
+    if result != kIOReturnSuccess {
+      print(
+        "[HIDDeviceStream] Output report failed for loc=\(locationID)"
+          + " report=0x\(String(format: "%02X", report.reportID)) kr=\(result)"
+      )
+    }
+    return result == kIOReturnSuccess
+  }
+
   // MARK: - Event handlers
 
   /// Reads device properties and yields a `.connected` event into the stream.

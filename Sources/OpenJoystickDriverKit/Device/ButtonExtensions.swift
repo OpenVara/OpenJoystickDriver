@@ -1,4 +1,45 @@
 extension Button {
+  /// SF Symbol name used by the Input Test button grid.
+  public var systemImageName: String {
+    switch self {
+    case .a: "a.circle"
+    case .b: "b.circle"
+    case .x: "x.circle"
+    case .y: "y.circle"
+    case .leftBumper: "l1.button.roundedbottom.horizontal"
+    case .rightBumper: "r1.button.roundedbottom.horizontal"
+    case .leftStick: "l.joystick.press.down"
+    case .rightStick: "r.joystick.press.down"
+    case .start: "line.3.horizontal.circle"
+    case .back: "rectangle.on.rectangle.circle"
+    case .guide: "house.circle"
+    case .dpadUp: "dpad.up.filled"
+    case .dpadDown: "dpad.down.filled"
+    case .dpadLeft: "dpad.left.filled"
+    case .dpadRight: "dpad.right.filled"
+    case .cross: "xmark.circle"
+    case .circle: "circle.circle"
+    case .square: "square.circle"
+    case .triangle: "triangle.circle"
+    case .l1: "l1.button.roundedbottom.horizontal"
+    case .r1: "r1.button.roundedbottom.horizontal"
+    case .l2Digital: "l2.button.roundedtop.horizontal"
+    case .r2Digital: "r2.button.roundedtop.horizontal"
+    case .share: "square.and.arrow.up.circle"
+    case .options: "ellipsis.circle"
+    case .ps: "logo.playstation"
+    case .touchpad: "rectangle.roundedtop"
+    case .genericButton1: "1.circle"
+    case .genericButton2: "2.circle"
+    case .genericButton3: "3.circle"
+    case .genericButton4: "4.circle"
+    case .genericButton5: "5.circle"
+    case .genericButton6: "6.circle"
+    case .genericButton7: "7.circle"
+    case .genericButton8: "8.circle"
+    }
+  }
+
   /// A short, human-readable label for the button (e.g. `"Left Bumper (LB)"`).
   ///
   /// Used in the mapping editor and profile display.

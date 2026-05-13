@@ -2,30 +2,37 @@
 
 All notable changes to OpenJoystickDriver are documented in this file.
 
-## Unreleased
+## 0.1.0-rc.1
 
 ### Added
 
-- **DriverKit virtual HID extension** — `OpenJoystickVirtualHIDDevice` (IOUserHIDDevice + user-client IPC) as the production output path for injecting gamepad input into the system HID stack
-- **DextOutputDispatcher** — daemon-side output dispatcher that connects to the DriverKit extension via IOKit user-client
-- **DextOutputDispatcher auto-retry** — silently retries dext connection on each dispatch call if the extension isn't loaded yet
-- **SystemExtensionManager** — GUI component for installing and approving the DriverKit extension
-- **GIPAuthHandler** — CMD 0x06 authentication sub-protocol state machine for Xbox One / Series controllers, with dummy auth payloads (lenient enforcement)
-- **GIPConstants** — protocol command bytes, option flags, device power states, and auth sub-protocol states extracted from Windows driver analysis
-- **build-dext.sh** — script to build and embed the DriverKit extension into the GUI app bundle
-- **build-release.sh** — universal binary build, codesign, and notarization pipeline
-- Dext entitlements: `driverkit.transport.hid`, `driverkit.family.hid.eventservice`
-- Stick-to-mouse and D-pad-to-arrow-keys mapping
+- Added DualShock 4 USB input support with raw HID-normalized stick values.
+- Added DualShock 4 physical rumble over HID output report `0x05`.
+- Added app-rumble forwarding for Compatibility devices through supported Xbox
+  One, Xbox 360, and compact OJD rumble reports.
+- Added Input Test controls for live input, packet logs, physical rumble, and
+  controller-specific button glyphs.
+- Added user-space compatibility identities for SDL 2/3, Apple GameController,
+  Generic HID, Xbox 360 HID, and Xbox One HID.
+- Added RTK filter install command plumbing under `./scripts/ojd rtk`.
 
 ### Changed
 
-- **GIPParser** — integrated GIPAuthHandler, fixed extended-length packet encoding, replaced inline constants with GIPConstants enums
-- **Output architecture** — replaced CGEvent-based output with DriverKit virtual HID gamepad dispatcher
-- **Permissions** — removed Accessibility requirement; only Input Monitoring is needed now
-- **Daemon entitlements** — clarified that `hid.virtual.device` was not granted; `driverkit.userclient-access` is the production path
-- **build-dev.sh** — creates `.app` bundle structure for system extension support
+- Reworked the menu-bar app so OpenJoystickDriver stays menu-bar-only and keeps
+  the status item alive reliably.
+- Improved the Input Test window sizing, layout, button grid, and rumble control
+  labels.
+- Updated README into a shorter user-first guide.
+- Moved detailed compatibility information into an emoji-based feature matrix in
+  `COMPATIBILITY_LAYERS.md`.
+- Clarified Sony controller names: DualShock 4 is supported over USB; DualShock
+  3 and DualSense are not implemented.
 
 ### Fixed
 
-- **build-release.sh** — added missing `--entitlements` flag to GUI codesign step
-- Dext `allow-any-userclient-access` commented out with dev-only guidance (was active, should only be used for local development without provisioning profiles)
+- Fixed D-pad state tracking so held D-pad directions appear in Input Test state.
+- Fixed a daemon/user-space output dispatcher race when creating virtual devices.
+- Fixed app rumble parsing so unmarked DriverKit relay bytes are not treated as
+  rumble commands.
+- Fixed the app delegate lifetime so the menu-bar app can launch and remain
+  visible.

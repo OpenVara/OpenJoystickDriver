@@ -229,23 +229,13 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
   public func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) async {
     guard !suppressOutput else { return }
 
-    var entry: Entry? = registryLock.withLock { entries[identifier] }
-    if entry == nil {
-      do {
-        let newEntry = try createDevice(for: identifier)
-        registryLock.withLock {
-          entries[identifier] = newEntry
-          if !status.hasPrefix("error:") { status = "on" }
-          recomputeStatusLocked()
-        }
-        entry = newEntry
-      } catch {
-        status = "error: \(error)"
-        return
-      }
+    let entry: Entry
+    do {
+      entry = try getEntry(for: identifier)
+    } catch {
+      status = "error: \(error)"
+      return
     }
-
-    guard let entry else { return }
 
     let reports = entry.lock.withLock { () -> [[UInt8]] in
       for event in events { applyEvent(event, deadzone: 0.15, state: &entry.state) }
@@ -271,6 +261,17 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       status = "error: \(String(lastResult, radix: 16))"
     } else if status.hasPrefix("error:") {
       status = "on"
+    }
+  }
+
+  private func getEntry(for identifier: DeviceIdentifier) throws -> Entry {
+    try registryLock.withLock {
+      if let existing = entries[identifier] { return existing }
+      let newEntry = try createDevice(for: identifier)
+      entries[identifier] = newEntry
+      if !status.hasPrefix("error:") { status = "on" }
+      recomputeStatusLocked()
+      return newEntry
     }
   }
 

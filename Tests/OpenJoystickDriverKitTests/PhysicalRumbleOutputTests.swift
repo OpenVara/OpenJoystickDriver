@@ -5,15 +5,11 @@ import IOKit.hid
 @testable import OpenJoystickDriverKit
 
 @Suite("Physical Rumble Output Tests") struct PhysicalRumbleOutputTests {
-  @Test("GIP and Xbox 360 parsers expose source-backed physical rumble")
+  @Test("GIP, Xbox 360, and DS4 parsers expose source-backed physical rumble")
   func sourceBackedParsersExposeRumble() {
     #expect(hasPhysicalRumble(GIPParser()))
     #expect(hasPhysicalRumble(Xbox360Parser()))
-  }
-
-  @Test("Parsers without source-backed output do not expose physical rumble")
-  func parsersWithoutOutputDoNotExposeRumble() {
-    #expect(!hasPhysicalRumble(DS4Parser()))
+    #expect(hasPhysicalRumble(DS4Parser()))
   }
 
   @Test("XPC device descriptions default rumble support to false")
@@ -94,7 +90,31 @@ import IOKit.hid
     #expect(command == expected)
   }
 
+  @Test("Virtual output report parser rejects unmarked relay input reports")
+  func virtualParserRejectsUnmarkedRelayInputReports() {
+    let command = VirtualRumbleOutputReportParser.parse(
+      type: kIOHIDReportTypeOutput,
+      reportID: 0,
+      bytes: [1, 2, 3, 4, 5, 6]
+    )
+
+    #expect(command == nil)
+  }
+
+  @Test("DS4 physical rumble report uses USB HID output report 0x05")
+  func ds4PhysicalRumbleReportUsesUSBHIDOutputReport() {
+    let report = DS4Parser().physicalRumbleReport(left: 180, right: 90, lt: 255, rt: 64)
+
+    #expect(report.reportID == 0x05)
+    #expect(report.bytes.count == 32)
+    #expect(report.bytes[0] == 0x05)
+    #expect(report.bytes[1] == 0x01)
+    #expect(report.bytes[4] == 90)
+    #expect(report.bytes[5] == 180)
+    #expect(report.bytes.dropFirst(6).allSatisfy { $0 == 0 })
+  }
+
   private func hasPhysicalRumble(_ parser: any InputParser) -> Bool {
-    parser is PhysicalRumbleOutput
+    parser is PhysicalRumbleOutput || parser is PhysicalHIDRumbleOutput
   }
 }

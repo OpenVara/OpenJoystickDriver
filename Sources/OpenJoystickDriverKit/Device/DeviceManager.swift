@@ -99,14 +99,36 @@ public actor DeviceManager {
     else {
       return false
     }
-    let didStart = await pipeline.sendRumble(left: left, right: right, lt: lt, rt: rt)
+    let didStartUSB = await pipeline.sendRumble(left: left, right: right, lt: lt, rt: rt)
+    let didStartHID =
+      didStartUSB
+      ? false
+      : sendHIDRumbleReport(
+        await pipeline.hidRumbleReport(left: left, right: right, lt: lt, rt: rt),
+        locationID: key.locationID
+      )
+    let didStart = didStartUSB || didStartHID
     guard didStart else { return false }
     let clampedDurationMs = max(0, min(durationMs, 5_000))
     if clampedDurationMs > 0 {
       try? await Task.sleep(nanoseconds: UInt64(clampedDurationMs) * 1_000_000)
-      _ = await pipeline.sendRumble(left: 0, right: 0, lt: 0, rt: 0)
+      let didStopUSB = await pipeline.sendRumble(left: 0, right: 0, lt: 0, rt: 0)
+      if !didStopUSB {
+        _ = sendHIDRumbleReport(
+          await pipeline.hidRumbleReport(left: 0, right: 0, lt: 0, rt: 0),
+          locationID: key.locationID
+        )
+      }
     }
     return true
+  }
+
+  private func sendHIDRumbleReport(
+    _ report: PhysicalHIDOutputReport?,
+    locationID: UInt32?
+  ) -> Bool {
+    guard let report, let locationID else { return false }
+    return hidManager.setOutputReport(locationID: locationID, report: report)
   }
 
   /// Returns structured descriptions for all connected controllers.

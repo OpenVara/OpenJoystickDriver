@@ -40,20 +40,43 @@ manual hardware notes in this repo support it.
 
 ## Validation
 
-Run focused checks for the touched surface:
+Run focused checks for the touched surface through RTK filters instead of
+`rtk proxy`, because proxy tracks raw output and can collapse project savings:
 
 ```bash
-./scripts/ojd validate profiles
-swift test
-bash -n scripts/ojd scripts/ojd-*.sh
+rtk ./scripts/ojd validate profiles
+rtk test swift test
+rtk err bash -n scripts/ojd scripts/ojd-*.sh
 ```
 
-For backend/runtime changes, also use the relevant diagnostics:
+For backend/runtime changes, also use compact diagnostics:
 
 ```bash
-./scripts/ojd diagnose backends --seconds 5
-./scripts/ojd diagnose gamecontroller --seconds 5
-./scripts/ojd diagnose sdl3 --seconds 10
+rtk ./scripts/ojd diagnose backends --seconds 5
+rtk ./scripts/ojd diagnose gamecontroller --seconds 5
+rtk ./scripts/ojd diagnose sdl3 --seconds 10
+```
+
+Use `rtk summary <cmd>` for one-off noisy runtime probes, `rtk log` or
+`rtk pipe --filter ...` for captured logs, and `rtk run <cmd>` only when raw
+execution should intentionally avoid filtering and tracking. Do not use
+`rtk proxy` for routine tests, validation, app binary runs, `launchctl`, or
+`log show` diagnostics.
+
+This repo has project-local filters in `.rtk/filters.toml`. Install or append
+the managed common filters idempotently with:
+
+```bash
+./scripts/ojd rtk install-filters
+```
+
+After changing filters, run:
+
+```bash
+rtk trust
+rtk verify --require-all
+rtk discover --project OpenJoystickDriver
+RTK_HOOK_AUDIT=1 rtk hook-audit
 ```
 
 DriverKit, signing, notarization, TCC permissions, and real controller input may

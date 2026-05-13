@@ -134,7 +134,13 @@ actor DevicePipeline {
   }
 
   nonisolated func supportsPhysicalRumble() -> Bool {
-    (parser as? PhysicalRumbleOutput)?.supportsPhysicalRumble ?? false
+    if let usbOutput = parser as? PhysicalRumbleOutput {
+      return usbOutput.supportsPhysicalRumble
+    }
+    if let hidOutput = parser as? PhysicalHIDRumbleOutput {
+      return hidOutput.supportsPhysicalRumble
+    }
+    return false
   }
 
   // MARK: - Input state and packet log
@@ -160,10 +166,53 @@ actor DevicePipeline {
         currentInputState.rightStickY = y
       case .leftTriggerChanged(let v): currentInputState.leftTrigger = v
       case .rightTriggerChanged(let v): currentInputState.rightTrigger = v
-      case .dpadChanged: break
+      case .dpadChanged(let direction):
+        updateDpadButtons(direction)
       }
     }
     snapshots.updateInputState(currentInputState)
+  }
+
+  private func updateDpadButtons(_ direction: DpadDirection) {
+    let dpadButtons = Set([
+      Button.dpadUp.rawValue,
+      Button.dpadDown.rawValue,
+      Button.dpadLeft.rawValue,
+      Button.dpadRight.rawValue,
+    ])
+    currentInputState.pressedButtons.removeAll { dpadButtons.contains($0) }
+
+    func append(_ button: Button) {
+      let raw = button.rawValue
+      if !currentInputState.pressedButtons.contains(raw) {
+        currentInputState.pressedButtons.append(raw)
+      }
+    }
+
+    switch direction {
+    case .neutral:
+      break
+    case .north:
+      append(.dpadUp)
+    case .northEast:
+      append(.dpadUp)
+      append(.dpadRight)
+    case .east:
+      append(.dpadRight)
+    case .southEast:
+      append(.dpadDown)
+      append(.dpadRight)
+    case .south:
+      append(.dpadDown)
+    case .southWest:
+      append(.dpadDown)
+      append(.dpadLeft)
+    case .west:
+      append(.dpadLeft)
+    case .northWest:
+      append(.dpadUp)
+      append(.dpadLeft)
+    }
   }
 
   private func appendToPacketLog(bytes: [UInt8], direction: String) {
@@ -194,6 +243,13 @@ actor DevicePipeline {
       print("[DevicePipeline] Rumble send failed for \(identifier): \(error)")
       return false
     }
+  }
+
+  func hidRumbleReport(left: UInt8, right: UInt8, lt: UInt8, rt: UInt8)
+    -> PhysicalHIDOutputReport?
+  {
+    guard let rumbleOutput = parser as? PhysicalHIDRumbleOutput else { return nil }
+    return rumbleOutput.physicalRumbleReport(left: left, right: right, lt: lt, rt: rt)
   }
 
   // MARK: - Private USB pipeline

@@ -1,5 +1,16 @@
 import SwiftUSB
 
+/// A raw HID output report that can be sent through IOKit.
+public struct PhysicalHIDOutputReport: Equatable, Sendable {
+  public let reportID: UInt8
+  public let bytes: [UInt8]
+
+  public init(reportID: UInt8, bytes: [UInt8]) {
+    self.reportID = reportID
+    self.bytes = bytes
+  }
+}
+
 /// Optional physical output support exposed by USB-backed controller protocols.
 public protocol PhysicalRumbleOutput: AnyObject, Sendable {
   /// True when the protocol has source-backed physical rumble output.
@@ -18,5 +29,17 @@ public protocol PhysicalRumbleOutput: AnyObject, Sendable {
 }
 
 extension PhysicalRumbleOutput {
+  public var supportsPhysicalRumble: Bool { true }
+}
+
+/// Optional physical output support exposed by HID-backed controller protocols.
+public protocol PhysicalHIDRumbleOutput: AnyObject, Sendable {
+  var supportsPhysicalRumble: Bool { get }
+
+  func physicalRumbleReport(left: UInt8, right: UInt8, lt: UInt8, rt: UInt8)
+    -> PhysicalHIDOutputReport
+}
+
+extension PhysicalHIDRumbleOutput {
   public var supportsPhysicalRumble: Bool { true }
 }

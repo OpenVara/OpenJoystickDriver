@@ -1,93 +1,118 @@
 # OpenJoystickDriver
 
-OpenJoystickDriver is a macOS userspace gamepad driver. It reads physical
-controllers, normalizes their reports, and exposes a virtual controller through
-DriverKit or an IOHIDUserDevice compatibility backend.
+OpenJoystickDriver is a macOS menu-bar app and daemon that turns supported
+physical controllers into app-friendly virtual controllers.
 
-The project is built for users who need a scriptable controller input layer on
-macOS: emulator users, engine integrators, game studios, and contributors adding
-new controller profiles.
+Use it when a controller works in OJD but not in a game, emulator, browser, SDL
+app, or native macOS app.
 
-<img width="492" height="532" alt="image" src="https://github.com/user-attachments/assets/532f809a-d6ef-49fc-9f99-3dbb5af7fc28" />
+<img width="492" height="532" alt="OpenJoystickDriver menu bar app" src="https://github.com/user-attachments/assets/532f809a-d6ef-49fc-9f99-3dbb5af7fc28" />
 
-## Status
+## What Works Today
 
-| Area                                    | Current state                                                                             |
-| --------------------------------------- | ----------------------------------------------------------------------------------------- |
-| macOS support                           | macOS 10.15 or later                                                                      |
-| Xbox One / Series class USB controllers | Working through the GIP protocol                                                          |
-| GameSir G7 SE                           | Hardware verified, including Xbox One HID compatibility reports                           |
-| Flydigi Vader 5S                        | Supported with a per-device schema, endpoint config, and `setConfiguration(1)` quirk      |
-| xpad.c Xbox controller batches          | Xbox 360 parser profiles and Xbox One GIP startup profiles, not locally hardware verified |
-| DualShock 4 USB                         | Implemented, not hardware verified in this repo                                           |
-| Generic USB HID gamepads                | Basic fallback                                                                            |
-| Virtual output                          | DriverKit HID and IOHIDUserDevice compatibility mode                                      |
-| GUI                                     | SwiftUI menu bar app                                                                      |
-| CLI                                     | `--headless` daemon and diagnostics commands                                              |
-| Bluetooth                               | Not implemented                                                                           |
-| DualSense / Switch Pro                  | Not implemented                                                                           |
+- ✅ GameSir G7 SE: hardware verified through GIP and Xbox One HID compatibility.
+- ✅ Flydigi Vader 5S: supported through GIP with its required USB setup quirk.
+- ✅ Sony DualShock 4 USB: input and physical rumble are implemented.
+- ✅ Xbox 360 USB profiles: supported through Xbox 360 HID-style parsing.
+- ✅ App-facing compatibility modes: SDL 2/3, Apple GameController, Generic HID,
+  Xbox 360 HID, and Xbox One HID.
+- 🚧 More xpad-derived Xbox profiles exist but still need local hardware checks.
+- ❌ Sony DualShock 3, Sony DualSense, Bluetooth, and Switch Pro are not implemented.
 
-GameSir G7 SE was manually verified in browser Gamepad API Xbox One HID
-compatibility mode as a standard `Xbox Wireless Controller` (`VID 045e`,
-`PID 02ea`). Browser, SDL, Generic HID, and Xbox HID compatibility mappings are
-kept in `COMPATIBILITY_LAYERS.md`.
+For the full feature matrix, mapping notes, and per-mode caveats, see
+[COMPATIBILITY_LAYERS.md](COMPATIBILITY_LAYERS.md).
 
-## Requirements
+## Install For Local Development
+
+Requirements:
 
 - macOS 10.15 or later
-- Xcode Command Line Tools or full Xcode
+- Xcode Command Line Tools or Xcode
 - `libusb`
 
 ```bash
 brew install libusb
 xcode-select --install
-```
-
-The Swift package uses Swift tools version 6.2 and Swift Testing. CI currently
-runs on macOS 26 so the compiler, SDK, and Apple `Testing.framework` match.
-
-## Quick Start
-
-```bash
 git clone https://github.com/xsyetopz/OpenJoystickDriver.git
 cd OpenJoystickDriver
-
 ./scripts/ojd signing install-profiles
 ./scripts/ojd signing configure
 ./scripts/ojd rebuild dev
 ```
 
-The dev rebuild creates a signed app bundle and installs it to
-`/Applications/OpenJoystickDriver.app`. On macOS 13 and newer, the daemon is
-managed through `SMAppService`; on macOS 10.15 through 12, OJD installs the
-bundled LaunchAgent plist through `launchctl`.
+The build installs:
 
-## Permissions
+```text
+/Applications/OpenJoystickDriver.app
+```
 
-Grant **Input Monitoring** to the daemon binary:
+Open that app from `/Applications`. OJD is menu-bar-only; it does not use a
+normal main window.
+
+## First Run
+
+1. Open `OpenJoystickDriver.app`.
+2. Grant **Input Monitoring** to the daemon if macOS asks.
+3. Connect a supported USB controller.
+4. Open the menu-bar item and choose **Input test**.
+5. Move sticks, press buttons, and use **Physical output** to test rumble.
+
+Grant Input Monitoring to this binary:
 
 ```text
 /Applications/OpenJoystickDriver.app/Contents/Library/LoginItems/OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon
 ```
 
-Accessibility permission is not required for normal virtual-controller output.
+Accessibility permission is not required for normal controller output.
 
-Development builds signed ad hoc can lose TCC grants after every rebuild because
-macOS ties permissions to the binary code identity. Use a real Apple Development
-identity for stable local testing.
+Development builds signed ad hoc can lose macOS permission grants after rebuilds
+because TCC tracks the binary code identity. Use an Apple Development identity
+for stable local testing.
 
-## Running
+## Pick A Compatibility Mode
 
-Use the app from `/Applications/OpenJoystickDriver.app`, or run the CLI from the
-app bundle:
+Most users should start with **Compatibility** mode and the **SDL 2/3** identity.
+
+- Use `SDL 2/3` for Steam, PCSX2, DuckStation, Moonlight/SDL, and most emulator
+  or game-launcher paths.
+- Use `Apple GameController` for native macOS apps that read `GCController`.
+- Use `Generic HID` for apps that inspect HID descriptors directly.
+- Use `Xbox 360 HID` or `Xbox One HID` only when testing a picky app that expects
+  a Microsoft-style HID device.
+
+CLI equivalents:
 
 ```bash
-/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless status
-/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless list
-/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless restart
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless compat sdl2-3
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless output secondary
 ```
 
-Common developer commands:
+```mermaid
+flowchart LR
+  physical[Physical USB controller] --> daemon[OJD daemon]
+  daemon --> input[Input Test]
+  daemon --> compat[Compatibility virtual controller]
+  compat --> apps[Games, emulators, browsers]
+  apps --> rumble[App rumble reports]
+  rumble --> daemon
+  daemon --> physical
+```
+
+## PCSX2
+
+For PCSX2, use SDL 2/3 Compatibility with user-space-only output:
+
+```bash
+./scripts/ojd install pcsx2-sdl-db
+./scripts/ojd install pcsx2-profile
+./scripts/ojd launch pcsx2
+```
+
+The launcher sets the known-good routing before starting PCSX2. The input
+profile binds both `SDL-0` and `SDL-1` so it still works if an old DriverKit
+device occupies one SDL slot.
+
+## Useful Commands
 
 ```bash
 ./scripts/ojd rebuild dev
@@ -98,196 +123,73 @@ Common developer commands:
 swift test
 ```
 
-Release and signing details live in [scripts/README.md](scripts/README.md).
+From the installed app bundle:
+
+```bash
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless status
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless list
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless restart
+```
 
 ## Controller Profiles
 
-Runtime controller profiles live here:
+Runtime profiles live in:
 
 ```text
 Sources/OpenJoystickDriverKit/Resources/Controllers/
 ```
 
-Device schemas live here:
+Device schemas live in:
 
 ```text
 Resources/Schemas/Devices/
 ```
 
-Every controller profile must use a repo URL for `$schema`, not a local file URL.
-GIP controller profiles must also have a matching device schema. Validate both
-with:
+Profile rules:
+
+- Use decimal VID, PID, endpoint, and packet values.
+- Use repo URL `$schema` references, not local file URLs.
+- Add a matching device schema for GIP controllers.
+- Keep protocol variants and mapping flags in data where possible.
+
+Validate profile changes with:
 
 ```bash
 ./scripts/ojd validate profiles
 ```
 
-Controller profiles use decimal VID/PID and endpoint values. Protocol metadata
-such as `variant` and mapping flags follows the xpad-style device family model so
-new Xbox-class devices can be added without hardcoding parser quirks.
+## Architecture In One Minute
 
-xpad.c-derived Xbox One profiles use named GIP startup packet sequences in
-profile data. That keeps device-specific init needs such as Xbox One S power
-init, Elite Series 2 extra input, HORI ACK, and PowerA rumble kick/stop packets
-out of parser VID/PID branches.
-
-## Architecture
-
-Input paths:
+Input:
 
 ```text
 USB vendor-specific devices -> LibUSB / SwiftUSB -> GIPParser
-USB HID devices             -> IOHIDManager      -> DS4Parser or GenericHIDParser
+USB HID devices             -> IOHIDManager      -> DualShock 4 parser or GenericHIDParser
 ```
 
-Output paths:
+Output:
 
 ```text
-DriverKit HID backend       -> private OJD relay / fallback diagnostics
-IOHIDUserDevice backend     -> consumer-facing virtual controller profiles
+DriverKit HID backend       -> private OJD relay / diagnostics
+IOHIDUserDevice backend     -> app-facing compatibility controllers
 ```
 
-If macOS keeps an old DriverKit process alive after a dext upgrade, browser and
-SDL consumers can see a stale extra virtual controller. Repair that state with:
+Each physical controller gets its own `DevicePipeline` actor. The daemon owns
+controller I/O and XPC APIs; the menu-bar app is only the user interface.
+
+If macOS keeps an old DriverKit process alive after an extension update, repair
+it with:
 
 ```bash
 ./scripts/ojd repair stale-dext
 ```
 
-The repair command only kills `OpenJoystickVirtualHID` processes whose executable
-path does not match the newest installed `com.openjoystickdriver.VirtualHIDDevice`
-copy under `/Library/SystemExtensions`.
+More architecture and contributor detail lives in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-Compatibility mode has five first-class user-space HID profiles:
+## Agent Context
 
-- `sdl2-3`: default for SDL consumers such as Steam and PCSX2. It uses
-  an OJD-owned identity plus an explicit SDL mapping.
-- `apple-gamecontroller`: Xbox-compatible HID surface accepted by Apple's
-  GameController.framework as a native `GCController`.
-- `generic-hid`: OJD-owned HID GamePad identity for apps that inspect the HID
-  descriptor directly.
-- `x360-hid`: experimental Xbox 360 HID hardware-spoof profile.
-- `xone-hid`: experimental Xbox One HID hardware-spoof profile.
-
-How the SDL vs Apple switch works:
-
-- OJD publishes one user-space compatibility identity at a time.
-- Use `sdl2-3` for SDL apps such as PCSX2, Steam, DuckStation, Moonlight/SDL
-  builds, and Parsec host paths.
-- Use `apple-gamecontroller` for native macOS apps that read controllers through
-  Apple's GameController.framework, including native game/app code that expects
-  a `GCController`.
-- Browser Gamepad API and direct HID consumers can still read the virtual
-  `IOHIDUserDevice`; they do not need SDL's mapping database.
-
-Application rumble works through the Compatibility `IOHIDUserDevice` set-report
-callback. OJD accepts common Xbox One, Xbox 360, and compact OJD rumble output
-reports, then forwards them to the connected physical controller when that
-controller supports physical rumble. Local validation physically felt rumble
-from an app-style HID output report.
-
-CLI switch examples:
-
-```bash
-/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless output secondary
-/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless compat sdl2-3
-/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless compat apple-gamecontroller
-./scripts/ojd diagnose gamecontroller --seconds 5
-```
-
-SDL consumers need a game controller mapping for the SDL 2/3 user-space identity.
-The repo ships the known-good mapping at
-`Resources/SDL/openjoystickdriver.gamecontrollerdb.txt`. Use `platform:macOS`
-for SDL3 consumers such as current PCSX2 builds; older `platform:Mac OS X`
-mapping lines can be ignored by SDL 3.2.x.
-
-For PCSX2, use SDL 2/3 Compatibility with user-space-only output.
-The SDL mapping targets the user-space PID `0x4448`, not the DriverKit PID `0x4447`.
-Do not spoof an SDL-known third-party controller VID/PID for this path: on macOS,
-GameController.framework can claim those identities before SDL's IOKit backend
-can enumerate them. The custom OJD PID plus explicit SDL mapping is intentional.
-Xbox 360 compatibility is exposed as an experimental user-space HID identity
-using the macOS Xbox 360 HID mapping. It is descriptor-backed, but it is not
-true Windows XInput/XUSB emulation: macOS cannot publish XUSB device interfaces
-or XInput IOCTLs through IOHIDUserDevice. The surface has independent LT/RT
-trigger axes, button-backed D-pad, and Guide/Home; vibration/headset semantics
-remain unsupported, so validate it per app.
-
-Detailed Browser Gamepad API and SDL mapping tables live in
-`COMPATIBILITY_LAYERS.md`.
-
-If PCSX2's bundled SDL database does not include the OJD mapping, launch PCSX2
-with the repo mapping override:
-
-```bash
-./scripts/ojd launch pcsx2
-```
-
-This sets `SDL_GAMECONTROLLERCONFIG` and `SDL_GAMECONTROLLERCONFIG_FILE` for
-PCSX2 without modifying the signed app bundle. It also sets the installed daemon
-to the known-good PCSX2 routing (`compat sdl2-3`, `output secondary`) before launch.
-For normal PCSX2 launches, install the merged user-data SDL database and the
-stale-index-tolerant input profile:
-
-```bash
-./scripts/ojd install pcsx2-sdl-db
-./scripts/ojd install pcsx2-profile
-```
-
-PCSX2 checks `~/Library/Application Support/PCSX2/game_controller_db.txt` before
-its bundled resources. The `OpenJoystickDriver` input profile binds both `SDL-0`
-and `SDL-1` so it still works while an old DriverKit device occupies one SDL slot.
-`scripts/ojd-install-pcsx2-mapping.sh` can append the mapping to PCSX2's bundled
-database when macOS allows app-bundle writes, but recent macOS builds may block
-that even with administrator rights.
-
-Each connected controller runs through an isolated `DevicePipeline` actor. The
-daemon exposes XPC status/control APIs to the GUI and CLI. The GUI is not the
-driver owner; the daemon can run without the menu bar app open.
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the current extension rules and
-long-term boundaries for profiles, protocol parsers, physical output
-capabilities, and virtual output profiles.
-
-## LLM and Agent Context
-
-This repo includes dedicated context files for coding agents and LLM tooling:
-
-- [AGENTS.md](AGENTS.md) - working instructions for repo agents
-- [ARCHITECTURE.md](ARCHITECTURE.md) - runtime boundaries and extension rules
+- [AGENTS.md](AGENTS.md) - repo working rules
+- [ARCHITECTURE.md](ARCHITECTURE.md) - runtime boundaries
+- [COMPATIBILITY_LAYERS.md](COMPATIBILITY_LAYERS.md) - feature matrix and mappings
 - [llms.txt](llms.txt) - concise project map
-- [llms-full.txt](llms-full.txt) - expanded architecture, validation, and device context
-
-`CLAUDE.md`, `GEMINI.md`, and `.github/copilot-instructions.md` are symlinks to
-`AGENTS.md`. Edit `AGENTS.md`; the other instruction surfaces follow it.
-
-## Attributions
-
-The Xbox controller profile batches derived from Linux `xpad.c` use upstream
-Linux controller metadata for VID/PID pairs, device names, xpad device-family
-classification, and Xbox One startup-packet selection. The source file is
-[`drivers/input/joystick/xpad.c`](https://raw.githubusercontent.com/torvalds/linux/refs/heads/master/drivers/input/joystick/xpad.c)
-from the Linux kernel tree, marked `SPDX-License-Identifier: GPL-2.0-or-later`
-and copyrighted by Linux kernel contributors. OpenJoystickDriver does not copy
-Linux driver implementation code for these profiles; it expresses controller
-metadata and named GIP startup packet selections as OpenJoystickDriver JSON
-profiles for the existing parser surfaces.
-
-The OpenJoystickDriver app icon is adapted from the Enjoyable app icon in
-[`MacThings/enjoyable`](https://github.com/MacThings/enjoyable). Enjoyable's
-README credits the joystick icon to the Tango icon set and notes that the icon
-is public domain.
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=xsyetopz%2FOpenJoystickDriver&type=date&logscale=&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=xsyetopz/OpenJoystickDriver&type=date&theme=dark&logscale&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=xsyetopz/OpenJoystickDriver&type=date&logscale&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=xsyetopz/OpenJoystickDriver&type=date&logscale&legend=top-left" />
- </picture>
-</a>
-
-## License
-
-[MIT](LICENSE)
+- [llms-full.txt](llms-full.txt) - expanded implementation context

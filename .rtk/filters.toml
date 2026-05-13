@@ -1,0 +1,304 @@
+schema_version = 1
+
+[filters.common-swift-test]
+description = "Compact Swift test output"
+match_command = "^swift\\s+test\\b"
+strip_ansi = true
+match_output = [
+  { pattern = "Test Suite '.+' passed", message = "ok (swift tests passed)", unless = "(?i)error|fail|failed|fatal|warning" },
+]
+keep_lines_matching = [
+  "(?i)error|fail|failed|fatal|warning|unexpected|issue recorded",
+  "^Test Suite '.+' (failed|passed)",
+  "^Test Case '.+' failed",
+]
+truncate_lines_at = 220
+max_lines = 120
+filter_stderr = true
+on_empty = "ok (swift test produced no notable lines)"
+
+[[tests.common-swift-test]]
+name = "successful swift test compacts"
+input = """
+Building for debugging...
+[1/3] Compiling Package Foo.swift
+Test Suite 'All tests' started at 2026-05-13.
+Test Case 'DeviceTests.testFoo' started.
+Test Case 'DeviceTests.testFoo' passed (0.001 seconds).
+Test Suite 'All tests' passed at 2026-05-13.
+"""
+expected = "ok (swift tests passed)"
+
+[[tests.common-swift-test]]
+name = "swift test failure is preserved"
+input = """
+Test Suite 'All tests' started at 2026-05-13.
+Test Case 'DeviceTests.testFoo' failed (0.001 seconds).
+/repo/Tests/DeviceTests.swift:10: error: DeviceTests.testFoo : XCTAssertEqual failed
+Test Suite 'All tests' failed at 2026-05-13.
+"""
+expected = "Test Case 'DeviceTests.testFoo' failed (0.001 seconds).\n/repo/Tests/DeviceTests.swift:10: error: DeviceTests.testFoo : XCTAssertEqual failed\nTest Suite 'All tests' failed at 2026-05-13."
+
+[filters.common-xcodebuild]
+description = "Compact xcodebuild output"
+match_command = "^xcodebuild\\b"
+strip_ansi = true
+match_output = [
+  { pattern = "\\*\\* BUILD SUCCEEDED \\*\\*", message = "ok (xcodebuild succeeded)", unless = "(?i)error|fail|failed|warning" },
+  { pattern = "\\*\\* TEST SUCCEEDED \\*\\*", message = "ok (xcodebuild tests succeeded)", unless = "(?i)error|fail|failed|warning" },
+]
+keep_lines_matching = [
+  "(?i)error:|warning:|fatal error|failed|testing failed|build failed",
+  "\\*\\* (BUILD|TEST) (FAILED|SUCCEEDED) \\*\\*",
+]
+truncate_lines_at = 240
+max_lines = 120
+filter_stderr = true
+on_empty = "ok (xcodebuild produced no notable lines)"
+
+[[tests.common-xcodebuild]]
+name = "successful xcodebuild compacts"
+input = """
+CompileSwift normal arm64 Foo.swift
+CodeSign /tmp/App.app
+** BUILD SUCCEEDED **
+"""
+expected = "ok (xcodebuild succeeded)"
+
+[[tests.common-xcodebuild]]
+name = "xcodebuild error is preserved"
+input = """
+CompileSwift normal arm64 Foo.swift
+/repo/Sources/Foo.swift:5:10: error: cannot find 'bar' in scope
+** BUILD FAILED **
+"""
+expected = "/repo/Sources/Foo.swift:5:10: error: cannot find 'bar' in scope\n** BUILD FAILED **"
+
+[filters.common-shell-syntax]
+description = "Compact shell syntax-check output"
+match_command = "^(bash|zsh|sh)\\s+-n\\b"
+strip_ansi = true
+keep_lines_matching = [
+  "(?i)syntax error|unexpected|error|failed|warning|warn",
+]
+truncate_lines_at = 220
+max_lines = 80
+filter_stderr = true
+on_empty = "ok (shell syntax check passed)"
+
+[[tests.common-shell-syntax]]
+name = "empty shell syntax output is ok"
+input = ""
+expected = "ok (shell syntax check passed)"
+
+[[tests.common-shell-syntax]]
+name = "shell syntax error is preserved"
+input = "scripts/dev: line 10: syntax error near unexpected token `fi'\n"
+expected = "scripts/dev: line 10: syntax error near unexpected token `fi'"
+
+[filters.common-js-ts-checks]
+description = "Compact JavaScript and TypeScript runtime checks"
+match_command = "^(bun|deno|yarn|corepack\\s+yarn|node\\s+--test)\\b.*\\b(test|spec|check|lint|typecheck)\\b|^(npm|pnpm)\\s+(run\\s+)?(test|check|typecheck|lint)\\b"
+strip_ansi = true
+match_output = [
+  { pattern = "(?i)(all tests passed|test result: ok|\\bpassed\\b|✓)", message = "ok (js/ts checks passed)", unless = "(?i)error|failed|fatal|warning|warn|unhandled|exception" },
+]
+keep_lines_matching = [
+  "(?i)error|fail|failed|fatal|warning|warn|unhandled|exception|not ok|panic|timeout|timed out",
+  "(?i)tests?\\s+(failed|passed)|test files|snapshots|duration|coverage|summary",
+  "\\b(TS\\d+|ERR_[A-Z_]+)\\b",
+]
+truncate_lines_at = 220
+max_lines = 140
+filter_stderr = true
+on_empty = "ok (js/ts command produced no notable lines)"
+
+[[tests.common-js-ts-checks]]
+name = "bun test success compacts"
+input = """
+bun test v1.1.0
+✓ src/foo.test.ts
+ 1 pass
+ 0 fail
+All tests passed
+"""
+expected = "ok (js/ts checks passed)"
+
+[[tests.common-js-ts-checks]]
+name = "npm test failure is preserved"
+input = """
+> app@1.0.0 test
+FAIL src/foo.test.ts
+Error: expected true to be false
+Tests: 1 failed, 2 passed
+"""
+expected = "FAIL src/foo.test.ts\nError: expected true to be false\nTests: 1 failed, 2 passed"
+
+[filters.common-python-test]
+description = "Compact Python pytest and unittest output"
+match_command = "^python(3)?\\s+-m\\s+(pytest|unittest)\\b"
+strip_ansi = true
+match_output = [
+  { pattern = "(?i)(=+\\s+\\d+ passed|OK)$", message = "ok (python tests passed)", unless = "(?i)error|failed|failure|warning|traceback" },
+]
+keep_lines_matching = [
+  "(?i)error|failed|failure|warning|traceback|assert|expected|actual",
+  "^(FAILED|ERROR|OK|=+ .* =+)",
+  "^E\\s+",
+]
+truncate_lines_at = 220
+max_lines = 140
+filter_stderr = true
+on_empty = "ok (python tests produced no notable lines)"
+
+[[tests.common-python-test]]
+name = "pytest success compacts"
+input = """
+============================= test session starts =============================
+tests/test_profiles.py .                                                   [100%]
+============================== 1 passed in 0.12s ==============================
+"""
+expected = "============================= test session starts =============================\n============================== 1 passed in 0.12s =============================="
+
+[[tests.common-python-test]]
+name = "pytest failure is preserved"
+input = """
+FAILED tests/test_profiles.py::test_profile - AssertionError: missing vendorId
+E   AssertionError: missing vendorId
+=========================== 1 failed, 2 passed in 0.20s =======================
+"""
+expected = "FAILED tests/test_profiles.py::test_profile - AssertionError: missing vendorId\nE   AssertionError: missing vendorId\n=========================== 1 failed, 2 passed in 0.20s ======================="
+
+[filters.ojd-validate-profiles]
+description = "Compact OpenJoystickDriver profile validation output"
+match_command = "^\\./scripts/ojd\\s+validate\\s+profiles\\b"
+strip_ansi = true
+strip_lines_matching = [
+  "^\\s*$",
+  "^Validating controller profiles\\b",
+  "^Checking schema\\b",
+  "^Loaded \\d+ profile",
+  "^Validated .+\\.json$",
+]
+match_output = [
+  { pattern = "(?i)(all|profile).*(valid|ok|passed|success)", message = "ok (profiles valid)", unless = "(?i)error|fail|invalid|warning" },
+]
+max_lines = 80
+filter_stderr = true
+on_empty = "ok (profile validation produced no output)"
+
+[[tests.ojd-validate-profiles]]
+name = "successful profile validation compacts to ok"
+input = """
+Validating controller profiles
+Checking schema Resources/Schemas/controller-profile.schema.json
+Loaded 12 profiles
+Validated Sources/OpenJoystickDriverKit/Resources/Controllers/gamesir-g7-se.json
+All profiles valid
+"""
+expected = "ok (profiles valid)"
+
+[[tests.ojd-validate-profiles]]
+name = "invalid profile details are preserved"
+input = """
+Validating controller profiles
+Validated Sources/OpenJoystickDriverKit/Resources/Controllers/gamesir-g7-se.json
+error: Sources/OpenJoystickDriverKit/Resources/Controllers/foo.json: missing vendorId
+Profile validation failed
+"""
+expected = "error: Sources/OpenJoystickDriverKit/Resources/Controllers/foo.json: missing vendorId\nProfile validation failed"
+
+[filters.ojd-script-diagnostics]
+description = "Compact OpenJoystickDriver script diagnostics and rebuild output"
+match_command = "^\\./scripts/ojd\\s+(diagnose|rebuild-fast|rebuild|status|doctor)\\b"
+strip_ansi = true
+keep_lines_matching = [
+  "(?i)error|fail|failed|fatal|panic|warning|warn|denied|not found|missing|invalid|timeout|timed out",
+  "(?i)backend|gamecontroller|sdl3|virtual|driverkit|daemon|launchctl|status|summary|ok|pass|success",
+]
+truncate_lines_at = 180
+max_lines = 100
+filter_stderr = true
+on_empty = "ok (ojd diagnostic output had no notable lines)"
+
+[[tests.ojd-script-diagnostics]]
+name = "keeps diagnostic summary and warning"
+input = """
+[info] Checking runtime state
+Found app bundle /Applications/OpenJoystickDriver.app
+Waiting 2 seconds
+backend: userspace active
+warning: virtual backend not active
+summary: diagnostics completed
+"""
+expected = "backend: userspace active\nwarning: virtual backend not active\nsummary: diagnostics completed"
+
+[filters.ojd-app-binary]
+description = "Compact OpenJoystickDriver app binary runtime output"
+match_command = "^/Applications/OpenJoystickDriver\\.app/Contents/MacOS/OpenJoystickDriver\\b"
+strip_ansi = true
+keep_lines_matching = [
+  "(?i)error|fail|failed|fatal|panic|exception|warning|warn|denied|not found|missing|invalid|timeout|timed out",
+  "(?i)started|ready|listening|connected|disconnected|controller|device|hid|gip|daemon|backend|virtual|summary",
+]
+truncate_lines_at = 180
+max_lines = 100
+filter_stderr = true
+on_empty = "ok (OpenJoystickDriver app produced no notable lines)"
+
+[[tests.ojd-app-binary]]
+name = "keeps app lifecycle and drops chatter"
+input = """
+2026-05-13 01:00:00.000 OpenJoystickDriver[123] debug poll tick
+2026-05-13 01:00:00.100 OpenJoystickDriver[123] backend ready: userspace
+2026-05-13 01:00:00.200 OpenJoystickDriver[123] warning: virtual device unavailable
+"""
+expected = "2026-05-13 01:00:00.100 OpenJoystickDriver[123] backend ready: userspace\n2026-05-13 01:00:00.200 OpenJoystickDriver[123] warning: virtual device unavailable"
+
+[filters.ojd-launchctl]
+description = "Compact launchctl output for OpenJoystickDriver services"
+match_command = "^launchctl\\s+(print|kickstart|bootout|bootstrap)\\b.*openjoystickdriver"
+strip_ansi = true
+keep_lines_matching = [
+  "(?i)state|pid|program|label|last exit|error|fail|failed|warning|warn|denied|not found|missing|invalid|service|openjoystickdriver",
+]
+truncate_lines_at = 180
+max_lines = 80
+filter_stderr = true
+on_empty = "ok (launchctl output had no notable OpenJoystickDriver lines)"
+
+[[tests.ojd-launchctl]]
+name = "keeps service state and last exit"
+input = """
+gui/501/com.openjoystickdriver.daemon = {
+    active count = 1
+    path = /Users/example/Library/LaunchAgents/com.openjoystickdriver.daemon.plist
+    state = running
+    pid = 1234
+    last exit code = 0
+}
+"""
+expected = "gui/501/com.openjoystickdriver.daemon = {\n    path = /Users/example/Library/LaunchAgents/com.openjoystickdriver.daemon.plist\n    state = running\n    pid = 1234\n    last exit code = 0"
+
+[filters.ojd-macos-log-show]
+description = "Compact macOS unified log output for OpenJoystickDriver"
+match_command = "^log\\s+show\\b.*(?i)(OpenJoystickDriver|openjoystickdriver|com\\.openjoystickdriver)"
+strip_ansi = true
+keep_lines_matching = [
+  "(?i)error|fault|fail|failed|fatal|panic|exception|warning|warn|denied|not found|missing|invalid|timeout|timed out",
+  "(?i)OpenJoystickDriver|openjoystickdriver|com\\.openjoystickdriver|controller|device|hid|gip|backend|virtual|daemon",
+]
+truncate_lines_at = 220
+max_lines = 120
+filter_stderr = true
+on_empty = "ok (OpenJoystickDriver logs had no notable lines)"
+
+[[tests.ojd-macos-log-show]]
+name = "keeps relevant OJD log lines"
+input = """
+Timestamp                       Thread     Type        Activity             PID    TTL
+2026-05-13 01:00:00.000000+0300 0x123      Default     0x0                  100    Other process chatter
+2026-05-13 01:00:01.000000+0300 0x124      Error       0x0                  101    OpenJoystickDriver: HID device claim failed
+2026-05-13 01:00:02.000000+0300 0x125      Info        0x0                  101    OpenJoystickDriver backend ready
+"""
+expected = "2026-05-13 01:00:00.000000+0300 0x123      Default     0x0                  100    Other process chatter\n2026-05-13 01:00:01.000000+0300 0x124      Error       0x0                  101    OpenJoystickDriver: HID device claim failed\n2026-05-13 01:00:02.000000+0300 0x125      Info        0x0                  101    OpenJoystickDriver backend ready"

@@ -1,133 +1,113 @@
 # Compatibility Layers
 
-OpenJoystickDriver has five user-space compatibility identities. Use this file
-for consumer-visible button and axis mappings; keep `README.md` focused on setup
-and common workflows.
+This page lists what each OJD output mode is for. README stays short; detailed
+mapping and caveats live here.
 
-## Browser Gamepad API Mappings
+## Legend
 
-## Choosing A Compatibility Identity
+| Mark  | Meaning                                           |
+| ----- | ------------------------------------------------- |
+| ✅     | Works now                                         |
+| ⚠️     | Works, but has a caveat                           |
+| 🚧     | Under construction or needs more hardware testing |
+| ❌     | Not implemented                                   |
+| `N/A` | Not part of that mode                             |
 
-The switch is the Compatibility identity picker in the app, or the
-`OpenJoystickDriver --headless compat ...` command in CLI mode. OJD publishes
-one user-space compatibility identity at a time:
+## Feature Set
 
-| Consumer                                   | Use                                                |
-| ------------------------------------------ | -------------------------------------------------- |
-| PCSX2, Steam, DuckStation, SDL apps        | `sdl2-3`                                           |
-| Native macOS GameController.framework apps | `apple-gamecontroller`                             |
-| Browser Gamepad API and direct HID readers | `generic-hid` or the active compatibility identity |
-| Hardware-spoof experiments                 | `x360-hid` or `xone-hid`                           |
+| Feature                          | Status | Best mode                          | Notes                                                                             |
+| -------------------------------- | ------ | ---------------------------------- | --------------------------------------------------------------------------------- |
+| Menu-bar app                     | ✅      | `N/A`                              | OJD is menu-bar-only.                                                             |
+| Input Test window                | ✅      | `N/A`                              | Shows live input, packets, and physical rumble controls.                          |
+| GameSir G7 SE                    | ✅      | `sdl2-3` or `xone-hid`             | Hardware verified through GIP and Xbox One HID compatibility.                     |
+| Flydigi Vader 5S                 | ✅      | `sdl2-3`                           | Uses GIP and needs `setConfiguration(1)` before claim.                            |
+| Sony DualShock 4 USB input       | ✅      | `sdl2-3` or `apple-gamecontroller` | USB HID parser is implemented.                                                    |
+| Sony DualShock 4 physical rumble | ✅      | Compatibility modes                | Verified through Input Test. App rumble routes through compatibility set reports. |
+| Xbox 360 USB parser              | ✅      | `sdl2-3` or `x360-hid`             | Parser and profiles exist. Hardware coverage varies by model.                     |
+| xpad-derived Xbox batches        | 🚧      | Varies                             | Added from source data, not all locally hardware verified.                        |
+| Generic USB HID fallback         | ⚠️      | `generic-hid`                      | Basic fallback for descriptor-driven apps.                                        |
+| SDL 2/3 apps                     | ✅      | `sdl2-3`                           | Use for Steam, PCSX2, DuckStation, Moonlight/SDL, and similar apps.               |
+| Apple GameController apps        | ✅      | `apple-gamecontroller`             | Use for native macOS apps that read `GCController`.                               |
+| Browser Gamepad API              | ⚠️      | active compatibility identity      | Browser mappings can vary by identity and stale devices.                          |
+| App rumble                       | ✅      | Compatibility modes                | Parses Xbox One, Xbox 360, and compact OJD rumble reports.                        |
+| DriverKit output                 | ⚠️      | `driverKit`                        | Good for relay/diagnostics; not the main app compatibility path.                  |
+| Bluetooth controllers            | ❌      | `N/A`                              | Not implemented.                                                                  |
+| Sony DualShock 3                 | ❌      | `N/A`                              | Not implemented; no local physical device is available for testing.               |
+| Sony DualSense                   | ❌      | `N/A`                              | Not implemented. This is the PS5 controller family.                               |
+| Switch Pro                       | ❌      | `N/A`                              | Not implemented.                                                                  |
 
-## Application Rumble
+## Pick A Mode
 
-Compatibility devices now register an `IOHIDUserDevice` set-report callback.
-When an app writes a supported HID output report, OJD converts it into the
-physical controller rumble path already used by the built-in rumble tester.
+| User goal                                       | Choose                   | Why                                                         |
+| ----------------------------------------------- | ------------------------ | ----------------------------------------------------------- |
+| Most games and emulators                        | ✅ `sdl2-3`               | Best default for SDL-based apps.                            |
+| Native macOS app using GameController.framework | ✅ `apple-gamecontroller` | Publishes a `GCController`-friendly Xbox-style HID surface. |
+| Direct HID testing                              | ⚠️ `generic-hid`          | Keeps OJD's own VID/PID and exposes a plain HID GamePad.    |
+| App expects Xbox 360 HID                        | 🚧 `x360-hid`             | Experimental Microsoft-style HID identity.                  |
+| App expects Xbox One HID                        | 🚧 `xone-hid`             | Experimental Microsoft-style HID identity.                  |
+| Bluetooth controller support                    | ❌ `N/A`                  | OJD does not implement Bluetooth input yet.                 |
 
-Supported app-facing report shapes:
+CLI examples:
 
-- Xbox One haptics output report ID `3`.
-- Xbox 360 rumble packets such as `[0x00, 0x08, 0x00, left, right, 0, 0, 0]`.
-- OJD compact rumble packets `[0x4F, left, right, lt, rt, durationLo, durationHi]`.
+```bash
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless compat sdl2-3
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless compat apple-gamecontroller
+/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless output secondary
+```
 
-The bridge requires a connected physical controller whose parser implements
-`PhysicalRumbleOutput`. GIP/Xbox controllers support it; parsers without physical
-rumble support still accept input but ignore app rumble.
+## App Rumble
 
-### SDL 2/3 Compatibility (`sdl2-3`)
+OJD can forward app rumble to the physical controller when both sides support it.
 
-Use this for SDL consumers such as PCSX2, Steam, DuckStation, and Parsec host
-routing. It uses the OJD-owned VID/PID and the SDL mapping in
-`Resources/SDL/openjoystickdriver.gamecontrollerdb.txt`.
+| App-facing report                                                        | Status | Physical target                                          |
+| ------------------------------------------------------------------------ | ------ | -------------------------------------------------------- |
+| Xbox One output report ID `3`                                            | ✅      | GIP/Xbox and DualShock 4-compatible physical rumble path |
+| Xbox 360 packet `[0x00, 0x08, 0x00, left, right, 0, 0, 0]`               | ✅      | Main left/right motors                                   |
+| OJD compact packet `[0x4F, left, right, lt, rt, durationLo, durationHi]` | ✅      | Main and trigger motors when present                     |
+| Bluetooth rumble                                                         | ❌      | `N/A`                                                    |
 
-| Browser control | Meaning     |
-| --------------- | ----------- |
-| `B0`            | A           |
-| `B1`            | B           |
-| `B2`            | X           |
-| `B3`            | Y           |
-| `B4`            | LB          |
-| `B5`            | RB          |
-| `B6`            | L3          |
-| `B7`            | R3          |
-| `B8`            | RCB / Menu  |
-| `B9`            | LCB / View  |
-| `B10`           | Xbox/Home   |
-| `B11`           | D-pad Up    |
-| `B12`           | D-pad Down  |
-| `B13`           | D-pad Left  |
-| `B14`           | D-pad Right |
-| `B15`           | BCB / Share |
+Notes:
 
-Axes use `A0`/`A1` for left stick, `A2` for LT, `A3`/`A4` for right stick,
-and `A5` for RT. LT and RT idle at zero and move independently. D-pad is
-button-backed only.
+- Sony DualShock 4 has two physical motors. OJD ignores trigger motor values for DualShock 4.
+- GIP/Xbox controllers can use main motors and trigger motors when the physical
+  protocol exposes them.
+- DriverKit relay bytes are ignored unless they match a supported rumble report.
 
-### Generic HID (`generic-hid`)
+## Browser Mapping
 
-Use this for descriptor-driven apps that should not receive a spoofed Microsoft
-VID/PID. Its Browser Gamepad API mapping is the same button order as `sdl2-3`:
+### `sdl2-3` and `generic-hid`
 
-| Browser control | Meaning     |
-| --------------- | ----------- |
-| `B0`            | A           |
-| `B1`            | B           |
-| `B2`            | X           |
-| `B3`            | Y           |
-| `B4`            | LB          |
-| `B5`            | RB          |
-| `B6`            | L3          |
-| `B7`            | R3          |
-| `B8`            | Menu        |
-| `B9`            | View        |
-| `B10`           | Xbox/Home   |
-| `B11`           | D-pad Up    |
-| `B12`           | D-pad Down  |
-| `B13`           | D-pad Left  |
-| `B14`           | D-pad Right |
-| `B15`           | Share       |
+| Browser control               | Meaning                        |
+| ----------------------------- | ------------------------------ |
+| `B0` / `B1` / `B2` / `B3`     | A / B / X / Y                  |
+| `B4` / `B5`                   | LB / RB                        |
+| `B6` / `B7`                   | L3 / R3                        |
+| `B8` / `B9`                   | Menu / View                    |
+| `B10`                         | Xbox/Home                      |
+| `B11` / `B12` / `B13` / `B14` | D-pad Up / Down / Left / Right |
+| `B15`                         | Share                          |
+| `A0` / `A1`                   | Left stick X / Y               |
+| `A2`                          | LT                             |
+| `A3` / `A4`                   | Right stick X / Y              |
+| `A5`                          | RT                             |
 
-Axes use `A0`/`A1` for left stick, `A2` for LT, `A3`/`A4` for right stick,
-and `A5` for RT. LT and RT idle at zero and move independently. D-pad is
-button-backed only.
+LT and RT idle at zero. D-pad is button-backed only.
 
-### Apple GameController (`apple-gamecontroller`)
+### `apple-gamecontroller`, `x360-hid`, and `xone-hid`
 
-Use this for native macOS apps that consume controllers through Apple's
-GameController.framework. It publishes the Xbox 360 HID-compatible report shape
-that `GCController.supportsHIDDevice(_:)` accepts as a native `GCController`.
-
-Its consumer-visible controls match the Xbox compatibility table below.
-
-### Xbox 360 HID (`x360-hid`) and Xbox One HID (`xone-hid`)
-
-These are experimental Microsoft hardware-spoof identities. Browser Gamepad API
-maps them like an Xbox controller compatibility surface:
-
-| Browser control | Meaning     |
-| --------------- | ----------- |
-| `B0`            | A           |
-| `B1`            | B           |
-| `B2`            | X           |
-| `B3`            | Y           |
-| `B4`            | LB          |
-| `B5`            | RB          |
-| `B6`            | LT          |
-| `B7`            | RT          |
-| `B8`            | View        |
-| `B9`            | Menu        |
-| `B10`           | L3          |
-| `B11`           | R3          |
-| `B12`           | D-pad Up    |
-| `B13`           | D-pad Down  |
-| `B14`           | D-pad Left  |
-| `B15`           | D-pad Right |
-| `B16`           | Xbox/Home   |
+| Browser control               | Meaning                        |
+| ----------------------------- | ------------------------------ |
+| `B0` / `B1` / `B2` / `B3`     | A / B / X / Y                  |
+| `B4` / `B5`                   | LB / RB                        |
+| `B6` / `B7`                   | LT / RT                        |
+| `B8` / `B9`                   | View / Menu                    |
+| `B10` / `B11`                 | L3 / R3                        |
+| `B12` / `B13` / `B14` / `B15` | D-pad Up / Down / Left / Right |
+| `B16`                         | Xbox/Home                      |
 
 ## SDL Mapping
 
-`Resources/SDL/openjoystickdriver.gamecontrollerdb.txt` maps `sdl2-3` as:
+`Resources/SDL/openjoystickdriver.gamecontrollerdb.txt` maps `sdl2-3` like this:
 
 | SDL control                              | HID source                    |
 | ---------------------------------------- | ----------------------------- |
@@ -142,15 +122,31 @@ maps them like an Xbox controller compatibility surface:
 | `rightx` / `righty`                      | `a3` / `a4`                   |
 | `righttrigger`                           | `a5`                          |
 
-## Manual Audit
+## PCSX2
 
-Before treating mapping changes as end-to-end verified, check:
+Use `sdl2-3` with user-space-only output:
 
-1. Browser Gamepad API for the selected compatibility identity against the
-   relevant table above.
-2. SDL2/3 with `sdl2-3`: idle `A2` and `A5` are zero, D-pad is four buttons,
-   and D-pad release clears all four button states.
-3. DuckStation and PCSX2 with `sdl2-3`: face buttons, View/Menu, L3/R3, D-pad,
-   and analog triggers bind once and do not create repeated up/down input.
-4. Parsec macOS to Windows with `sdl2-3`: Persona 5 receives stable D-pad input
-   and A/B/X/Y match the host-side SDL mapping.
+```bash
+./scripts/ojd install pcsx2-sdl-db
+./scripts/ojd install pcsx2-profile
+./scripts/ojd launch pcsx2
+```
+
+PCSX2 reads this user data file before its bundled database:
+
+```text
+~/Library/Application Support/PCSX2/game_controller_db.txt
+```
+
+The included input profile binds both `SDL-0` and `SDL-1`. This keeps controls
+working if an old DriverKit device takes one SDL slot.
+
+## Manual Checks
+
+Before calling a mapping fully verified, check the exact app and mode:
+
+1. Browser Gamepad API: buttons and axes match the active identity table.
+2. SDL 2/3: `A2` and `A5` idle at zero, D-pad releases cleanly.
+3. PCSX2 or DuckStation: face buttons, View/Menu, L3/R3, D-pad, and triggers bind once.
+4. Parsec macOS to Windows: D-pad and A/B/X/Y stay stable on the Windows host.
+5. Rumble: app output report reaches the physical controller if the controller supports rumble.

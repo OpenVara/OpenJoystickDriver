@@ -92,13 +92,8 @@ public enum VirtualRumbleOutputReportParser {
   }
 
   private static func parseOJDReport(reportID: UInt32, bytes: [UInt8]) -> VirtualRumbleCommand? {
-    guard reportID == 0 else { return nil }
-    let payload: [UInt8]
-    if bytes.first == 0x4F {
-      payload = Array(bytes.dropFirst())
-    } else {
-      payload = bytes
-    }
+    guard reportID == 0, bytes.first == 0x4F else { return nil }
+    let payload = Array(bytes.dropFirst())
     guard payload.count >= 4 else { return nil }
     let duration: Int
     if payload.count >= 6 {

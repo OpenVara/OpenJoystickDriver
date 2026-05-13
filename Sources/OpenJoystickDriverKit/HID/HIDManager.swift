@@ -18,4 +18,9 @@ public final class HIDManager: Sendable {
 
   /// Returns a live stream of HID device events (connect, disconnect, input report).
   public func deviceEvents() -> AsyncStream<HIDDeviceEvent> { stream.deviceEvents() }
+
+  /// Sends a raw HID output report to the connected device at `locationID`.
+  public func setOutputReport(locationID: UInt32, report: PhysicalHIDOutputReport) -> Bool {
+    stream.setOutputReport(locationID: locationID, report: report)
+  }
 }

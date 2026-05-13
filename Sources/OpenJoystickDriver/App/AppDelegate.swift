@@ -39,7 +39,8 @@ import SwiftUI
   // MARK: - Status Item
 
   private func setupStatusItem() {
-    let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+    item.autosaveName = "OpenJoystickDriver"
     if let button = item.button {
       if #available(macOS 11.0, *) {
         button.image = NSImage(
@@ -49,9 +50,22 @@ import SwiftUI
       } else {
         button.image = NSImage(named: NSImage.actionTemplateName)
       }
-      button.target = self
-      button.action = #selector(togglePopover(_:))
     }
+    let menu = NSMenu()
+    let openItem = NSMenuItem(
+      title: "Open OpenJoystickDriver",
+      action: #selector(togglePopover(_:)),
+      keyEquivalent: ""
+    )
+    openItem.target = self
+    menu.addItem(openItem)
+    menu.addItem(.separator())
+    menu.addItem(NSMenuItem(
+      title: "Quit OpenJoystickDriver",
+      action: #selector(NSApplication.terminate(_:)),
+      keyEquivalent: "q"
+    ))
+    item.menu = menu
     statusItem = item
   }
 

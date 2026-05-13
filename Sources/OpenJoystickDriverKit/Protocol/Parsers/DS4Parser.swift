@@ -2,24 +2,30 @@ import Foundation
 import SwiftUSB
 
 private let ds4AxisCenter: Float = 128
+private let ds4AxisDeadzone: Float = 0.08
 private let ds4HatNeutral: UInt8 = 0xFF
 private let ds4TriggerMax: Float = 255
+private let ds4OutputReportID: UInt8 = 0x05
+private let ds4OutputReportLength = 32
+private let ds4OutputValidFlagMotor: UInt8 = 0x01
 
 /// Parser for Sony DualShock 4 controllers (USB HID, Report ID 0x01).
 ///
 /// No handshake required — DS4 sends input reports automatically on USB connection.
-public final class DS4Parser: InputParser, @unchecked Sendable {
+/// IOKit reports the DS4 report ID separately, so wired HID input can arrive
+/// either with or without the leading `0x01` report ID byte.
+public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked Sendable {
 
   private enum ReportOffset {
-    static let leftStickX: Int = 1
-    static let leftStickY: Int = 2
-    static let rightStickX: Int = 3
-    static let rightStickY: Int = 4
-    static let buttons0: Int = 5
-    static let buttons1: Int = 6
-    static let buttons2: Int = 7
-    static let l2Trigger: Int = 8
-    static let r2Trigger: Int = 9
+    static let leftStickX: Int = 0
+    static let leftStickY: Int = 1
+    static let rightStickX: Int = 2
+    static let rightStickY: Int = 3
+    static let buttons0: Int = 4
+    static let buttons1: Int = 5
+    static let buttons2: Int = 6
+    static let l2Trigger: Int = 7
+    static let r2Trigger: Int = 8
   }
 
   private var prevFace: UInt8 = 0
@@ -45,8 +51,8 @@ public final class DS4Parser: InputParser, @unchecked Sendable {
 
   /// Parses one DS4 HID input report and returns zero or more controller events.
   public func parse(data: Data) throws -> [ControllerEvent] {
-    guard data.count >= 10 else { return [] }
-    let bytes = Array(data)
+    let bytes = reportPayload(from: data)
+    guard bytes.count >= 9 else { return [] }
     var events: [ControllerEvent] = []
 
     let stickEvents = parseSticks(bytes: bytes)
@@ -85,6 +91,25 @@ public final class DS4Parser: InputParser, @unchecked Sendable {
     prevRSY = rsyRaw
 
     return events
+  }
+
+  public func physicalRumbleReport(left: UInt8, right: UInt8, lt _: UInt8, rt _: UInt8)
+    -> PhysicalHIDOutputReport
+  {
+    var report = [UInt8](repeating: 0, count: ds4OutputReportLength)
+    report[0] = ds4OutputReportID
+    report[1] = ds4OutputValidFlagMotor
+    report[4] = right
+    report[5] = left
+    return PhysicalHIDOutputReport(reportID: ds4OutputReportID, bytes: report)
+  }
+
+  private func reportPayload(from data: Data) -> [UInt8] {
+    let bytes = Array(data)
+    if bytes.first == 0x01, bytes.count >= 10 {
+      return Array(bytes.dropFirst())
+    }
+    return bytes
   }
 
   private func parseSticks(bytes: [UInt8]) -> (
@@ -158,7 +183,11 @@ public final class DS4Parser: InputParser, @unchecked Sendable {
     return (events, system)
   }
 
-  private func normalizeHID(_ raw: UInt8) -> Float { (Float(raw) - ds4AxisCenter) / ds4AxisCenter }
+  private func normalizeHID(_ raw: UInt8) -> Float {
+    let normalized = (Float(raw) - ds4AxisCenter) / ds4AxisCenter
+    if abs(normalized) < ds4AxisDeadzone { return 0 }
+    return normalized
+  }
 
   private func mapHat(_ hat: UInt8) -> DpadDirection {
     switch hat {

@@ -370,6 +370,7 @@ struct MenuBarPopoverView: View {
 }
 
 @MainActor private final class InputTestWindowController {
+  private let compactSize = NSSize(width: 720, height: 500)
   private var window: NSWindow?
 
   func show(model: AppModel) {
@@ -383,7 +384,8 @@ struct MenuBarPopoverView: View {
     let hosting = NSHostingController(rootView: root)
     let newWindow = NSWindow(contentViewController: hosting)
     newWindow.title = "OpenJoystickDriver Input Test"
-    newWindow.setContentSize(NSSize(width: 760, height: 620))
+    newWindow.setContentSize(compactSize)
+    newWindow.minSize = compactSize
     newWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable]
     newWindow.isReleasedWhenClosed = false
     newWindow.center()
@@ -409,32 +411,38 @@ private struct InputTestWindowView: View {
   @State private var packetLogTask: Task<Void, Never>?
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      header
-      Divider()
-      if let device = selectedDevice {
-        ScrollView {
-          VStack(alignment: .leading, spacing: 12) {
-            deviceSummary(device)
-            axesGrid
-            buttonGrid
-            outputTestRow(device)
-            packetLogView
+    ScrollView {
+      VStack(alignment: .leading, spacing: 10) {
+        header
+        Divider()
+        if let device = selectedDevice {
+          HStack(alignment: .top, spacing: 18) {
+            VStack(alignment: .leading, spacing: 10) {
+              compactDeviceSummary(device)
+              axesGrid
+              buttonGrid
+            }
+            .frame(width: 300, alignment: .topLeading)
+
+            VStack(alignment: .leading, spacing: 10) {
+              outputTestRow(device)
+              packetLogView
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
           }
-          .padding(.trailing, 8)
+        } else {
+          VStack(spacing: 10) {
+            Text("No controller selected").font(.headline)
+            Text("Connect a controller or restart the daemon, then refresh.")
+              .font(.caption)
+              .foregroundColor(.secondary)
+          }
+          .frame(maxWidth: .infinity, minHeight: 420)
         }
-      } else {
-        VStack(spacing: 10) {
-          Text("No controller selected").font(.headline)
-          Text("Connect a controller or restart the daemon, then refresh.")
-            .font(.caption)
-            .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
+      .padding(16)
     }
-    .padding(14)
-    .frame(minWidth: 700, minHeight: 560)
+    .frame(minWidth: 720, minHeight: 500)
     .onAppear {
       selectedDeviceID = selectedDeviceID ?? model.devices.first?.id
       startRefreshTasks()
@@ -456,7 +464,8 @@ private struct InputTestWindowView: View {
 
   private var header: some View {
     HStack(spacing: 10) {
-      Text("Input Test").font(.title.weight(.semibold))
+      Text("Input Test")
+        .font(.headline)
       Spacer()
       Picker("Controller", selection: Binding(get: {
         selectedDevice?.id ?? ""
@@ -479,36 +488,33 @@ private struct InputTestWindowView: View {
     }
   }
 
-  private func deviceSummary(_ device: DeviceViewModel) -> some View {
-    VStack(alignment: .leading, spacing: 6) {
-      summaryRow("Device", device.name)
-      summaryRow("VID:PID", String(format: "%04X:%04X", device.vendorID, device.productID))
-      summaryRow("Parser", device.parser)
-      summaryRow("Connection", device.connection)
-    }
-    .font(.caption)
-  }
-
-  private func summaryRow(_ label: String, _ value: String) -> some View {
-    HStack(alignment: .firstTextBaseline, spacing: 16) {
-      Text(label)
-        .foregroundColor(.secondary)
-        .frame(width: 72, alignment: .leading)
-      Text(value)
+  private func compactDeviceSummary(_ device: DeviceViewModel) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text(device.name)
+        .font(.headline)
+        .lineLimit(1)
+      HStack(spacing: 8) {
+        Text(device.parser)
+        Text(device.connection)
+        Text(String(format: "%04X:%04X", device.vendorID, device.productID))
+      }
+      .font(.caption)
+      .foregroundColor(.secondary)
     }
   }
 
   private var axesGrid: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack(spacing: 18) {
+    VStack(alignment: .leading, spacing: 6) {
+      Text("Axes").font(.headline)
+      HStack(spacing: 10) {
         AxisMeter(label: "LX", value: state?.leftStickX ?? 0, range: -1...1)
         AxisMeter(label: "LY", value: state?.leftStickY ?? 0, range: -1...1)
       }
-      HStack(spacing: 18) {
+      HStack(spacing: 10) {
         AxisMeter(label: "RX", value: state?.rightStickX ?? 0, range: -1...1)
         AxisMeter(label: "RY", value: state?.rightStickY ?? 0, range: -1...1)
       }
-      HStack(spacing: 18) {
+      HStack(spacing: 10) {
         AxisMeter(label: "LT", value: state?.leftTrigger ?? 0, range: 0...1)
         AxisMeter(label: "RT", value: state?.rightTrigger ?? 0, range: 0...1)
       }
@@ -517,20 +523,19 @@ private struct InputTestWindowView: View {
 
   private var buttonGrid: some View {
     let pressed = Set(state?.pressedButtons ?? [])
-    let buttons = Button.allCases
-    let rowCount = (buttons.count + 2) / 3
-    return VStack(alignment: .leading, spacing: 8) {
+    let buttons = supportedButtons(for: selectedDevice?.parser)
+    let columnCount = 6
+    let rowCount = (buttons.count + columnCount - 1) / columnCount
+    return VStack(alignment: .leading, spacing: 6) {
       Text("Buttons").font(.headline)
-      VStack(alignment: .leading, spacing: 8) {
+      VStack(alignment: .leading, spacing: 6) {
         ForEach(0..<rowCount, id: \.self) { row in
-          HStack(spacing: 8) {
-            ForEach(0..<3, id: \.self) { column in
-              let index = row * 3 + column
+          HStack(spacing: 6) {
+            ForEach(0..<columnCount, id: \.self) { column in
+              let index = row * columnCount + column
               if index < buttons.count {
                 let button = buttons[index]
                 buttonPill(button: button, isDown: pressed.contains(button.rawValue))
-              } else {
-                Spacer().frame(maxWidth: .infinity, minHeight: 30)
               }
             }
           }
@@ -539,90 +544,177 @@ private struct InputTestWindowView: View {
     }
   }
 
+  @ViewBuilder
   private func buttonPill(button: OpenJoystickDriverKit.Button, isDown: Bool) -> some View {
-    Text(button.displayName)
-      .font(.caption)
-      .lineLimit(1)
-      .minimumScaleFactor(0.8)
-      .frame(maxWidth: .infinity, minHeight: 30)
-      .background(isDown ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.14))
-      .foregroundColor(isDown ? .white : .primary)
-      .clipShape(RoundedRectangle(cornerRadius: 6))
+    if #available(macOS 11.0, *) {
+      Image(systemName: button.systemImageName)
+        .font(.system(size: 15, weight: .semibold))
+        .frame(width: 32, height: 30)
+        .background(isDown ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.14))
+        .foregroundColor(isDown ? .white : .primary)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .accessibilityLabel(Text(button.displayName))
+    } else {
+      Text(button.displayName)
+        .font(.caption)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .frame(width: 32, height: 30)
+        .background(isDown ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.14))
+        .foregroundColor(isDown ? .white : .primary)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+  }
+
+  private func supportedButtons(for parser: String?) -> [OpenJoystickDriverKit.Button] {
+    switch parser {
+    case "DS4":
+      return [
+        .cross, .circle, .square, .triangle,
+        .l1, .r1, .leftStick, .rightStick,
+        .share, .options, .ps, .touchpad,
+        .dpadUp, .dpadDown, .dpadLeft, .dpadRight,
+      ]
+    case "GIP":
+      return [
+        .a, .b, .x, .y,
+        .leftBumper, .rightBumper,
+        .leftStick, .rightStick,
+        .back, .start, .guide, .share,
+        .dpadUp, .dpadDown, .dpadLeft, .dpadRight,
+      ]
+    case "Xbox360":
+      return [
+        .a, .b, .x, .y,
+        .leftBumper, .rightBumper,
+        .leftStick, .rightStick,
+        .back, .start, .guide,
+        .dpadUp, .dpadDown, .dpadLeft, .dpadRight,
+      ]
+    default:
+      return [
+        .genericButton1, .genericButton2, .genericButton3, .genericButton4,
+        .genericButton5, .genericButton6, .genericButton7, .genericButton8,
+        .dpadUp, .dpadDown, .dpadLeft, .dpadRight,
+      ]
+    }
   }
 
   private func outputTestRow(_ device: DeviceViewModel) -> some View {
     let canRumble = device.supportsPhysicalRumble
-    return VStack(alignment: .leading, spacing: 8) {
+    return VStack(alignment: .leading, spacing: 6) {
       Text("Physical output").font(.headline)
-      VStack(alignment: .leading, spacing: 6) {
-        HStack(spacing: 14) {
+      HStack(alignment: .top, spacing: 18) {
+        VStack(alignment: .leading, spacing: 4) {
           RumbleSlider(label: "L", value: $rumbleLeft)
           RumbleSlider(label: "R", value: $rumbleRight)
         }
-        HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 4) {
           RumbleSlider(label: "LT", value: $rumbleLT)
           RumbleSlider(label: "RT", value: $rumbleRT)
         }
       }
-      VStack(alignment: .leading, spacing: 8) {
-        HStack(spacing: 10) {
-          SwiftUI.Button(rumbleRunning ? "Sending..." : "Pulse") {
+      VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 8) {
+          rumbleIconButton(
+            rumbleRunning ? "Sending" : "Pulse",
+            systemName: rumbleRunning ? "hourglass" : "waveform.path.ecg"
+          ) {
             sendRumble(to: device, durationMs: Int(rumbleDurationMs))
           }
           .disabled(rumbleRunning || !canRumble)
-          SwiftUI.Button("Hold") {
+          rumbleIconButton("Hold", systemName: "infinity") {
             sendRumble(to: device, durationMs: 0)
           }
           .disabled(!canRumble)
-          SwiftUI.Button("Stop") {
+          rumbleIconButton("Stop", systemName: "stop.fill") {
             sendRumble(to: device, left: 0, right: 0, lt: 0, rt: 0, durationMs: 0)
           }
           .disabled(!canRumble)
-          SwiftUI.Button("Left only") {
+          Divider().frame(height: 18)
+          Stepper("Duration \(Int(rumbleDurationMs)) ms", value: $rumbleDurationMs, in: 50...5000, step: 50)
+            .font(.caption)
+            .frame(width: 160)
+        }
+        HStack(spacing: 8) {
+          rumbleIconButton("Left motor", systemName: "l.circle") {
             sendRumble(to: device, left: UInt8(clamping: Int(rumbleLeft)), right: 0, lt: 0, rt: 0)
           }
           .disabled(rumbleRunning || !canRumble)
-          SwiftUI.Button("Right only") {
+          rumbleIconButton("Right motor", systemName: "r.circle") {
             sendRumble(to: device, left: 0, right: UInt8(clamping: Int(rumbleRight)), lt: 0, rt: 0)
           }
           .disabled(rumbleRunning || !canRumble)
-          Stepper("Duration \(Int(rumbleDurationMs)) ms", value: $rumbleDurationMs, in: 50...5000, step: 50)
-            .font(.caption)
-            .frame(width: 170)
-        }
-        HStack(spacing: 10) {
-          SwiftUI.Button("Low") {
+          Divider().frame(height: 16)
+          rumbleIconButton("Low", systemName: "speaker.wave.1.fill") {
             setRumbleValues(left: 32, right: 32, lt: 32, rt: 32)
           }
-          SwiftUI.Button("Mid") {
+          rumbleIconButton("Mid", systemName: "speaker.wave.2.fill") {
             setRumbleValues(left: 128, right: 128, lt: 128, rt: 128)
           }
-          SwiftUI.Button("Max") {
+          rumbleIconButton("Max", systemName: "speaker.wave.3.fill") {
             setRumbleValues(left: 255, right: 255, lt: 255, rt: 255)
           }
-          SwiftUI.Button("Zero") {
+          rumbleIconButton("Zero", systemName: "speaker.slash.fill") {
             setRumbleValues(left: 0, right: 0, lt: 0, rt: 0)
           }
-          Divider().frame(height: 16)
-          Text("Range: 0...255")
+        }
+        HStack(spacing: 8) {
+          Text("Rumble: \(canRumble ? "supported" : "not supported")")
             .font(.caption)
             .foregroundColor(.secondary)
-        }
-        HStack(spacing: 10) {
-        Text("Rumble: \(canRumble ? "supported" : "not supported")")
-          .font(.caption)
-          .foregroundColor(.secondary)
-        Text("LED: not exposed")
-          .font(.caption)
-          .foregroundColor(.secondary)
-        if let rumbleResult {
-          Text("Rumble: \(rumbleResult)").font(.caption).foregroundColor(.secondary)
-        }
+          Text("LED: not exposed")
+            .font(.caption)
+            .foregroundColor(.secondary)
+          if let rumbleResult {
+            Text("Rumble: \(rumbleResult)").font(.caption).foregroundColor(.secondary)
+          }
         }
       }
-      Text("LED needs a verified per-protocol command surface before it becomes a live control.")
-        .font(.caption)
-        .foregroundColor(.secondary)
+    }
+  }
+
+  @ViewBuilder
+  private func rumbleIconButton(
+    _ title: String,
+    systemName: String,
+    action: @escaping () -> Void
+  ) -> some View {
+    SwiftUI.Button(action: action) {
+      if #available(macOS 11.0, *) {
+        VStack(spacing: 3) {
+          Image(systemName: systemName)
+            .font(.system(size: 14, weight: .semibold))
+          Text(rumbleGlyphCaption(title))
+            .font(.system(size: 9, weight: .medium))
+            .lineLimit(1)
+        }
+        .frame(width: 44, height: 36)
+        .contentShape(RoundedRectangle(cornerRadius: 7))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(title))
+      } else {
+        Text(title)
+          .font(.caption)
+          .frame(width: 44, height: 36)
+      }
+    }
+    .buttonStyle(.borderless)
+  }
+
+  private func rumbleGlyphCaption(_ title: String) -> String {
+    switch title {
+    case "Sending": return "..."
+    case "Pulse": return "pulse"
+    case "Hold": return "hold"
+    case "Stop": return "stop"
+    case "Left motor": return "L"
+    case "Right motor": return "R"
+    case "Low": return "low"
+    case "Mid": return "mid"
+    case "Max": return "max"
+    case "Zero": return "zero"
+    default: return title
     }
   }
 
@@ -659,15 +751,15 @@ private struct InputTestWindowView: View {
   }
 
   private var packetLogView: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: 6) {
       Text("Recent packets").font(.headline)
       if packetLog.isEmpty {
         Text("No packets captured yet.").font(.caption).foregroundColor(.secondary)
       } else {
-        ForEach(Array(packetLog.suffix(12).enumerated()), id: \.offset) { _, entry in
+        ForEach(Array(packetLog.suffix(8).enumerated()), id: \.offset) { _, entry in
           Text("\(entry.direction) \(entry.length)b \(entry.hex)")
             .font(.system(.caption, design: .monospaced))
-            .lineLimit(2)
+            .lineLimit(1)
         }
       }
     }
@@ -720,10 +812,10 @@ private struct RumbleSlider: View {
         .font(.caption.weight(.semibold))
         .frame(width: 24, alignment: .leading)
       Slider(value: $value, in: 0...255, step: 1)
-        .frame(width: 220)
+        .frame(width: 110)
       Text("\(Int(value))")
         .font(.system(.caption, design: .monospaced))
-        .frame(width: 34, alignment: .trailing)
+        .frame(width: 30, alignment: .trailing)
     }
     .accessibilityElement(children: .combine)
   }
@@ -751,7 +843,7 @@ private struct AxisMeter: View {
             .frame(width: max(4, proxy.size.width * normalizedValue))
         }
       }
-      .frame(width: 300, height: 8)
+      .frame(width: 140, height: 7)
       .transaction { transaction in
         transaction.animation = nil
       }

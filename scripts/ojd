@@ -50,6 +50,7 @@ Commands:
   launch pcsx2                Launch PCSX2 with the OpenJoystickDriver SDL mapping override
   install pcsx2-sdl-db        Install merged PCSX2 SDL DB in user data dir
   install pcsx2-profile       Install the PCSX2 SDL-0/SDL-1 input profile
+  rtk install-filters         Create/update project-local RTK filters without duplicates
 
   notarize submit             Submit + poll + staple (release only)
   notarize status [id]        Show notarization status (release only)
@@ -246,6 +247,21 @@ case "$cmd" in
 
   lint)
     exec /usr/bin/env bash "$SCRIPT_DIR/ojd-build.sh" lint
+    ;;
+
+  rtk)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      install-filters)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-rtk-filters.sh" install-filters
+        ;;
+      ""|-h|--help|help)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-rtk-filters.sh" help
+        ;;
+      *)
+        die "Unknown: rtk $sub (expected: install-filters)"
+        ;;
+    esac
     ;;
 
   notarize)
