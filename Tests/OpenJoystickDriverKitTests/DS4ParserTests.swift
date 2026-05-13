@@ -75,10 +75,15 @@ private func containsEvent(_ events: [ControllerEvent], _ expected: ControllerEv
       )
     )
 
-    #expect(containsEvent(events, .leftStickChanged(x: 127.0 / 128.0, y: 1.0)))
-    #expect(containsEvent(events, .rightStickChanged(x: -1.0, y: -127.0 / 128.0)))
-    #expect(containsEvent(events, .leftTriggerChanged(1.0)))
-    #expect(containsEvent(events, .rightTriggerChanged(128.0 / 255.0)))
+    let expectedLeftStick = ControllerEvent.leftStickChanged(x: 127.0 / 128.0, y: 1.0)
+    let expectedRightStick = ControllerEvent.rightStickChanged(x: -1.0, y: -127.0 / 128.0)
+    let expectedLeftTrigger = ControllerEvent.leftTriggerChanged(1.0)
+    let expectedRightTrigger = ControllerEvent.rightTriggerChanged(128.0 / 255.0)
+
+    #expect(containsEvent(events, expectedLeftStick))
+    #expect(containsEvent(events, expectedRightStick))
+    #expect(containsEvent(events, expectedLeftTrigger))
+    #expect(containsEvent(events, expectedRightTrigger))
     #expect(containsEvent(events, .buttonPressed(.share)))
     #expect(containsEvent(events, .buttonPressed(.options)))
     #expect(containsEvent(events, .buttonPressed(.ps)))
@@ -133,8 +138,11 @@ private func containsEvent(_ events: [ControllerEvent], _ expected: ControllerEv
       data: makeDS4Report(leftStickX: 254, leftStickY: 2, rightStickX: 2, rightStickY: 254)
     )
 
-    #expect(containsEvent(events, .leftStickChanged(x: 126.0 / 128.0, y: 126.0 / 128.0)))
-    #expect(containsEvent(events, .rightStickChanged(x: -126.0 / 128.0, y: -126.0 / 128.0)))
+    let expectedLeftStick = ControllerEvent.leftStickChanged(x: 126.0 / 128.0, y: 126.0 / 128.0)
+    let expectedRightStick = ControllerEvent.rightStickChanged(x: -126.0 / 128.0, y: -126.0 / 128.0)
+
+    #expect(containsEvent(events, expectedLeftStick))
+    #expect(containsEvent(events, expectedRightStick))
   }
 
   @Test("Observed DS4 right-stick Y shortfall remains visible")
@@ -143,8 +151,9 @@ private func containsEvent(_ events: [ControllerEvent], _ expected: ControllerEv
     _ = try parser.parse(data: makeDS4Report())
 
     let events = try parser.parse(data: makeDS4Report(rightStickY: 8))
+    let expectedRightStick = ControllerEvent.rightStickChanged(x: 0, y: 120.0 / 128.0)
 
-    #expect(containsEvent(events, .rightStickChanged(x: 0, y: 120.0 / 128.0)))
+    #expect(containsEvent(events, expectedRightStick))
   }
 
   @Test("Device input state exposes DS4 D-pad as held buttons")
