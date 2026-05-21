@@ -68,7 +68,7 @@ Commands:
   notarize log <id>           Fetch notarization log (release only)
   notarize history            List notarization history (release only)
   notarize store-credentials  Store notarytool credentials in Keychain
-  package release             Build, notarize, staple, and zip a release app
+  package release             Build, notarize, staple, and package a release DMG
 
   lint                        Run SwiftLint (requires swiftlint)
 

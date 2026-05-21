@@ -18,6 +18,8 @@ Examples:
 Updates:
   - Sources/OpenJoystickDriver/CLI.swift
   - scripts/README.md release examples
+  - scripts/ojd-build.sh generated GUI/daemon bundle versions
+  - DriverKitExtension/Info.plist short version
 
 The target version must already have a CHANGELOG.md heading.
 USAGE
@@ -40,32 +42,38 @@ fi
 
 cli_file="$PROJECT_DIR/Sources/OpenJoystickDriver/CLI.swift"
 scripts_readme="$PROJECT_DIR/scripts/README.md"
+build_script="$PROJECT_DIR/scripts/ojd-build.sh"
+dext_plist="$PROJECT_DIR/DriverKitExtension/Info.plist"
 changelog="$PROJECT_DIR/CHANGELOG.md"
 
 [[ -f "$cli_file" ]] || die "Missing $cli_file"
 [[ -f "$scripts_readme" ]] || die "Missing $scripts_readme"
+[[ -f "$build_script" ]] || die "Missing $build_script"
+[[ -f "$dext_plist" ]] || die "Missing $dext_plist"
 [[ -f "$changelog" ]] || die "Missing $changelog"
 
-if ! grep -Eq "^## ${version//./\\.}($|[[:space:]])" "$changelog"; then
+if ! grep -Fxq "## $version" "$changelog"; then
   die "CHANGELOG.md must contain heading: ## $version"
 fi
 
-python3 - "$version" "$cli_file" "$scripts_readme" <<'PY'
+python3 - "$version" "$cli_file" "$scripts_readme" "$build_script" "$dext_plist" <<'PY'
 import re
 import sys
 from pathlib import Path
 
-version, cli_path, readme_path = sys.argv[1:]
+version, cli_path, readme_path, build_script_path, dext_plist_path = sys.argv[1:]
 
 replacements = [
     (
         Path(cli_path),
         [
             (
+                "CLI version strings",
                 re.compile(
                     r"OpenJoystickDriver v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"
                 ),
                 f"OpenJoystickDriver v{version}",
+                2,
             ),
         ],
     ),
@@ -73,30 +81,74 @@ replacements = [
         Path(readme_path),
         [
             (
+                "scripts README package release example",
                 re.compile(
                     r"\./scripts/ojd package release \d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"
                 ),
                 f"./scripts/ojd package release {version}",
+                1,
             ),
             (
+                "scripts README manual dispatch version example",
                 re.compile(
                     r"`\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?` and by manual dispatch"
                 ),
                 f"`{version}` and by manual dispatch",
+                1,
+            ),
+        ],
+    ),
+    (
+        Path(build_script_path),
+        [
+            (
+                "ojd-build GUI/daemon short versions",
+                re.compile(
+                    r"(<key>CFBundleShortVersionString</key>\n[ \t]*<string>)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(</string>)"
+                ),
+                rf"\g<1>{version}\g<2>",
+                2,
+            ),
+        ],
+    ),
+    (
+        Path(dext_plist_path),
+        [
+            (
+                "DriverKit short version",
+                re.compile(
+                    r"(<key>CFBundleShortVersionString</key>\n[ \t]*<string>)\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(</string>)"
+                ),
+                rf"\g<1>{version}\g<2>",
+                1,
             ),
         ],
     ),
 ]
 
-changed = []
+missing = []
+updates = []
 for path, patterns in replacements:
     text = path.read_text()
     updated = text
-    for pattern, repl in patterns:
-        updated = pattern.sub(repl, updated)
-    if updated != text:
-        path.write_text(updated)
-        changed.append(str(path))
+    file_missing = False
+    for description, pattern, repl, minimum in patterns:
+        updated, count = pattern.subn(repl, updated)
+        if count < minimum:
+            missing.append(f"{path}: {description} (expected at least {minimum}, found {count})")
+            file_missing = True
+    if not file_missing and updated != text:
+        updates.append((path, updated))
+
+if missing:
+    for item in missing:
+        print(f"missing expected version reference: {item}", file=sys.stderr)
+    sys.exit(1)
+
+changed = []
+for path, updated in updates:
+    path.write_text(updated)
+    changed.append(str(path))
 
 for path in changed:
     print(f"updated {path}")

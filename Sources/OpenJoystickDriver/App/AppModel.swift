@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import OpenJoystickDriverKit
 
@@ -48,11 +49,17 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   @Published var compatibilityIdentity: String = CompatibilityIdentity.sdl2_3.rawValue
   @Published var virtualDeviceDiagnostics: XPCVirtualDeviceDiagnosticsPayload?
   @Published var virtualDeviceSelfTest: XPCVirtualDeviceSelfTestPayload?
+  @Published var updateCheckState: UpdateCheckState = .idle
 
   var developerMode: Bool
 
+  var appVersion: String {
+    Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.2.0"
+  }
+
   private let client = XPCClient()
   private let permissionManager = PermissionManager()
+  private let updateChecker = UpdateChecker()
   private var pollTask: Task<Void, Never>?
 
   init(developerMode: Bool = false) { self.developerMode = developerMode }
@@ -65,6 +72,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     await refreshVirtualDeviceDiagnostics()
     extensionManager.refreshInstallState()
     startPolling()
+    Task { await checkForUpdates() }
   }
 
   func refreshDaemonStatus() { daemonInstalled = DaemonManager.isInstalled }
@@ -258,6 +266,17 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     } catch {
       daemonError = formatDaemonError(error)
       virtualDeviceDiagnostics = nil
+    }
+  }
+
+  func checkForUpdates() async {
+    updateCheckState = .checking
+    updateCheckState = await updateChecker.check(currentVersion: appVersion)
+  }
+
+  func openLatestRelease() {
+    if case .available(let info) = updateCheckState {
+      NSWorkspace.shared.open(info.htmlURL)
     }
   }
 

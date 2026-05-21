@@ -76,7 +76,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: OpenJoystickDriver-${{ steps.release.outputs.tag }}
-          path: .build/release-artifacts/*.zip
+          path: .build/release-artifacts/*.dmg
           if-no-files-found: error
           retention-days: 14
 
@@ -85,7 +85,7 @@ jobs:
         with:
           tag_name: ${{ steps.release.outputs.tag }}
           name: OpenJoystickDriver ${{ steps.release.outputs.tag }}
-          files: .build/release-artifacts/*.zip
+          files: .build/release-artifacts/*.dmg
           fail_on_unmatched_files: true
           generate_release_notes: true
           prerelease: ${{ steps.release.outputs.prerelease }}
