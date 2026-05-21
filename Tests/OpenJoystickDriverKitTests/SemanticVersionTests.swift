@@ -1,5 +1,5 @@
-import XCTest
 @testable import OpenJoystickDriverKit
+import XCTest
 
 final class SemanticVersionTests: XCTestCase {
   func testParsesVersionWithLeadingVAndPrerelease() throws {
@@ -33,7 +33,7 @@ final class SemanticVersionTests: XCTestCase {
       "1.0.0-beta.2",
       "1.0.0-beta.11",
       "1.0.0-rc.1",
-      "1.0.0"
+      "1.0.0",
     ].map { try XCTUnwrap(SemanticVersion($0)) }
 
     for (older, newer) in zip(versions, versions.dropFirst()) {

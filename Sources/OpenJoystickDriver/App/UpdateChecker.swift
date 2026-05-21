@@ -16,6 +16,14 @@ enum UpdateCheckState: Equatable, Sendable {
 }
 
 struct UpdateChecker {
+  private static var defaultLatestReleaseURL: URL {
+    var components = URLComponents()
+    components.scheme = "https"
+    components.host = "api.github.com"
+    components.path = "/repos/xsyetopz/OpenJoystickDriver/releases/latest"
+    return components.url ?? URL(fileURLWithPath: "/")
+  }
+
   private struct GitHubRelease: Decodable {
     let tagName: String
     let htmlURL: URL
@@ -32,7 +40,7 @@ struct UpdateChecker {
   let session: URLSession
 
   init(
-    latestReleaseURL: URL = URL(string: "https://api.github.com/repos/xsyetopz/OpenJoystickDriver/releases/latest")!,
+    latestReleaseURL: URL = Self.defaultLatestReleaseURL,
     session: URLSession = .shared
   ) {
     self.latestReleaseURL = latestReleaseURL
@@ -60,7 +68,11 @@ struct UpdateChecker {
         return .failed("Latest GitHub release tag is not SemVer: \(release.tagName)")
       }
 
-      let info = UpdateInfo(tagName: release.tagName, version: latestVersion, htmlURL: release.htmlURL)
+      let info = UpdateInfo(
+        tagName: release.tagName,
+        version: latestVersion,
+        htmlURL: release.htmlURL
+      )
       return latestVersion > currentVersion ? .available(info) : .upToDate(rawCurrentVersion)
     } catch {
       return .failed(error.localizedDescription)

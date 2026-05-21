@@ -18,7 +18,11 @@ public struct SemanticVersion: Comparable, Equatable, Sendable {
       version = String(version[..<buildStart])
     }
 
-    let versionAndPrerelease = version.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
+    let versionAndPrerelease = version.split(
+      separator: "-",
+      maxSplits: 1,
+      omittingEmptySubsequences: false
+    )
     guard let core = versionAndPrerelease.first else { return nil }
 
     let numbers = core.split(separator: ".", omittingEmptySubsequences: false)
@@ -37,7 +41,9 @@ public struct SemanticVersion: Comparable, Equatable, Sendable {
 
     let prerelease: [String]
     if versionAndPrerelease.count == 2 {
-      prerelease = versionAndPrerelease[1].split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+      prerelease = versionAndPrerelease[1]
+        .split(separator: ".", omittingEmptySubsequences: false)
+        .map(String.init)
       guard !prerelease.isEmpty, prerelease.allSatisfy(Self.isValidIdentifier) else { return nil }
     } else {
       prerelease = []
@@ -49,7 +55,7 @@ public struct SemanticVersion: Comparable, Equatable, Sendable {
     self.prerelease = prerelease
   }
 
-  public static func < (lhs: SemanticVersion, rhs: SemanticVersion) -> Bool {
+  public static func < (lhs: Self, rhs: Self) -> Bool {
     if lhs.major != rhs.major { return lhs.major < rhs.major }
     if lhs.minor != rhs.minor { return lhs.minor < rhs.minor }
     if lhs.patch != rhs.patch { return lhs.patch < rhs.patch }
@@ -79,7 +85,12 @@ public struct SemanticVersion: Comparable, Equatable, Sendable {
       if lhs.count != rhs.count {
         return lhs.count < rhs.count ? .orderedAscending : .orderedDescending
       }
-      let comparison = lhs.compare(rhs, options: [], range: nil, locale: Locale(identifier: "en_US_POSIX"))
+      let comparison = lhs.compare(
+        rhs,
+        options: [],
+        range: nil,
+        locale: Locale(identifier: "en_US_POSIX")
+      )
       if comparison == .orderedSame { return .orderedSame }
       return comparison == .orderedAscending ? .orderedAscending : .orderedDescending
     case (true, false):
@@ -87,7 +98,12 @@ public struct SemanticVersion: Comparable, Equatable, Sendable {
     case (false, true):
       return .orderedDescending
     case (false, false):
-      let comparison = lhs.compare(rhs, options: [], range: nil, locale: Locale(identifier: "en_US_POSIX"))
+      let comparison = lhs.compare(
+        rhs,
+        options: [],
+        range: nil,
+        locale: Locale(identifier: "en_US_POSIX")
+      )
       if comparison == .orderedSame { return .orderedSame }
       return comparison == .orderedAscending ? .orderedAscending : .orderedDescending
     }
@@ -100,7 +116,9 @@ public struct SemanticVersion: Comparable, Equatable, Sendable {
   }
 
   private static func isValidBuildMetadata(_ buildMetadata: String) -> Bool {
-    let identifiers = buildMetadata.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+    let identifiers = buildMetadata
+      .split(separator: ".", omittingEmptySubsequences: false)
+      .map(String.init)
     return !identifiers.isEmpty && identifiers.allSatisfy { identifier in
       !identifier.isEmpty && identifier.unicodeScalars.allSatisfy(Self.isValidIdentifierScalar)
     }
