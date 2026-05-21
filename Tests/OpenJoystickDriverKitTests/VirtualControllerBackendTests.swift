@@ -126,10 +126,10 @@ final class VirtualControllerBackendTests: XCTestCase {
       identifier: DeviceIdentifier(vendorID: 13623, productID: 4112)
     )
 
-    let inputSize = properties[kIOHIDMaxInputReportSizeKey as String] as? NSNumber
-    let outputSize = properties[kIOHIDMaxOutputReportSizeKey as String] as? NSNumber
-    XCTAssertTrue(inputSize?.intValue == SDLGamepadHIDDescriptor.reportSize)
-    XCTAssertTrue(outputSize?.intValue == SDLGamepadHIDDescriptor.maxOutputReportPayloadSize)
+    let inputSize = properties[kIOHIDMaxInputReportSizeKey as String] as? Int
+    let outputSize = properties[kIOHIDMaxOutputReportSizeKey as String] as? Int
+    XCTAssertTrue(inputSize == SDLGamepadHIDDescriptor.reportSize)
+    XCTAssertTrue(outputSize == SDLGamepadHIDDescriptor.maxOutputReportPayloadSize)
   }
   func testXbox360FormatDefaultsToJoystickPrimaryUsage() {
     XCTAssertTrue(
@@ -170,8 +170,8 @@ final class VirtualControllerBackendTests: XCTestCase {
       identifier: DeviceIdentifier(vendorID: 13623, productID: 4112)
     )
 
-    let outputSize = properties[kIOHIDMaxOutputReportSizeKey as String] as? NSNumber
-    XCTAssertTrue(outputSize?.intValue == 13)
+    let outputSize = properties[kIOHIDMaxOutputReportSizeKey as String] as? Int
+    XCTAssertTrue(outputSize == 13)
   }
   func testFixedCompatibilityReportHasNoHatAxis() throws {
     let parsed = try HIDDescriptorReportFormat(descriptor: OJDSDLGamepadFormat().descriptor)

@@ -122,19 +122,19 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     )
 
     let usageProps: [String: Any] = [
-      kIOHIDPrimaryUsagePageKey as String: NSNumber(value: Int(kHIDPage_GenericDesktop)),
-      kIOHIDPrimaryUsageKey as String: NSNumber(value: primaryUsage),
+      kIOHIDPrimaryUsagePageKey as String: Int(kHIDPage_GenericDesktop),
+      kIOHIDPrimaryUsageKey as String: primaryUsage,
       kIOHIDDeviceUsagePairsKey as String: [
         [
-          kIOHIDDeviceUsagePageKey as String: NSNumber(value: Int(kHIDPage_GenericDesktop)),
-          kIOHIDDeviceUsageKey as String: NSNumber(value: primaryUsage),
+          kIOHIDDeviceUsagePageKey as String: Int(kHIDPage_GenericDesktop),
+          kIOHIDDeviceUsageKey as String: primaryUsage,
         ],
       ],
     ]
 
     let noPairsUsageProps: [String: Any] = [
-      kIOHIDPrimaryUsagePageKey as String: NSNumber(value: Int(kHIDPage_GenericDesktop)),
-      kIOHIDPrimaryUsageKey as String: NSNumber(value: primaryUsage),
+      kIOHIDPrimaryUsagePageKey as String: Int(kHIDPage_GenericDesktop),
+      kIOHIDPrimaryUsageKey as String: primaryUsage,
     ]
 
     let attemptVariants: [(label: String, props: [String: Any])] = [
@@ -250,28 +250,24 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
   ) -> [String: Any] {
     var properties: [String: Any] = [
       kIOHIDReportDescriptorKey as String: Data(format.descriptor),
-      kIOHIDVendorIDKey as String: NSNumber(value: profile.vendorID),
-      kIOHIDProductIDKey as String: NSNumber(value: profile.productID),
-      kIOHIDVersionNumberKey as String: NSNumber(value: profile.versionNumber),
+      kIOHIDVendorIDKey as String: profile.vendorID,
+      kIOHIDProductIDKey as String: profile.productID,
+      kIOHIDVersionNumberKey as String: profile.versionNumber,
       kIOHIDProductKey as String: profile.productName,
       kIOHIDManufacturerKey as String: profile.manufacturer,
       kIOHIDSerialNumberKey as String:
         UserSpaceVirtualDeviceConstants.serialNumber(for: identifier),
       kIOHIDTransportKey as String: "USB",
-      kIOHIDMaxInputReportSizeKey as String: NSNumber(
-        value: reportBufferSize(
-          payloadSize: format.inputReportPayloadSize,
-          reportID: format.inputReportID
-        )
+      kIOHIDMaxInputReportSizeKey as String: reportBufferSize(
+        payloadSize: format.inputReportPayloadSize,
+        reportID: format.inputReportID
       ),
     ]
 
     if let outputSize = format.outputReportPayloadSize {
-      properties[kIOHIDMaxOutputReportSizeKey as String] = NSNumber(
-        value: reportBufferSize(
-          payloadSize: outputSize,
-          reportID: format.outputReportID
-        )
+      properties[kIOHIDMaxOutputReportSizeKey as String] = reportBufferSize(
+        payloadSize: outputSize,
+        reportID: format.outputReportID
       )
     }
     return properties
