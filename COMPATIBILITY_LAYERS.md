@@ -42,7 +42,9 @@ mapping and caveats live here.
 | User goal                                       | Choose                   | Why                                                               |
 | ----------------------------------------------- | ------------------------ | ----------------------------------------------------------------- |
 | Most games and emulators                        | ✅ `sdl2-3`               | Best default for SDL-based apps.                                  |
-| Native macOS app using GameController.framework | ✅ `apple-gamecontroller` | Publishes a `GCController`-friendly Xbox-style HID surface.       |
+| Native macOS app using GameController.framework | ✅ `apple-gamecontroller` | Publishes a `GCController`-friendly Xbox-style HID surface with haptics. |
+| SDL app needs output-report rumble              | 🚧 `x360-hid`             | Test with `./scripts/ojd diagnose sdl3-hidapi-x360 --seconds 5`.  |
+| SDL app needs macOS GameController rumble       | 🚧 `apple-gamecontroller` | GameController haptics work; SDL MFI enumeration is still gated.  |
 | Direct HID testing                              | ⚠️ `generic-hid`          | Keeps OJD's own VID/PID and exposes a plain HID GamePad.          |
 | App expects Xbox 360 HID                        | 🚧 `x360-hid`             | Experimental Microsoft-style HID identity.                        |
 | App expects Xbox One HID                        | 🚧 `xone-hid`             | Experimental Microsoft-style HID identity.                        |
@@ -54,6 +56,8 @@ CLI examples:
 /Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless compat sdl2-3
 /Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless compat apple-gamecontroller
 /Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless output secondary
+./scripts/ojd diagnose sdl3-gamecontroller --seconds 5
+./scripts/ojd diagnose sdl3-hidapi-x360 --seconds 5
 ```
 
 ## App Rumble
@@ -139,8 +143,20 @@ PCSX2 reads this user data file before its bundled database:
 ~/Library/Application Support/PCSX2/game_controller_db.txt
 ```
 
-The included input profile binds both `SDL-0` and `SDL-1`. This keeps controls
-working if an old DriverKit device takes one SDL slot.
+The included input profile binds the single expected `SDL-0` OJD Compatibility
+controller.
+
+For SDL apps that need rumble through macOS GameController haptics, use:
+
+```bash
+./scripts/ojd diagnose sdl3-hidapi-x360 --seconds 5
+./scripts/ojd launch pcsx2 --hidapi-rumble
+```
+
+That route selects `x360-hid`, enables user-space output, and launches SDL with
+Xbox 360 HIDAPI enabled for the Steam Virtual Gamepad-style identity. SDL's
+GameController/MFI route remains available for diagnostics, but current SDL3
+builds have not enumerated OJD through that path in local testing.
 
 ## Manual Checks
 

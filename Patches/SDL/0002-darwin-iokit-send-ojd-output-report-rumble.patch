@@ -1,0 +1,91 @@
+diff --git a/src/joystick/darwin/SDL_iokitjoystick.c b/src/joystick/darwin/SDL_iokitjoystick.c
+index 209f7d820..b7b124d41 100644
+--- a/src/joystick/darwin/SDL_iokitjoystick.c
++++ b/src/joystick/darwin/SDL_iokitjoystick.c
+@@ -35,0 +36,3 @@
++#define USB_VENDOR_OPENJOYSTICKDRIVER 0x4F4A
++#define USB_PRODUCT_OPENJOYSTICKDRIVER_SDL_GAMEPAD 0x4448
++
+@@ -500,0 +504,4 @@ static bool GetDeviceInfo(IOHIDDeviceRef hidDevice, recDevice *pDevice)
++    refCF = IOHIDDeviceGetProperty(hidDevice, CFSTR(kIOHIDMaxOutputReportSizeKey));
++    if (refCF) {
++        CFNumberGetValue(refCF, kCFNumberIntType, &pDevice->output_report_size);
++    }
+@@ -531,0 +539,3 @@ static bool GetDeviceInfo(IOHIDDeviceRef hidDevice, recDevice *pDevice)
++    pDevice->ojd_output_rumble_report = (vendor == USB_VENDOR_OPENJOYSTICKDRIVER &&
++                                         product == USB_PRODUCT_OPENJOYSTICKDRIVER_SDL_GAMEPAD &&
++                                         (pDevice->output_report_size == 0 || pDevice->output_report_size >= 7));
+@@ -809 +819 @@ static bool DARWIN_JoystickOpen(SDL_Joystick *joystick, int device_index)
+-    if (device->ffservice) {
++    if (device->ffservice || device->ojd_output_rumble_report) {
+@@ -906,0 +917,50 @@ static bool DARWIN_JoystickInitRumble(recDevice *device, Sint16 magnitude)
++static bool DARWIN_JoystickSendOutputReport(recDevice *device, const Uint8 *data, int size)
++{
++    const Uint8 *data_to_send;
++    CFIndex size_to_send;
++    Uint8 report_id;
++    IOReturn result;
++
++    if (!data || size <= 0) {
++        return SDL_InvalidParamError("data");
++    }
++    if (!device->deviceRef) {
++        return SDL_SetError("Output report failed, device disconnected");
++    }
++
++    report_id = data[0];
++    data_to_send = data;
++    size_to_send = size;
++
++    if (report_id == 0x0) {
++        // Match hidapi semantics: callers include a leading zero for unnumbered reports,
++        // but IOKit expects only the report payload.
++        data_to_send = data + 1;
++        size_to_send = size - 1;
++    }
++
++    if (size_to_send <= 0) {
++        return SDL_InvalidParamError("data");
++    }
++    if (device->output_report_size > 0 && size_to_send > device->output_report_size) {
++        return SDL_SetError("Output report size %ld exceeds device maximum %d", (long)size_to_send, device->output_report_size);
++    }
++
++    result = IOHIDDeviceSetReport(device->deviceRef, kIOHIDReportTypeOutput, report_id,
++                                  data_to_send, size_to_send);
++    if (result != kIOReturnSuccess) {
++        return SDL_SetError("Unable to send output report: 0x%08x", result);
++    }
++    return true;
++}
++
++static bool DARWIN_JoystickRumbleOutputReport(recDevice *device, Uint16 low_frequency_rumble, Uint16 high_frequency_rumble)
++{
++    Uint8 rumble_packet[] = { 0x00, 0x4F, 0x00, 0x00, 0x00, 0x00, 0xFA, 0x00 };
++
++    rumble_packet[2] = (Uint8)(low_frequency_rumble >> 8);
++    rumble_packet[3] = (Uint8)(high_frequency_rumble >> 8);
++
++    return DARWIN_JoystickSendOutputReport(device, rumble_packet, sizeof(rumble_packet));
++}
++
+@@ -919,0 +980,3 @@ static bool DARWIN_JoystickRumble(SDL_Joystick *joystick, Uint16 low_frequency_r
++        if (device->ojd_output_rumble_report) {
++            return DARWIN_JoystickRumbleOutputReport(device, low_frequency_rumble, high_frequency_rumble);
++        }
+@@ -958 +1021,7 @@ static bool DARWIN_JoystickSendEffect(SDL_Joystick *joystick, const void *data,
+-    return SDL_Unsupported();
++    recDevice *device = joystick->hwdata;
++
++    if (!device) {
++        return SDL_SetError("Output report failed, device disconnected");
++    }
++
++    return DARWIN_JoystickSendOutputReport(device, (const Uint8 *)data, size);
+diff --git a/src/joystick/darwin/SDL_iokitjoystick_c.h b/src/joystick/darwin/SDL_iokitjoystick_c.h
+index ec017eabe..6dab0d2ac 100644
+--- a/src/joystick/darwin/SDL_iokitjoystick_c.h
++++ b/src/joystick/darwin/SDL_iokitjoystick_c.h
+@@ -75,0 +76,2 @@ struct joystick_hwdata
++    int output_report_size;
++    bool ojd_output_rumble_report;

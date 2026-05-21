@@ -109,8 +109,7 @@ For PCSX2, use SDL 2/3 Compatibility with user-space-only output:
 ```
 
 The launcher sets the known-good routing before starting PCSX2. The input
-profile binds both `SDL-0` and `SDL-1` so it still works if an old DriverKit
-device occupies one SDL slot.
+profile binds the single expected `SDL-0` OJD Compatibility controller.
 
 ## Useful Commands
 
@@ -119,7 +118,9 @@ device occupies one SDL slot.
 ./scripts/ojd rebuild-fast dev
 ./scripts/ojd validate profiles
 ./scripts/ojd diagnose backends --seconds 5
-./scripts/ojd diagnose gamecontroller --seconds 5
+./scripts/ojd diagnose gamecontroller --seconds 5 --rumble
+./scripts/ojd diagnose sdl3-gamecontroller --seconds 5
+./scripts/ojd diagnose sdl3-hidapi-x360 --seconds 5
 swift test
 ```
 

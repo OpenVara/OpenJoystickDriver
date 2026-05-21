@@ -7,6 +7,12 @@
 
 #if defined(__APPLE__)
     #include <TargetConditionals.h>
+    #if TARGET_OS_OSX
+        #import <Foundation/Foundation.h>
+        #if !defined(OJD_SDL_PROBE_NO_GAMECONTROLLER)
+            #import <GameController/GameController.h>
+        #endif
+    #endif
 #endif
 
 static const char *OJD_GUIDS[] = {
@@ -27,6 +33,20 @@ static int has_flag(int argc, char **argv, const char *flag) {
     return 0;
 }
 
+static int parse_int_arg(int argc, char **argv, const char *name, int default_value, int min_value, int max_value) {
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], name) == 0 && (i + 1) < argc) {
+            int value = atoi(argv[i + 1]);
+            if (value < min_value)
+                value = min_value;
+            if (value > max_value)
+                value = max_value;
+            return value;
+        }
+    }
+    return default_value;
+}
+
 static int is_ojd_guid(const char *guid) {
     for (int i = 0; i < OJD_GUID_COUNT; i++) {
         if (strcmp(guid, OJD_GUIDS[i]) == 0)
@@ -44,7 +64,7 @@ static void print_joystick_id(SDL_JoystickID id) {
     SDL_GUID guid = SDL_GetJoystickGUIDForID(id);
     char guid_str[64];
     SDL_GUIDToString(guid, guid_str, (int)sizeof(guid_str));
-#
+
     printf(
         "- id=%u vid=0x%04x pid=0x%04x ver=0x%04x guid=%s\n",
         (unsigned)id,
@@ -57,7 +77,7 @@ static void print_joystick_id(SDL_JoystickID id) {
         "  is_gamepad=%s gamepad_name=%s\n",
         SDL_IsGamepad(id) ? "yes" : "no",
         gamepad_name ? gamepad_name : "(null)");
-#
+
     SDL_Joystick *joy = SDL_OpenJoystick(id);
     if (joy) {
         const char *serial = SDL_GetJoystickSerial(joy);
@@ -66,7 +86,7 @@ static void print_joystick_id(SDL_JoystickID id) {
     } else {
         printf("  open_joystick_failed=%s\n", SDL_GetError());
     }
-#
+
     if (SDL_IsGamepad(id)) {
         char *mapping = SDL_GetGamepadMappingForID(id);
         if (mapping) {
@@ -96,17 +116,7 @@ static void print_joystick_id(SDL_JoystickID id) {
 }
 
 static int parse_seconds(int argc, char **argv) {
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--seconds") == 0 && (i + 1) < argc) {
-            int s = atoi(argv[i + 1]);
-            if (s <= 0)
-                s = 10;
-            if (s > 60)
-                s = 60;
-            return s;
-        }
-    }
-    return 10;
+    return parse_int_arg(argc, argv, "--seconds", 10, 1, 60);
 }
 
 static const char *parse_mappings_file(int argc, char **argv) {
@@ -124,6 +134,61 @@ static int file_exists(const char *path) {
         return 0;
     fclose(f);
     return 1;
+}
+
+static void prewarm_gamecontroller_if_available(void) {
+#if defined(__APPLE__) && TARGET_OS_OSX && !defined(OJD_SDL_PROBE_NO_GAMECONTROLLER)
+    if (@available(macOS 11.3, *)) {
+        GCController.shouldMonitorBackgroundEvents = YES;
+    }
+#else
+    (void)0;
+#endif
+}
+
+static void pump_platform_events(void) {
+#if defined(__APPLE__) && TARGET_OS_OSX
+    @autoreleasepool {
+        [[NSRunLoop mainRunLoop] runMode:NSDefaultRunLoopMode
+                              beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    }
+#endif
+}
+
+static SDL_JoystickID *enumerate_joysticks(int *joy_count) {
+    pump_platform_events();
+    SDL_UpdateJoysticks();
+    SDL_UpdateGamepads();
+    SDL_PumpEvents();
+    return SDL_GetJoysticks(joy_count);
+}
+
+static SDL_JoystickID *wait_for_joysticks(int wait_seconds, int *joy_count) {
+    SDL_JoystickID *joy_ids = enumerate_joysticks(joy_count);
+    if (*joy_count > 0 || wait_seconds <= 0)
+        return joy_ids;
+
+    SDL_free(joy_ids);
+    Uint64 start = SDL_GetTicks();
+    while ((SDL_GetTicks() - start) < (Uint64)(wait_seconds * 1000)) {
+        pump_platform_events();
+        SDL_Event e;
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_EVENT_JOYSTICK_ADDED || e.type == SDL_EVENT_GAMEPAD_ADDED) {
+                SDL_JoystickID *ids = enumerate_joysticks(joy_count);
+                if (*joy_count > 0)
+                    return ids;
+                SDL_free(ids);
+            }
+        }
+        SDL_Delay(50);
+        joy_ids = enumerate_joysticks(joy_count);
+        if (*joy_count > 0)
+            return joy_ids;
+        SDL_free(joy_ids);
+    }
+
+    return enumerate_joysticks(joy_count);
 }
 
 static int check_single_neutral_ojd(SDL_JoystickID *joy_ids, int joy_count) {
@@ -183,9 +248,13 @@ static int check_single_neutral_ojd(SDL_JoystickID *joy_ids, int joy_count) {
 
 int main(int argc, char **argv) {
     int seconds = parse_seconds(argc, argv);
+    int wait_devices_seconds = parse_int_arg(argc, argv, "--wait-devices", 0, 0, 30);
     const char *mappings_file = parse_mappings_file(argc, argv);
+    int gc_prewarm = has_flag(argc, argv, "--gc-prewarm");
+    int init_video = has_flag(argc, argv, "--video");
     int expect_single_neutral_ojd = has_flag(argc, argv, "--expect-single-neutral-ojd");
     int send_rumble = has_flag(argc, argv, "--rumble");
+    int expect_rumble = has_flag(argc, argv, "--expect-rumble");
 
     int v = SDL_GetVersion();
     int major = SDL_VERSIONNUM_MAJOR(v);
@@ -196,10 +265,20 @@ int main(int argc, char **argv) {
     printf("SDL platform: %s\n", SDL_GetPlatform());
     printf("SDL_JOYSTICK_MFI=%s\n", env_or_unset("SDL_JOYSTICK_MFI"));
     printf("SDL_JOYSTICK_IOKIT=%s\n", env_or_unset("SDL_JOYSTICK_IOKIT"));
+    printf("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=%s\n", env_or_unset("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"));
     printf("SDL_JOYSTICK_HIDAPI_XBOX=%s\n", env_or_unset("SDL_JOYSTICK_HIDAPI_XBOX"));
     printf("SDL_JOYSTICK_HIDAPI_XBOX_ONE=%s\n", env_or_unset("SDL_JOYSTICK_HIDAPI_XBOX_ONE"));
 
-    if (!SDL_Init(SDL_INIT_GAMEPAD | SDL_INIT_JOYSTICK | SDL_INIT_EVENTS)) {
+    if (gc_prewarm) {
+        prewarm_gamecontroller_if_available();
+    }
+
+    SDL_InitFlags init_flags = SDL_INIT_GAMEPAD | SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC | SDL_INIT_EVENTS;
+    if (init_video) {
+        init_flags |= SDL_INIT_VIDEO;
+    }
+
+    if (!SDL_Init(init_flags)) {
         fprintf(stderr, "ERROR: SDL_Init failed: %s\n", SDL_GetError());
         fprintf(stderr, "\nWhat to do:\n");
         fprintf(stderr, "  - Make sure your terminal app has Input Monitoring permission.\n");
@@ -228,7 +307,7 @@ int main(int argc, char **argv) {
     }
 
     int joy_count = 0;
-    SDL_JoystickID *joy_ids = SDL_GetJoysticks(&joy_count);
+    SDL_JoystickID *joy_ids = wait_for_joysticks(wait_devices_seconds, &joy_count);
     printf("\nFound %d joystick(s)\n", joy_count);
     for (int i = 0; i < joy_count; i++) {
         print_joystick_id(joy_ids[i]);
@@ -263,13 +342,18 @@ int main(int argc, char **argv) {
         printf("\nOpened %d gamepad(s) for event listening\n", open_gamepad_count);
     }
 
+    int rumble_failures = 0;
+    int rumble_attempts = 0;
     if (send_rumble) {
         printf("\nRumble probe:\n");
         for (int i = 0; i < joy_count; i++) {
             SDL_Gamepad *gamepad = open_gamepads ? open_gamepads[i] : NULL;
             if (!gamepad)
                 continue;
+            rumble_attempts++;
             bool ok = SDL_RumbleGamepad(gamepad, 0x9000, 0x6000, 300);
+            if (!ok)
+                rumble_failures++;
             printf(
                 "- id=%u SDL_RumbleGamepad=%s%s%s\n",
                 (unsigned)joy_ids[i],
@@ -277,6 +361,34 @@ int main(int argc, char **argv) {
                 ok ? "" : " error=",
                 ok ? "" : SDL_GetError());
             SDL_UpdateGamepads();
+        }
+
+        printf("\nHaptic probe:\n");
+        for (int i = 0; i < joy_count; i++) {
+            SDL_Joystick *joy = SDL_OpenJoystick(joy_ids[i]);
+            if (!joy) {
+                printf("- id=%u open_joystick=failed error=%s\n", (unsigned)joy_ids[i], SDL_GetError());
+                continue;
+            }
+            SDL_Haptic *haptic = SDL_OpenHapticFromJoystick(joy);
+            if (!haptic) {
+                printf("- id=%u SDL_OpenHapticFromJoystick=failed error=%s\n", (unsigned)joy_ids[i], SDL_GetError());
+                SDL_CloseJoystick(joy);
+                continue;
+            }
+            bool supported = SDL_HapticRumbleSupported(haptic);
+            bool initialized = SDL_InitHapticRumble(haptic);
+            bool played = initialized ? SDL_PlayHapticRumble(haptic, 0.75f, 300) : false;
+            printf(
+                "- id=%u haptic_rumble_supported=%s init=%s play=%s%s%s\n",
+                (unsigned)joy_ids[i],
+                supported ? "yes" : "no",
+                initialized ? "ok" : "failed",
+                played ? "ok" : "failed",
+                played ? "" : " error=",
+                played ? "" : SDL_GetError());
+            SDL_CloseHaptic(haptic);
+            SDL_CloseJoystick(joy);
         }
     }
 
@@ -300,7 +412,18 @@ int main(int argc, char **argv) {
     if (expect_single_neutral_ojd) {
         expectation_result = check_single_neutral_ojd(joy_ids, joy_count);
     }
-#
+    if (expect_rumble) {
+        if (rumble_attempts == 0) {
+            printf("EXPECT_FAIL: no SDL gamepad was available for rumble\n");
+            expectation_result = 4;
+        } else if (rumble_failures > 0) {
+            printf("EXPECT_FAIL: %d SDL_RumbleGamepad call(s) failed\n", rumble_failures);
+            expectation_result = 4;
+        } else {
+            printf("EXPECT_PASS: SDL_RumbleGamepad succeeded on %d gamepad(s)\n", rumble_attempts);
+        }
+    }
+
     if (joy_count == 0) {
         printf("\nNOTE: SDL sees 0 devices.\n");
         printf("  This typically means either:\n");

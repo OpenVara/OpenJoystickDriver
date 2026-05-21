@@ -5,7 +5,7 @@
 #   ./scripts/ojd diagnose <subcommand>
 #
 # Subcommands:
-#   dext (default), sdl3, pcsx2-sdl3, pcsx2-live, pcsx2-latency, backends
+#   dext (default), sdl3, sdl3-gamecontroller, sdl3-patched, sdl3-patched-gamecontroller, sdl3-hidapi-x360, pcsx2-sdl3, pcsx2-gamecontroller, pcsx2-hidapi-x360, pcsx2-live, pcsx2-latency, backends
 #
 # Runs all checks regardless of individual failures.
 
@@ -22,9 +22,15 @@ if [[ "$cmd" == "-h" || "$cmd" == "--help" || "$cmd" == "help" ]]; then
 Usage:
   ./scripts/ojd diagnose dext
   ./scripts/ojd diagnose sdl3 [--seconds N] [--rumble] [other args]
+  ./scripts/ojd diagnose sdl3-gamecontroller [--seconds N] [--rumble]
+  ./scripts/ojd diagnose sdl3-patched [--seconds N] [--rumble]
+  ./scripts/ojd diagnose sdl3-patched-gamecontroller [--seconds N] [--rumble]
+  ./scripts/ojd diagnose sdl3-hidapi-x360 [--seconds N] [--rumble]
   ./scripts/ojd diagnose pcsx2-sdl3 [--seconds N] [other args]
+  ./scripts/ojd diagnose pcsx2-gamecontroller [--seconds N] [--rumble] [other args]
+  ./scripts/ojd diagnose pcsx2-hidapi-x360 [--seconds N] [--rumble] [other args]
   ./scripts/ojd diagnose pcsx2-live [--seconds N]
-  ./scripts/ojd diagnose gamecontroller [--seconds N]
+  ./scripts/ojd diagnose gamecontroller [--seconds N] [--rumble]
   ./scripts/ojd diagnose pcsx2-latency
   ./scripts/ojd diagnose backends [--seconds N]
 TXT
@@ -44,7 +50,10 @@ run_sdl3_probe_native() {
   [[ -f "$SRC" ]] || die "Missing probe source: $SRC"
 
   echo "Building SDL3 probe (native)..."
-  SDKROOT="$SDKROOT" clang -isysroot "$SDKROOT" "$SRC" $(pkg-config --cflags --libs sdl3) -o "$OUT"
+  SDKROOT="$SDKROOT" clang -x objective-c -isysroot "$SDKROOT" "$SRC" \
+    $(pkg-config --cflags --libs sdl3) \
+    -framework Foundation -framework GameController \
+    -o "$OUT"
 
   echo
   echo "Running: $OUT $*"
@@ -52,6 +61,112 @@ run_sdl3_probe_native() {
   echo "  System Settings -> Privacy & Security -> Input Monitoring"
   echo
   "$OUT" "$@"
+}
+
+run_sdl3_probe_patched() {
+  local ROOT
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  local SRC="$ROOT/tools/sdl3-gamepad-probe/main.c"
+  local PREFIX="$ROOT/.build/sdl-ojd/install"
+  local OUT="/tmp/ojd-sdl3-probe-patched"
+  local SDKROOT
+  SDKROOT="$(select_macos_sdk)" || return $?
+
+  [[ -f "$SRC" ]] || die "Missing probe source: $SRC"
+  [[ -f "$PREFIX/lib/libSDL3.dylib" ]] || die "Patched SDL not built. Run: ./scripts/ojd sdl build-patched"
+
+  echo "Building SDL3 probe (patched SDL submodule)..."
+  SDKROOT="$SDKROOT" clang -x objective-c -isysroot "$SDKROOT" "$SRC" \
+    -I"$PREFIX/include" -L"$PREFIX/lib" -lSDL3 \
+    -framework Foundation -framework GameController \
+    -Wl,-rpath,"$PREFIX/lib" \
+    -o "$OUT"
+
+  echo
+  echo "Running: $OUT $*"
+  echo "Using SDL: $PREFIX/lib/libSDL3.dylib"
+  echo
+  DYLD_LIBRARY_PATH="$PREFIX/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "$OUT" "$@"
+}
+
+configure_ojd_gamecontroller_route() {
+  local ROOT
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  local APP_BIN="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver"
+  local CLI_BIN="${OJD_CLI:-$APP_BIN}"
+  if [[ ! -x "$CLI_BIN" ]]; then
+    CLI_BIN="$ROOT/.build/debug/OpenJoystickDriver"
+  fi
+
+  [[ -x "$CLI_BIN" ]] || die "OpenJoystickDriver CLI not found at $CLI_BIN or $APP_BIN"
+
+  run_limited_command 8 "$CLI_BIN" --headless compat apple-gamecontroller >/dev/null || {
+    echo "WARN: could not set OJD compatibility identity to apple-gamecontroller" >&2
+  }
+  run_limited_command 8 "$CLI_BIN" --headless userspace on >/dev/null || {
+    echo "WARN: could not enable OJD user-space output" >&2
+  }
+}
+
+run_sdl3_gamecontroller_probe() {
+  configure_ojd_gamecontroller_route
+  SDL_JOYSTICK_MFI=1 \
+    SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1 \
+    SDL_JOYSTICK_IOKIT=0 \
+    SDL_JOYSTICK_HIDAPI=0 \
+    SDL_JOYSTICK_HIDAPI_XBOX=0 \
+    SDL_JOYSTICK_HIDAPI_XBOX_360=0 \
+    SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS=0 \
+    SDL_JOYSTICK_HIDAPI_XBOX_ONE=0 \
+    SDL_JOYSTICK_HIDAPI_GIP=0 \
+    run_sdl3_probe_native --gc-prewarm --wait-devices 8 --rumble --expect-rumble "$@"
+}
+
+run_sdl3_patched_gamecontroller_probe() {
+  configure_ojd_gamecontroller_route
+  SDL_JOYSTICK_MFI=1 \
+    SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1 \
+    SDL_JOYSTICK_IOKIT=0 \
+    SDL_JOYSTICK_HIDAPI=0 \
+    SDL_JOYSTICK_HIDAPI_XBOX=0 \
+    SDL_JOYSTICK_HIDAPI_XBOX_360=0 \
+    SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS=0 \
+    SDL_JOYSTICK_HIDAPI_XBOX_ONE=0 \
+    SDL_JOYSTICK_HIDAPI_GIP=0 \
+    run_sdl3_probe_patched --gc-prewarm --wait-devices 8 --rumble --expect-rumble "$@"
+}
+
+configure_ojd_hidapi_x360_route() {
+  local ROOT
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  local APP_BIN="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver"
+  local CLI_BIN="${OJD_CLI:-$APP_BIN}"
+  if [[ ! -x "$CLI_BIN" ]]; then
+    CLI_BIN="$ROOT/.build/debug/OpenJoystickDriver"
+  fi
+
+  [[ -x "$CLI_BIN" ]] || die "OpenJoystickDriver CLI not found at $CLI_BIN or $APP_BIN"
+
+  run_limited_command 8 "$CLI_BIN" --headless compat x360-hid >/dev/null || {
+    echo "WARN: could not set OJD compatibility identity to x360-hid" >&2
+  }
+  run_limited_command 8 "$CLI_BIN" --headless userspace on >/dev/null || {
+    echo "WARN: could not enable OJD user-space output" >&2
+  }
+}
+
+run_sdl3_hidapi_x360_probe() {
+  configure_ojd_hidapi_x360_route
+  SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=1 \
+    SDL_JOYSTICK_MFI=0 \
+    SDL_JOYSTICK_IOKIT=0 \
+    SDL_JOYSTICK_HIDAPI=1 \
+    SDL_JOYSTICK_HIDAPI_XBOX=1 \
+    SDL_JOYSTICK_HIDAPI_XBOX_360=1 \
+    SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS=0 \
+    SDL_JOYSTICK_HIDAPI_XBOX_ONE=0 \
+    SDL_JOYSTICK_HIDAPI_GIP=0 \
+    run_sdl3_probe_native --wait-devices 8 --rumble --expect-rumble "$@"
 }
 
 combined_sdl_mapping_file() {
@@ -74,6 +189,23 @@ combined_sdl_mapping_file() {
   echo "$OUT"
 }
 
+seconds_arg_or_default() {
+  local default_value="$1"
+  shift
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --seconds)
+        if [[ -n "${2:-}" ]]; then
+          echo "$2"
+          return 0
+        fi
+        ;;
+    esac
+    shift
+  done
+  echo "$default_value"
+}
+
 run_sdl3_probe_pcsx2_x86_64() {
   local PCSX2_APP="/Applications/PCSX2.app"
   local PCSX2_SDL3="$PCSX2_APP/Contents/Frameworks/libSDL3.0.dylib"
@@ -89,9 +221,10 @@ run_sdl3_probe_pcsx2_x86_64() {
   [[ -f "$SRC" ]] || die "Missing probe source: $SRC"
 
   echo "Building SDL3 probe (PCSX2/Rosetta x86_64)..."
-  SDKROOT="$SDKROOT" clang -arch x86_64 -isysroot "$SDKROOT" "$SRC" \
+  SDKROOT="$SDKROOT" clang -arch x86_64 -x objective-c -isysroot "$SDKROOT" "$SRC" \
     -I/opt/homebrew/include -I/opt/homebrew/include/SDL3 \
     -L"$PCSX2_APP/Contents/Frameworks" -lSDL3.0 \
+    -framework Foundation -framework GameController \
     -Wl,-headerpad_max_install_names \
     -o "$OUT"
 
@@ -102,12 +235,39 @@ run_sdl3_probe_pcsx2_x86_64() {
   echo "Running: $OUT $*"
   echo "Tip: Input Monitoring must be granted to the terminal app you are using."
   echo
-  SDL_JOYSTICK_HIDAPI_XBOX=0 \
-    SDL_JOYSTICK_HIDAPI_XBOX_360=0 \
-    SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS=0 \
-    SDL_JOYSTICK_HIDAPI_XBOX_ONE=0 \
-    SDL_JOYSTICK_HIDAPI_GIP=0 \
-    "$OUT" "$@"
+  local probe_seconds probe_limit
+  probe_seconds="$(seconds_arg_or_default 10 "$@")"
+  probe_limit="$((probe_seconds + 15))"
+  if [[ "${OJD_PCSX2_SDL3_GAMECONTROLLER:-0}" == "1" ]]; then
+    SDL_JOYSTICK_MFI=1 \
+      SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1 \
+      SDL_JOYSTICK_IOKIT=0 \
+      SDL_JOYSTICK_HIDAPI=0 \
+      SDL_JOYSTICK_HIDAPI_XBOX=0 \
+      SDL_JOYSTICK_HIDAPI_XBOX_360=0 \
+      SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS=0 \
+      SDL_JOYSTICK_HIDAPI_XBOX_ONE=0 \
+      SDL_JOYSTICK_HIDAPI_GIP=0 \
+      run_limited_command "$probe_limit" "$OUT" "$@"
+  elif [[ "${OJD_PCSX2_SDL3_HIDAPI_X360:-0}" == "1" ]]; then
+    SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=1 \
+      SDL_JOYSTICK_MFI=0 \
+      SDL_JOYSTICK_IOKIT=0 \
+      SDL_JOYSTICK_HIDAPI=1 \
+      SDL_JOYSTICK_HIDAPI_XBOX=1 \
+      SDL_JOYSTICK_HIDAPI_XBOX_360=1 \
+      SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS=0 \
+      SDL_JOYSTICK_HIDAPI_XBOX_ONE=0 \
+      SDL_JOYSTICK_HIDAPI_GIP=0 \
+      run_limited_command "$probe_limit" "$OUT" "$@"
+  else
+    SDL_JOYSTICK_HIDAPI_XBOX=0 \
+      SDL_JOYSTICK_HIDAPI_XBOX_360=0 \
+      SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS=0 \
+      SDL_JOYSTICK_HIDAPI_XBOX_ONE=0 \
+      SDL_JOYSTICK_HIDAPI_GIP=0 \
+      run_limited_command "$probe_limit" "$OUT" "$@"
+  fi
 }
 
 select_macos_sdk() {
@@ -189,6 +349,22 @@ run_pcsx2_latency_triage() {
   run_sdl3_probe_pcsx2_x86_64 --seconds 10 --mappings-file "$(combined_sdl_mapping_file "$ROOT")" --expect-single-neutral-ojd || true
 }
 
+run_pcsx2_gamecontroller_probe() {
+  local ROOT
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  configure_ojd_gamecontroller_route
+  OJD_PCSX2_SDL3_GAMECONTROLLER=1 \
+    run_sdl3_probe_pcsx2_x86_64 --mappings-file "$(combined_sdl_mapping_file "$ROOT")" --gc-prewarm --wait-devices 8 --rumble --expect-rumble "$@"
+}
+
+run_pcsx2_hidapi_x360_probe() {
+  local ROOT
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  configure_ojd_hidapi_x360_route
+  OJD_PCSX2_SDL3_HIDAPI_X360=1 \
+    run_sdl3_probe_pcsx2_x86_64 --mappings-file "$(combined_sdl_mapping_file "$ROOT")" --wait-devices 8 --rumble --expect-rumble "$@"
+}
+
 run_pcsx2_live_probe() {
   local seconds="${1:-8}"
   local APP_BIN="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver"
@@ -211,6 +387,7 @@ run_pcsx2_live_probe() {
 
 run_gamecontroller_probe() {
   local seconds="${1:-5}"
+  local rumble="${2:-0}"
   local ROOT
   ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
   local PROBE="$ROOT/.build/debug/OpenJoystickDriverGameControllerProbe"
@@ -221,7 +398,11 @@ run_gamecontroller_probe() {
   fi
 
   [[ -x "$PROBE" ]] || die "Missing probe binary: $PROBE"
-  "$PROBE" --seconds "$seconds"
+  local args=(--seconds "$seconds")
+  if [[ "$rumble" == "1" ]]; then
+    args+=(--rumble)
+  fi
+  "$PROBE" "${args[@]}"
 }
 
 run_backend_acceptance_loop() {
@@ -300,9 +481,39 @@ if [[ "$cmd" == "sdl3" ]]; then
   exit 0
 fi
 
+if [[ "$cmd" == "sdl3-gamecontroller" ]]; then
+  run_sdl3_gamecontroller_probe "$@"
+  exit 0
+fi
+
+if [[ "$cmd" == "sdl3-patched" ]]; then
+  run_sdl3_probe_patched "$@"
+  exit 0
+fi
+
+if [[ "$cmd" == "sdl3-patched-gamecontroller" ]]; then
+  run_sdl3_patched_gamecontroller_probe "$@"
+  exit 0
+fi
+
+if [[ "$cmd" == "sdl3-hidapi-x360" ]]; then
+  run_sdl3_hidapi_x360_probe "$@"
+  exit 0
+fi
+
 if [[ "$cmd" == "pcsx2-sdl3" ]]; then
   ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
   run_sdl3_probe_pcsx2_x86_64 --mappings-file "$(combined_sdl_mapping_file "$ROOT")" "$@"
+  exit 0
+fi
+
+if [[ "$cmd" == "pcsx2-gamecontroller" ]]; then
+  run_pcsx2_gamecontroller_probe "$@"
+  exit 0
+fi
+
+if [[ "$cmd" == "pcsx2-hidapi-x360" ]]; then
+  run_pcsx2_hidapi_x360_probe "$@"
   exit 0
 fi
 
@@ -317,10 +528,24 @@ fi
 
 if [[ "$cmd" == "gamecontroller" ]]; then
   seconds="5"
-  if [[ "${1:-}" == "--seconds" && -n "${2:-}" ]]; then
-    seconds="$2"
-  fi
-  run_gamecontroller_probe "$seconds"
+  rumble="0"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --seconds)
+        [[ -n "${2:-}" ]] || die "--seconds requires a value"
+        seconds="$2"
+        shift 2
+        ;;
+      --rumble)
+        rumble="1"
+        shift
+        ;;
+      *)
+        die "Unknown gamecontroller option: $1"
+        ;;
+    esac
+  done
+  run_gamecontroller_probe "$seconds" "$rumble"
   exit 0
 fi
 

@@ -94,21 +94,29 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       _ = setUserSpaceVirtualDeviceEnabledInternal(false)
       effectiveOutputMode = .primaryOnly
       dispatcher.setMode(.primaryOnly)
-      UserDefaults.standard.set(CompositeOutputDispatcher.Mode.primaryOnly.rawValue, forKey: Self.outputModeDefaultsKey)
+      UserDefaults.standard.set(
+        CompositeOutputDispatcher.Mode.primaryOnly.rawValue,
+        forKey: Self.outputModeDefaultsKey
+      )
     case .driverKit:
       dextDispatcher.setCompatibilitySeizeEnabled(false)
       dextDispatcher.setEnabled(true)
       _ = setUserSpaceVirtualDeviceEnabledInternal(false)
       effectiveOutputMode = .primaryOnly
       dispatcher.setMode(.primaryOnly)
-      UserDefaults.standard.set(CompositeOutputDispatcher.Mode.primaryOnly.rawValue, forKey: Self.outputModeDefaultsKey)
+      UserDefaults.standard.set(
+        CompositeOutputDispatcher.Mode.primaryOnly.rawValue,
+        forKey: Self.outputModeDefaultsKey
+      )
     case .compatUserSpace:
       // Compatibility is user-requested. Do not rewrite the requested mode on failures.
       //
       // If user-space creation fails, keep DriverKit enabled as a fallback but keep the
       // requested mode as Compatibility and show an explicit error string.
       if setUserSpaceVirtualDeviceEnabledInternal(true) {
-        dextDispatcher.setCompatibilitySeizeEnabled(false)
+        dextDispatcher.setCompatibilitySeizeEnabled(
+          compatibilityIdentity.seizesDriverKitInCompatibilityMode
+        )
         dextDispatcher.setEnabled(false)
         effectiveOutputMode = .secondaryOnly
         dispatcher.setMode(.secondaryOnly)
@@ -140,18 +148,25 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         effectiveOutputMode = .primaryOnly
         dispatcher.setMode(.primaryOnly)
         userSpaceStatus =
-          "off (\(compatibilityIdentity.rawValue) Compatibility disabled while DriverKit output is active)"
+          "off (\(compatibilityIdentity.rawValue) Compatibility disabled while DriverKit " +
+          "output is active)"
         return
       }
       if setUserSpaceVirtualDeviceEnabledInternal(true) {
         effectiveOutputMode = .both
         dispatcher.setMode(.both)
-        UserDefaults.standard.set(CompositeOutputDispatcher.Mode.both.rawValue, forKey: Self.outputModeDefaultsKey)
+        UserDefaults.standard.set(
+          CompositeOutputDispatcher.Mode.both.rawValue,
+          forKey: Self.outputModeDefaultsKey
+        )
       } else {
         dextDispatcher.setEnabled(true)
         effectiveOutputMode = .primaryOnly
         dispatcher.setMode(.primaryOnly)
-        UserDefaults.standard.set(CompositeOutputDispatcher.Mode.primaryOnly.rawValue, forKey: Self.outputModeDefaultsKey)
+        UserDefaults.standard.set(
+          CompositeOutputDispatcher.Mode.primaryOnly.rawValue,
+          forKey: Self.outputModeDefaultsKey
+        )
         if !userSpaceStatus.hasPrefix("error:") {
           userSpaceStatus =
             "error: Compatibility backend failed to start. Still using DriverKit output."
@@ -196,11 +211,13 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       let strings = devices.map { d in
         let sn = d.serialNumber ?? "none"
         let mappings = d.mappingFlags.isEmpty ? "none" : d.mappingFlags.joined(separator: ",")
-        let backends = d.preferredBackends.isEmpty ? "none" : d.preferredBackends.joined(separator: ",")
+        let backends =
+          d.preferredBackends.isEmpty ? "none" : d.preferredBackends.joined(separator: ",")
         return "\(d.name) (VID:\(d.vendorID)" + " PID:\(d.productID) \(d.parser)"
           + " [\(d.connection)] SN:\(sn))"
           + " protocol=\(d.protocolVariant)"
-          + " endpoints=in:0x\(String(d.inputEndpoint, radix: 16)) out:0x\(String(d.outputEndpoint, radix: 16))"
+          + " endpoints=in:0x\(String(d.inputEndpoint, radix: 16))"
+          + " out:0x\(String(d.outputEndpoint, radix: 16))"
           + " setConfig=\(d.needsSetConfiguration)"
           + " settleMs=\(d.postHandshakeSettleMs)"
           + " mappings=\(mappings)"
@@ -350,7 +367,8 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         } catch {
           if !userSpaceStatus.hasPrefix("error:") {
             userSpaceStatus =
-              "error: Failed to switch Compatibility identity (\(id.rawValue)). Kept previous Compatibility device running. \(error)"
+              "error: Failed to switch Compatibility identity (\(id.rawValue)). Kept " +
+              "previous Compatibility device running. \(error)"
           } else {
             userSpaceStatus += " (kept previous Compatibility device running)"
           }
@@ -445,7 +463,9 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
 
   // MARK: - Private
 
-  private func buildUserSpaceDispatcher(identity: CompatibilityIdentity) throws -> (UserSpaceOutputDispatcher, String) {
+  private func buildUserSpaceDispatcher(
+    identity: CompatibilityIdentity
+  ) throws -> (UserSpaceOutputDispatcher, String) {
     enum CompatError: Swift.Error, CustomStringConvertible, Sendable {
       case unsupported(String)
       var description: String {
@@ -459,14 +479,19 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     let compatibilityProfile = CompatibilityOutputProfileCatalog.profile(for: identity)
     let profile = compatibilityProfile.deviceProfile
     let format: any VirtualGamepadReportFormat
+    let primaryUsage: Int?
     switch identity {
     case .genericHID:
       format = OJDSDLGamepadFormat()
+      primaryUsage = nil
     case .sdl2_3:
       format = OJDSDLGamepadFormat()
+      primaryUsage = nil
     case .appleGameController:
-      format = Xbox360MacHIDReportFormat()
+      format = Xbox360MacHIDReportFormat(topLevelUsage: UInt8(kHIDUsage_GD_GamePad))
+      primaryUsage = Int(kHIDUsage_GD_GamePad)
     case .xoneHID:
+      primaryUsage = nil
       // Xbox One identity for SDL/Steam/PCSX2:
       // - Prefer the physical HID report descriptor exposed by macOS for 045E:02EA (USB).
       //   This makes SDL treat the virtual device as a real Xbox controller.
@@ -477,21 +502,36 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         preferredTransport: "USB"
       ) {
         do {
-          format = try HIDDescriptorReportFormat(descriptor: physical)
+          format = try HIDDescriptorReportFormat(
+            descriptor: physical,
+            outputReportID: VirtualRumbleOutputReportParser.xboxGIPReportID,
+            outputReportPayloadSize:
+              VirtualRumbleOutputReportParser.xboxGIPReportPayloadSizeWithoutReportID
+          )
         } catch {
           // If parsing fails on this OS build, fall back to the built-in descriptor.
-          format = try HIDDescriptorReportFormat(descriptor: XboxOneBluetoothHIDDescriptor.descriptor)
+          format = try HIDDescriptorReportFormat(
+            descriptor: XboxOneBluetoothHIDDescriptor.descriptor,
+            outputReportID: VirtualRumbleOutputReportParser.xboxOneReportID,
+            outputReportPayloadSize: VirtualRumbleOutputReportParser.xboxOneReportPayloadSize
+          )
         }
       } else {
-        format = try HIDDescriptorReportFormat(descriptor: XboxOneBluetoothHIDDescriptor.descriptor)
+        format = try HIDDescriptorReportFormat(
+          descriptor: XboxOneBluetoothHIDDescriptor.descriptor,
+          outputReportID: VirtualRumbleOutputReportParser.xboxOneReportID,
+          outputReportPayloadSize: VirtualRumbleOutputReportParser.xboxOneReportPayloadSize
+        )
       }
     case .x360HID:
       format = Xbox360MacHIDReportFormat()
+      primaryUsage = nil
     }
 
     let ud = try UserSpaceOutputDispatcher(
       profile: profile,
       format: format,
+      primaryUsage: primaryUsage,
       emitsXboxGuideReport: compatibilityProfile.emitsXboxGuideReport
     ) { [weak self] identifier, command in
       guard let self else { return }
@@ -654,7 +694,10 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
 
       let isUserSpace =
         UserSpaceVirtualDeviceConstants.isOJDUserSpaceSerial(serial)
-        || ((UInt32(truncatingIfNeeded: location) & 0xFFFF_0000) == VirtualDeviceIdentityConstants.userSpaceLocationIDNamespace)
+        || (
+          (UInt32(truncatingIfNeeded: location) & 0xFFFF_0000)
+            == VirtualDeviceIdentityConstants.userSpaceLocationIDNamespace
+        )
         || (ioUserClass == "IOHIDUserDevice")
 
       let looksLikeOJDVirtual =
@@ -686,8 +729,9 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
-  private func runVirtualDeviceSelfTestInternal(seconds: Int) async -> XPCVirtualDeviceSelfTestPayload
-  {
+  private func runVirtualDeviceSelfTestInternal(
+    seconds: Int
+  ) async -> XPCVirtualDeviceSelfTestPayload {
     let driverKitStartCount = Self.readDriverKitInputReportCount()
     let startStats = dextDispatcher.outputStatsSnapshot()
 
@@ -746,10 +790,19 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       await dextDispatcher.dispatch(events: [.buttonReleased(.a)], from: syntheticIdentifier)
       await userSpace?.dispatch(events: [.buttonReleased(.a)], from: syntheticIdentifier)
       try? await Task.sleep(nanoseconds: 250_000_000)
-      await dextDispatcher.dispatch(events: [.leftStickChanged(x: 0.75, y: 0)], from: syntheticIdentifier)
-      await userSpace?.dispatch(events: [.leftStickChanged(x: 0.75, y: 0)], from: syntheticIdentifier)
+      await dextDispatcher.dispatch(
+        events: [.leftStickChanged(x: 0.75, y: 0)],
+        from: syntheticIdentifier
+      )
+      await userSpace?.dispatch(
+        events: [.leftStickChanged(x: 0.75, y: 0)],
+        from: syntheticIdentifier
+      )
       try? await Task.sleep(nanoseconds: 250_000_000)
-      await dextDispatcher.dispatch(events: [.leftStickChanged(x: 0, y: 0)], from: syntheticIdentifier)
+      await dextDispatcher.dispatch(
+        events: [.leftStickChanged(x: 0, y: 0)],
+        from: syntheticIdentifier
+      )
       await userSpace?.dispatch(events: [.leftStickChanged(x: 0, y: 0)], from: syntheticIdentifier)
     }
 
@@ -767,8 +820,10 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     let setReportSuccessDelta = max(0, endStats.successes - startStats.successes)
     let setReportAttemptDelta = max(0, endStats.attempts - startStats.attempts)
     let setReportFailureDelta = max(0, endStats.failures - startStats.failures)
-    let connectionAttemptDelta = max(0, endStats.connectionAttempts - startStats.connectionAttempts)
-    let connectionSuccessDelta = max(0, endStats.connectionSuccesses - startStats.connectionSuccesses)
+    let connectionAttemptDelta =
+      max(0, endStats.connectionAttempts - startStats.connectionAttempts)
+    let connectionSuccessDelta =
+      max(0, endStats.connectionSuccesses - startStats.connectionSuccesses)
     let connectionFailureDelta = max(0, endStats.connectionFailures - startStats.connectionFailures)
 
     let retained = Unmanaged<SelfTestCounter>.fromOpaque(counterPtr).takeRetainedValue()

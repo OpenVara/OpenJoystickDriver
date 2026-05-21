@@ -43,10 +43,21 @@ public protocol VirtualGamepadReportFormat: Sendable {
   /// HID Report ID used for the input report, or nil if the descriptor does not use report IDs.
   var inputReportID: UInt8? { get }
 
+  /// Size of one output report payload, or nil when the descriptor does not accept output reports.
+  var outputReportPayloadSize: Int? { get }
+
+  /// HID Report ID used for the output report, or nil if the descriptor does not use report IDs.
+  var outputReportID: UInt8? { get }
+
   /// Builds one complete input report.
   ///
   /// If `inputReportID` is non-nil, the returned bytes MUST begin with that Report ID byte.
   func buildInputReport(from state: VirtualGamepadState) -> [UInt8]
+}
+
+public extension VirtualGamepadReportFormat {
+  var outputReportPayloadSize: Int? { nil }
+  var outputReportID: UInt8? { nil }
 }
 
 /// Generic OJD HID GamePad format (matches ``GamepadHIDDescriptor``).
@@ -54,6 +65,8 @@ public struct OJDGenericGamepadFormat: VirtualGamepadReportFormat {
   public let descriptor: [UInt8] = GamepadHIDDescriptor.descriptor
   public let inputReportPayloadSize: Int = GamepadHIDDescriptor.reportSize
   public let inputReportID: UInt8? = nil
+  public let outputReportPayloadSize: Int? = GamepadHIDDescriptor.reportSize
+  public let outputReportID: UInt8? = nil
   private let includesDpadButtonBits: Bool
 
   public init(includesDpadButtonBits: Bool = true) {
@@ -94,12 +107,14 @@ public struct OJDGenericGamepadFormat: VirtualGamepadReportFormat {
 ///
 /// This keeps the stable OJD button/axis order but deliberately omits the hat
 /// switch so SDL does not expose D-pad as an extra axis. D-pad directions are
-/// exposed only as buttons 12-15, and triggers are signed axes with zero idle so
-/// SDL2/SDL3 raw joystick axes are neutral at rest.
+/// exposed only as buttons 12-15, and triggers are unsigned zero-idle axes so
+/// SDL2/SDL3 gamepad trigger axes are neutral at rest.
 public struct OJDSDLGamepadFormat: VirtualGamepadReportFormat {
   public let descriptor: [UInt8] = SDLGamepadHIDDescriptor.descriptor
   public let inputReportPayloadSize: Int = SDLGamepadHIDDescriptor.reportSize
   public let inputReportID: UInt8? = nil
+  public let outputReportPayloadSize: Int? = SDLGamepadHIDDescriptor.maxOutputReportPayloadSize
+  public let outputReportID: UInt8? = nil
 
   public init() {}
 

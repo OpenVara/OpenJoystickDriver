@@ -1,8 +1,8 @@
-import Testing
+import XCTest
 
 @testable import OpenJoystickDriverKit
 
-@Suite("Xbox One HID Report Format Tests") struct XboxOneHIDReportFormatTests {
+final class XboxOneHIDReportFormatTests: XCTestCase {
   private func format() throws -> HIDDescriptorReportFormat {
     try HIDDescriptorReportFormat(descriptor: XboxOneBluetoothHIDDescriptor.descriptor)
   }
@@ -10,20 +10,16 @@ import Testing
   private func report(buttonBit: Int) throws -> [UInt8] {
     try format().buildInputReport(from: VirtualGamepadState(buttons: 1 << UInt32(buttonBit)))
   }
-
-  @Test("Xbox One descriptor maps face and shoulder buttons directly")
-  func mapsFaceAndShoulderButtonsDirectly() throws {
+  func testMapsFaceAndShoulderButtonsDirectly() throws {
     let a = try report(buttonBit: 0)
     let rb = try report(buttonBit: 5)
 
-    #expect(a.count == 16)
-    #expect(a[0] == 1)
-    #expect(a[14] == 0x01)
-    #expect(rb[14] == 0x20)
+    XCTAssertTrue(a.count == 16)
+    XCTAssertTrue(a[0] == 1)
+    XCTAssertTrue(a[14] == 0x01)
+    XCTAssertTrue(rb[14] == 0x20)
   }
-
-  @Test("Xbox One descriptor parses and packs all primary axes")
-  func parsesAndPacksPrimaryAxes() throws {
+  func testParsesAndPacksPrimaryAxes() throws {
     let full = try format().buildInputReport(
       from: VirtualGamepadState(
         leftStickX: 32_767,
@@ -35,38 +31,34 @@ import Testing
       )
     )
 
-    #expect(full[0] == 1)
-    #expect(full[1] == 0xFF)
-    #expect(full[2] == 0xFF)
-    #expect(full[3] == 0xFF)
-    #expect(full[4] == 0xBF)
-    #expect(full[5] == 0x00)
-    #expect(full[6] == 0x00)
-    #expect(full[7] == 0xFF)
-    #expect(full[8] == 0x3F)
-    #expect(full[9] == 0xFF)
-    #expect(full[10] == 0x03)
-    #expect(full[11] == 0xFF)
-    #expect(full[12] == 0x01)
-    #expect(full[13] == 0x00)
-    #expect(full[14] == 0x00)
+    XCTAssertTrue(full[0] == 1)
+    XCTAssertTrue(full[1] == 0xFF)
+    XCTAssertTrue(full[2] == 0xFF)
+    XCTAssertTrue(full[3] == 0xFF)
+    XCTAssertTrue(full[4] == 0xBF)
+    XCTAssertTrue(full[5] == 0x00)
+    XCTAssertTrue(full[6] == 0x00)
+    XCTAssertTrue(full[7] == 0xFF)
+    XCTAssertTrue(full[8] == 0x3F)
+    XCTAssertTrue(full[9] == 0xFF)
+    XCTAssertTrue(full[10] == 0x03)
+    XCTAssertTrue(full[11] == 0xFF)
+    XCTAssertTrue(full[12] == 0x01)
+    XCTAssertTrue(full[13] == 0x00)
+    XCTAssertTrue(full[14] == 0x00)
   }
-
-  @Test("Xbox One descriptor keeps raw HID order for stick clicks and menu buttons")
-  func mapsStickClicksAndMenuButtonsInRawHIDOrder() throws {
+  func testMapsStickClicksAndMenuButtonsInRawHIDOrder() throws {
     let view = try report(buttonBit: 9)
     let menu = try report(buttonBit: 8)
     let leftStick = try report(buttonBit: 6)
     let rightStick = try report(buttonBit: 7)
 
-    #expect(leftStick[14] == 0x40)
-    #expect(rightStick[14] == 0x80)
-    #expect(menu[15] == 0x01)
-    #expect(view[15] == 0x02)
+    XCTAssertTrue(leftStick[14] == 0x40)
+    XCTAssertTrue(rightStick[14] == 0x80)
+    XCTAssertTrue(menu[15] == 0x01)
+    XCTAssertTrue(view[15] == 0x02)
   }
-
-  @Test("Xbox One descriptor packs dpad as the hat switch")
-  func packsDpadAsHatSwitch() throws {
+  func testPacksDpadAsHatSwitch() throws {
     let north = try format().buildInputReport(
       from: VirtualGamepadState(hat: .north)
     )
@@ -77,13 +69,11 @@ import Testing
       from: VirtualGamepadState(hat: .neutral)
     )
 
-    #expect(north[13] == 0x01)
-    #expect(east[13] == 0x03)
-    #expect(neutral[13] == 0x00)
+    XCTAssertTrue(north[13] == 0x01)
+    XCTAssertTrue(east[13] == 0x03)
+    XCTAssertTrue(neutral[13] == 0x00)
   }
-
-  @Test("Xbox One descriptor also exposes dpad as digital button usages")
-  func packsDpadAsDigitalButtons() throws {
+  func testPacksDpadAsDigitalButtons() throws {
     let north = try format().buildInputReport(
       from: VirtualGamepadState(buttons: GamepadHIDDescriptor.dpadButtonBits(for: .north))
     )
@@ -91,7 +81,7 @@ import Testing
       from: VirtualGamepadState(buttons: GamepadHIDDescriptor.dpadButtonBits(for: .east))
     )
 
-    #expect(north[15] == 0x08)
-    #expect(east[15] == 0x40)
+    XCTAssertTrue(north[15] == 0x08)
+    XCTAssertTrue(east[15] == 0x40)
   }
 }

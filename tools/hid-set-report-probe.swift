@@ -35,7 +35,7 @@ for device in targets {
     guard let baseAddress = pointer.baseAddress else {
       return kIOReturnBadArgument
     }
-    IOHIDDeviceSetReport(
+    return IOHIDDeviceSetReport(
       device,
       kIOHIDReportTypeOutput,
       CFIndex(0),

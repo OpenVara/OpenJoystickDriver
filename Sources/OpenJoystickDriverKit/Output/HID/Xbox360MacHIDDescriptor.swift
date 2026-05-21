@@ -19,10 +19,25 @@ import Foundation
 ///   Bytes 10-11: Right stick X, Int16 LE
 ///   Bytes 12-13: Right stick Y, Int16 LE
 ///   Output: 8-byte Xbox 360 rumble packet `[0x00, 0x08, 0x00, left, right, 0, 0, 0]`
+///
+/// The default top-level usage is Joystick rather than Game Pad. SDL still
+/// treats both usages as controllers, while macOS GameController's synthetic
+/// controller plugin can synchronously claim and hang on a `045E:028E` Game Pad
+/// during SDL HIDAPI initialization. The Apple GameController compatibility
+/// identity can request a Game Pad descriptor when SDL HIDAPI is disabled or
+/// patched to avoid that claim path.
 public enum Xbox360MacHIDDescriptor {
-  public static let descriptor: [UInt8] = [
+  public static let descriptor: [UInt8] = descriptor(topLevelUsage: UInt8(kHIDUsage_GD_Joystick))
+
+  public static func descriptor(topLevelUsage: UInt8) -> [UInt8] {
+    var descriptor = baseDescriptor
+    descriptor[3] = topLevelUsage
+    return descriptor
+  }
+
+  private static let baseDescriptor: [UInt8] = [
     0x05, 0x01,  // Usage Page: Generic Desktop
-    0x09, 0x05,  // Usage: Game Pad
+    0x09, 0x04,  // Usage: Joystick
     0xA1, 0x01,  // Collection: Application
     0x05, 0x01,  //   Usage Page: Generic Desktop
     0x09, 0x3A,  //   Usage: Counted Buffer
@@ -146,11 +161,17 @@ public enum Xbox360MacHIDDescriptor {
 }
 
 public struct Xbox360MacHIDReportFormat: VirtualGamepadReportFormat {
-  public let descriptor: [UInt8] = Xbox360MacHIDDescriptor.descriptor
+  public let descriptor: [UInt8]
+  public let topLevelUsage: UInt8
   public let inputReportPayloadSize: Int = 14
   public let inputReportID: UInt8? = nil
+  public let outputReportPayloadSize: Int? = 8
+  public let outputReportID: UInt8? = nil
 
-  public init() {}
+  public init(topLevelUsage: UInt8 = UInt8(kHIDUsage_GD_Joystick)) {
+    self.topLevelUsage = topLevelUsage
+    self.descriptor = Xbox360MacHIDDescriptor.descriptor(topLevelUsage: topLevelUsage)
+  }
 
   public func buildInputReport(from state: VirtualGamepadState) -> [UInt8] {
     var r = [UInt8](repeating: 0, count: inputReportPayloadSize)

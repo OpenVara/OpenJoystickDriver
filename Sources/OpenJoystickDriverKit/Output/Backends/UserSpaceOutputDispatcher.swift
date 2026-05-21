@@ -1,9 +1,9 @@
+import Darwin
 import Foundation
 import IOKit
 import IOKit.hid
 import IOKit.hidsystem
 import Security
-import Darwin
 
 /// Sends HID input reports via a user-space IOHIDUserDevice.
 ///
@@ -36,6 +36,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
 
   private let profile: VirtualDeviceProfile
   private let format: any VirtualGamepadReportFormat
+  private let primaryUsage: Int
   private let emitsXboxGuideReport: Bool
   private let registryLock = NSLock()
 
@@ -67,11 +68,13 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
   public init(
     profile: VirtualDeviceProfile = .default,
     format: any VirtualGamepadReportFormat = OJDGenericGamepadFormat(),
+    primaryUsage: Int? = nil,
     emitsXboxGuideReport: Bool = false,
     onRumbleCommand: RumbleCommandHandler? = nil
   ) throws {
     self.profile = profile
     self.format = format
+    self.primaryUsage = primaryUsage ?? Self.defaultPrimaryUsage(for: format)
     self.emitsXboxGuideReport = emitsXboxGuideReport
     self.onRumbleCommand = onRumbleCommand
     // Device(s) are created lazily on first dispatch for each physical controller.
@@ -102,10 +105,6 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
   }
 
   private func createDevice(for identifier: DeviceIdentifier) throws -> Entry {
-    let descriptor = Data(format.descriptor)
-    let serialNumber = UserSpaceVirtualDeviceConstants.serialNumber(for: identifier)
-    let locationID = UserSpaceVirtualDeviceConstants.locationID(for: identifier)
-
     // IMPORTANT: Keep the properties dictionary minimal. Some HID keys that are valid on
     // real devices are rejected for IOHIDUserDevice creation on newer macOS builds.
     func tryCreate(_ props: [String: Any]) -> IOHIDUserDevice? {
@@ -116,32 +115,26 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       )
     }
 
-    let baseProperties: [String: Any] = [
-      kIOHIDReportDescriptorKey as String: descriptor,
-      kIOHIDVendorIDKey as String: NSNumber(value: profile.vendorID),
-      kIOHIDProductIDKey as String: NSNumber(value: profile.productID),
-      kIOHIDVersionNumberKey as String: NSNumber(value: profile.versionNumber),
-      kIOHIDProductKey as String: profile.productName,
-      kIOHIDManufacturerKey as String: profile.manufacturer,
-      kIOHIDSerialNumberKey as String: serialNumber,
-      kIOHIDTransportKey as String: "USB",
-      kIOHIDMaxInputReportSizeKey as String: NSNumber(
-        value: (format.inputReportID == nil) ? format.inputReportPayloadSize : (format.inputReportPayloadSize + 1)
-      ),
-    ]
+    let baseProperties = Self.deviceProperties(
+      profile: profile,
+      format: format,
+      identifier: identifier
+    )
 
     let usageProps: [String: Any] = [
       kIOHIDPrimaryUsagePageKey as String: NSNumber(value: Int(kHIDPage_GenericDesktop)),
-      kIOHIDPrimaryUsageKey as String: NSNumber(value: Int(kHIDUsage_GD_GamePad)),
-      kIOHIDDeviceUsagePairsKey as String: [[
-        kIOHIDDeviceUsagePageKey as String: NSNumber(value: Int(kHIDPage_GenericDesktop)),
-        kIOHIDDeviceUsageKey as String: NSNumber(value: Int(kHIDUsage_GD_GamePad)),
-      ]],
+      kIOHIDPrimaryUsageKey as String: NSNumber(value: primaryUsage),
+      kIOHIDDeviceUsagePairsKey as String: [
+        [
+          kIOHIDDeviceUsagePageKey as String: NSNumber(value: Int(kHIDPage_GenericDesktop)),
+          kIOHIDDeviceUsageKey as String: NSNumber(value: primaryUsage),
+        ],
+      ],
     ]
 
     let noPairsUsageProps: [String: Any] = [
       kIOHIDPrimaryUsagePageKey as String: NSNumber(value: Int(kHIDPage_GenericDesktop)),
-      kIOHIDPrimaryUsageKey as String: NSNumber(value: Int(kHIDUsage_GD_GamePad)),
+      kIOHIDPrimaryUsageKey as String: NSNumber(value: primaryUsage),
     ]
 
     let attemptVariants: [(label: String, props: [String: Any])] = [
@@ -152,7 +145,7 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     // Some macOS builds reject certain LocationID values for IOHIDUserDevice creation.
     // Try the computed namespaced LocationID first, then a small stable fallback.
     let candidateLocationIDs: [UInt32] = [
-      locationID,
+      UserSpaceVirtualDeviceConstants.locationID(for: identifier),
       0x1000_0002,
     ]
 
@@ -188,6 +181,34 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     let queue = DispatchQueue(
       label: "com.openjoystickdriver.userspace-hid.\(identifier.vendorID).\(identifier.productID)"
     )
+    IOHIDUserDeviceRegisterGetReportBlock(dev) { type, reportID, report, reportLength in
+      guard type == kIOHIDReportTypeInput else {
+        reportLength.pointee = 0
+        return kIOReturnUnsupported
+      }
+      let payloadSize = self.format.inputReportPayloadSize
+      let includesReportID = self.format.inputReportID != nil
+      let requiredLength = payloadSize + (includesReportID ? 1 : 0)
+      guard reportLength.pointee >= requiredLength else {
+        reportLength.pointee = CFIndex(requiredLength)
+        return kIOReturnNoSpace
+      }
+      let neutral = self.format.buildInputReport(from: VirtualGamepadState())
+      var offset = 0
+      if let expectedReportID = self.format.inputReportID {
+        guard reportID == expectedReportID else {
+          reportLength.pointee = 0
+          return kIOReturnUnsupported
+        }
+        report[0] = expectedReportID
+        offset = 1
+      }
+      for (index, byte) in neutral.enumerated() {
+        report[offset + index] = byte
+      }
+      reportLength.pointee = CFIndex(requiredLength)
+      return kIOReturnSuccess
+    }
     if let onRumbleCommand {
       IOHIDUserDeviceRegisterSetReportBlock(dev) {
         [weak self] type, reportID, report, reportLength in
@@ -215,18 +236,64 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     return Entry(device: dev, queue: queue)
   }
 
+  public static func defaultPrimaryUsage(for format: any VirtualGamepadReportFormat) -> Int {
+    if let xbox360 = format as? Xbox360MacHIDReportFormat {
+      return Int(xbox360.topLevelUsage)
+    }
+    return Int(kHIDUsage_GD_GamePad)
+  }
+
+  static func deviceProperties(
+    profile: VirtualDeviceProfile,
+    format: any VirtualGamepadReportFormat,
+    identifier: DeviceIdentifier
+  ) -> [String: Any] {
+    var properties: [String: Any] = [
+      kIOHIDReportDescriptorKey as String: Data(format.descriptor),
+      kIOHIDVendorIDKey as String: NSNumber(value: profile.vendorID),
+      kIOHIDProductIDKey as String: NSNumber(value: profile.productID),
+      kIOHIDVersionNumberKey as String: NSNumber(value: profile.versionNumber),
+      kIOHIDProductKey as String: profile.productName,
+      kIOHIDManufacturerKey as String: profile.manufacturer,
+      kIOHIDSerialNumberKey as String:
+        UserSpaceVirtualDeviceConstants.serialNumber(for: identifier),
+      kIOHIDTransportKey as String: "USB",
+      kIOHIDMaxInputReportSizeKey as String: NSNumber(
+        value: reportBufferSize(
+          payloadSize: format.inputReportPayloadSize,
+          reportID: format.inputReportID
+        )
+      ),
+    ]
+
+    if let outputSize = format.outputReportPayloadSize {
+      properties[kIOHIDMaxOutputReportSizeKey as String] = NSNumber(
+        value: reportBufferSize(
+          payloadSize: outputSize,
+          reportID: format.outputReportID
+        )
+      )
+    }
+    return properties
+  }
+
+  private static func reportBufferSize(payloadSize: Int, reportID: UInt8?) -> Int {
+    reportID == nil ? payloadSize : payloadSize + 1
+  }
+
   private static func hasEntitlement(_ entitlement: String) -> Bool {
     guard let task = SecTaskCreateFromSelf(nil) else { return false }
     guard let value = SecTaskCopyValueForEntitlement(task, entitlement as CFString, nil) else {
       return false
     }
     if CFGetTypeID(value) == CFBooleanGetTypeID() {
-      return CFBooleanGetValue((value as! CFBoolean))
+      let boolean = unsafeDowncast(value, to: CFBoolean.self)
+      return CFBooleanGetValue(boolean)
     }
     return false
   }
 
-  public func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) async {
+  public func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) {
     guard !suppressOutput else { return }
 
     let entry: Entry
@@ -239,7 +306,8 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
 
     let reports = entry.lock.withLock { () -> [[UInt8]] in
       for event in events { applyEvent(event, deadzone: 0.15, state: &entry.state) }
-      let secondaryReports = emitsXboxGuideReport ? events.compactMap { xboxGuideReport(for: $0) } : []
+      let secondaryReports =
+        emitsXboxGuideReport ? events.compactMap { xboxGuideReport(for: $0) } : []
       return [format.buildInputReport(from: entry.state)] + secondaryReports
     }
 
@@ -277,7 +345,11 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
 
   // MARK: - Event application (called inside reportLock.withLock)
 
-  private func applyEvent(_ event: ControllerEvent, deadzone: Float, state: inout VirtualGamepadState) {
+  private func applyEvent(
+    _ event: ControllerEvent,
+    deadzone: Float,
+    state: inout VirtualGamepadState
+  ) {
     switch event {
     case .buttonPressed(let btn):
       if let bit = buttonBit(for: btn) { state.buttons |= (1 << bit) }
@@ -296,7 +368,8 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     case .dpadChanged(let dir):
       state.hat = hatValue(for: dir)
       let dpadMask: UInt32 = 0xF << 11
-      state.buttons = (state.buttons & ~dpadMask) | GamepadHIDDescriptor.dpadButtonBits(for: state.hat)
+      state.buttons =
+        (state.buttons & ~dpadMask) | GamepadHIDDescriptor.dpadButtonBits(for: state.hat)
     }
   }
 

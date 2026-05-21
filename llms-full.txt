@@ -139,9 +139,12 @@ backend enumerates them.
 If a stale DriverKit process remains after sysext upgrade, run
 `./scripts/ojd repair stale-dext`; it kills only OJD dext processes whose
 executable path does not match the newest installed system-extension copy.
-Xbox 360 compatibility is exposed as an experimental user-space HID identity
-using the macOS Xbox 360 HID mapping. It is descriptor-backed, but
-it is not true Windows XInput/XUSB emulation. It exposes independent LT/RT trigger axes, button-backed D-pad, and Guide/Home; vibration/headset semantics remain unsupported. Detailed mappings live in `COMPATIBILITY_LAYERS.md`.
+Xbox 360 compatibility is an experimental Microsoft-style HID identity using
+the Xbox 360 report layout. It is descriptor-backed, but it is not true Windows
+XInput/XUSB emulation. For native macOS haptics, prefer
+`apple-gamecontroller` and validate with
+`./scripts/ojd diagnose gamecontroller --seconds 5 --rumble`.
+Detailed mappings live in `COMPATIBILITY_LAYERS.md`.
 If the PCSX2 app bundle database lacks the OJD mapping, launch it through
 `./scripts/ojd launch pcsx2`; this sets `SDL_GAMECONTROLLERCONFIG` and
 `SDL_GAMECONTROLLERCONFIG_FILE` without modifying the signed app bundle, and
@@ -149,7 +152,7 @@ best-effort applies `compat sdl2-3` plus `output secondary` before launch.
 For normal PCSX2 launches, `./scripts/ojd install pcsx2-sdl-db` installs a
 merged user-data SDL database at `~/Library/Application Support/PCSX2`, and
 `./scripts/ojd install pcsx2-profile` installs an `OpenJoystickDriver` input
-profile that binds both `SDL-0` and `SDL-1`.
+profile that binds the single expected `SDL-0` OJD device.
 
 GameSir G7 SE was manually verified through hardwaretester.com Gamepad API in
 Xbox One HID compatibility mode as a standard `Xbox Wireless Controller`

@@ -1,6 +1,6 @@
 import Foundation
 import SwiftUSB
-import Testing
+import XCTest
 
 @testable import OpenJoystickDriverKit
 
@@ -8,25 +8,22 @@ private let gamesirVID: UInt16 = 13623  // 0x3537
 private let gamesirPID: UInt16 = 4112  // 0x1010
 private let hardwareTestsEnabled =
   ProcessInfo.processInfo.environment["OJD_HARDWARE_TESTS"] == "1"
-  || ProcessInfo.processInfo.environment["CI"] != "true"
 private let hardwareSkipMessage =
-  "[HardwareTest] Skipping USB hardware test in CI; set OJD_HARDWARE_TESTS=1 to require it."
+  "[HardwareTest] Skipping USB hardware test; set OJD_HARDWARE_TESTS=1 to require it."
 
-/// Shared USBContext for all hardware tests.
-///
-/// Avoids creating/destroying multiple libusb contexts
-/// which can cause crashes due to event loop thread races.
-private let sharedContext: USBContext? = try? USBContext()
+final class HardwarePipelineTests: XCTestCase {
+  /// Shared USBContext for enabled hardware tests.
+  ///
+  /// Kept lazy so the default skipped hardware path does not touch libusb at
+  /// module load time.
+  private static let sharedContext: USBContext? = try? USBContext()
 
-@Suite("Hardware Pipeline Tests", .serialized) struct HardwarePipelineTests {
-
-  @Test("Gamesir G7 SE is enumerated by SwiftUSB") func deviceEnumeration() async throws {
+  func testDeviceEnumeration() async throws {
     guard hardwareTestsEnabled else {
-      print(hardwareSkipMessage)
-      return
+      throw XCTSkip(hardwareSkipMessage)
     }
-    guard let context = sharedContext else {
-      Issue.record("Failed to create USBContext")
+    guard let context = Self.sharedContext else {
+      XCTFail("Failed to create USBContext")
       return
     }
     var found = false
@@ -40,34 +37,29 @@ private let sharedContext: USBContext? = try? USBContext()
       )
       break
     }
-    #expect(found, "Gamesir G7 SE should be enumerable via SwiftUSB")
+    XCTAssertTrue(found, "Gamesir G7 SE should be enumerable via SwiftUSB")
   }
-
-  @Test("GIP handshake and single input report read") func gipHandshakeAndInput() async throws {
+  func testGipHandshakeAndInput() async throws {
     guard hardwareTestsEnabled else {
-      print(hardwareSkipMessage)
-      return
+      throw XCTSkip(hardwareSkipMessage)
     }
-    guard let context = sharedContext else {
-      Issue.record("Failed to create USBContext")
+    guard let context = Self.sharedContext else {
+      XCTFail("Failed to create USBContext")
       return
     }
     guard let device = await context.findDevice(vendorId: gamesirVID, productId: gamesirPID) else {
-      Issue.record("Gamesir G7 SE not found - is it connected?")
+      XCTFail("Gamesir G7 SE not found - is it connected?")
       return
     }
 
     let handle: USBDeviceHandle
     do { handle = try device.open() } catch let error as USBError where error.isAccessDenied {
-      print(
-        "[HardwareTest] USB access denied" + " - skipping handshake test"
-          + " (needs root or entitlements)"
+      throw XCTSkip(
+        "[HardwareTest] USB access denied - skipping handshake test (needs root or entitlements)"
       )
-      return
     }
     do { try handle.claimInterface(0) } catch let error as USBError where error.isAccessDenied {
-      print("[HardwareTest] Cannot claim interface" + " - skipping (access denied)")
-      return
+      throw XCTSkip("[HardwareTest] Cannot claim interface - skipping (access denied)")
     }
 
     let parser = GIPParser()
@@ -94,23 +86,21 @@ private let sharedContext: USBContext? = try? USBContext()
 
     try? handle.releaseInterface(0)
 
-    if let parseError { Issue.record("Parse/USB error: \(parseError)") }
-    #expect(gotReport, "Should receive at least 1 input report after handshake")
+    if let parseError { XCTFail("Parse/USB error: \(parseError)") }
+    XCTAssertTrue(gotReport, "Should receive at least 1 input report after handshake")
   }
-
-  @Test("ParserRegistry returns GIPParser for G7 SE") func parserRegistryDispatch() {
+  func testParserRegistryDispatch() {
     let registry = ParserRegistry()
     let identifier = DeviceIdentifier(vendorID: gamesirVID, productID: gamesirPID)
     let parser = registry.parser(for: identifier)
-    #expect(parser is GIPParser, "G7 SE should get GIPParser, got \(type(of: parser))")
+    XCTAssertTrue(parser is GIPParser, "G7 SE should get GIPParser, got \(type(of: parser))")
   }
-
-  @Test("DeviceIdentifier correctly identifies G7 SE model") func deviceIdentifierMatching() {
+  func testDeviceIdentifierMatching() {
     let id1 = DeviceIdentifier(vendorID: gamesirVID, productID: gamesirPID, serialNumber: "ABC123")
     let id2 = DeviceIdentifier(vendorID: gamesirVID, productID: gamesirPID, serialNumber: "XYZ789")
     let id3 = DeviceIdentifier(vendorID: 0x045E, productID: 0x02EA)
-    #expect(id1.modelMatches(id2))
-    #expect(!id1.modelMatches(id3))
-    #expect(!id1.exactlyMatches(id2))
+    XCTAssertTrue(id1.modelMatches(id2))
+    XCTAssertTrue(!id1.modelMatches(id3))
+    XCTAssertTrue(!id1.exactlyMatches(id2))
   }
 }

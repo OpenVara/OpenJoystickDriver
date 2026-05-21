@@ -36,15 +36,18 @@ DriverKit HID or IOHIDUserDevice compatibility mode.
 - If a stale DriverKit process remains after sysext upgrade, run
   `./scripts/ojd repair stale-dext`; it kills only OJD dext processes whose
   executable path does not match the newest installed system-extension copy.
-- Xbox 360 compatibility is exposed as an experimental user-space HID identity
-  using the macOS Xbox 360 HID mapping. It is descriptor-backed,
-  but it is not true Windows XInput/XUSB emulation. It exposes independent LT/RT trigger axes, button-backed D-pad, and Guide/Home; vibration/headset semantics remain unsupported. Detailed mappings live in `COMPATIBILITY_LAYERS.md`.
+- Xbox 360 compatibility is an experimental Microsoft-style HID identity using
+  the Xbox 360 report layout. It is descriptor-backed, but it is not true
+  Windows XInput/XUSB emulation. For native macOS haptics, prefer
+  `apple-gamecontroller` and validate with
+  `./scripts/ojd diagnose gamecontroller --seconds 5 --rumble`.
+  Detailed mappings live in `COMPATIBILITY_LAYERS.md`.
 - Use `./scripts/ojd launch pcsx2` when PCSX2's bundled SDL database lacks the
   OJD mapping; it sets SDL mapping override environment variables and applies
   the known-good daemon routing before launch.
 - For normal PCSX2 launches, `./scripts/ojd install pcsx2-sdl-db` installs a
   merged user-data SDL database and `./scripts/ojd install pcsx2-profile`
-  installs an input profile that binds both `SDL-0` and `SDL-1`.
+  installs an input profile that binds the single expected `SDL-0` OJD device.
 - Flydigi Vader 5S: GIP USB path supported with endpoint configuration,
   `setConfiguration(1)` before claim, and post-handshake settle delay.
 - xpad.c Xbox batches: Xbox 360 wired-style profiles use the `Xbox360` parser;

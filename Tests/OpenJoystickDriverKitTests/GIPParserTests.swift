@@ -1,61 +1,54 @@
 import Foundation
-import Testing
+import XCTest
 
 @testable import OpenJoystickDriverKit
 
-@Suite("GIP Parser Tests") struct GIPParserTests {
-
-  @Test func sequencerIncrements() {
+final class GIPParserTests: XCTestCase {
+  func testSequencerIncrements() {
     var seq = GIPSequencer()
-    #expect(seq.next(for: 5) == 0)
-    #expect(seq.next(for: 5) == 1)
+    XCTAssertTrue(seq.next(for: 5) == 0)
+    XCTAssertTrue(seq.next(for: 5) == 1)
     // Different command starts at 0
-    #expect(seq.next(for: 32) == 0)
+    XCTAssertTrue(seq.next(for: 32) == 0)
     // Original command continues
-    #expect(seq.next(for: 5) == 2)
+    XCTAssertTrue(seq.next(for: 5) == 2)
   }
-
-  @Test func sequencerWrapsAt255() {
+  func testSequencerWrapsAt255() {
     var seq = GIPSequencer()
     for _ in 0..<255 { _ = seq.next(for: 1) }
-    #expect(seq.next(for: 1) == 255)
-    #expect(seq.next(for: 1) == 0)
+    XCTAssertTrue(seq.next(for: 1) == 255)
+    XCTAssertTrue(seq.next(for: 1) == 0)
   }
-
-  @Test func sequencerReset() {
+  func testSequencerReset() {
     var seq = GIPSequencer()
     _ = seq.next(for: 5)
     _ = seq.next(for: 5)
     seq.reset(commandID: 5)
-    #expect(seq.next(for: 5) == 0)
+    XCTAssertTrue(seq.next(for: 5) == 0)
   }
-
-  @Test("default GIP startup sequence matches current G7 SE handshake") func defaultStartupSequence() {
-    #expect(GIPStartupPacket.defaultSequence == [.powerOn, .ledOn, .authDone])
-    #expect(GIPStartupPacket.powerOn.packet(sequence: 0) == [5, 32, 0, 1, 0])
-    #expect(GIPStartupPacket.ledOn.packet(sequence: 0) == [10, 32, 0, 3, 0, 1, 20])
-    #expect(GIPStartupPacket.authDone.packet(sequence: 0) == [6, 32, 0, 2, 1, 0])
+  func testDefaultStartupSequence() {
+    XCTAssertTrue(GIPStartupPacket.defaultSequence == [.powerOn, .ledOn, .authDone])
+    XCTAssertTrue(GIPStartupPacket.powerOn.packet(sequence: 0) == [5, 32, 0, 1, 0])
+    XCTAssertTrue(GIPStartupPacket.ledOn.packet(sequence: 0) == [10, 32, 0, 3, 0, 1, 20])
+    XCTAssertTrue(GIPStartupPacket.authDone.packet(sequence: 0) == [6, 32, 0, 2, 1, 0])
   }
-
-  @Test("xpad.c Xbox One startup packet bytes are modeled by name")
-  func xpadXboxOneStartupPackets() {
-    #expect(GIPStartupPacket.xboxOneSInit.packet(sequence: 0) == [5, 32, 0, 15, 6])
-    #expect(GIPStartupPacket.extraInput.packet(sequence: 1) == [77, 16, 1, 2, 7, 0])
-    #expect(
+  func testXpadXboxOneStartupPackets() {
+    XCTAssertTrue(GIPStartupPacket.xboxOneSInit.packet(sequence: 0) == [5, 32, 0, 15, 6])
+    XCTAssertTrue(GIPStartupPacket.extraInput.packet(sequence: 1) == [77, 16, 1, 2, 7, 0])
+    XCTAssertTrue(
       GIPStartupPacket.horiAck.packet(sequence: 2)
         == [1, 32, 2, 9, 0, 4, 32, 58, 0, 0, 0, 128, 0]
     )
-    #expect(
+    XCTAssertTrue(
       GIPStartupPacket.rumbleBegin.packet(sequence: 3)
         == [9, 0, 3, 9, 0, 15, 0, 0, 29, 29, 255, 0, 0]
     )
-    #expect(
+    XCTAssertTrue(
       GIPStartupPacket.rumbleEnd.packet(sequence: 4)
         == [9, 0, 4, 9, 0, 15, 0, 0, 0, 0, 0, 0, 0]
     )
   }
-
-  @Test func parseMainInputAllZero() throws {
+  func testParseMainInputAllZero() throws {
     let parser = GIPParser()
     var packet = Data([0x20, 32, 0, 14])
     packet += Data(repeating: 0, count: 14)
@@ -64,36 +57,33 @@ import Testing
       if case .leftStickChanged = $0 { return true }
       return false
     }
-    #expect(hasLeftStick)
+    XCTAssertTrue(hasLeftStick)
   }
-
-  @Test func parseMainInputAButton() throws {
+  func testParseMainInputAButton() throws {
     let parser = GIPParser()
     var payload = Data(repeating: 0, count: 14)
     payload[0] = 16  // A button
     var packet = Data([0x20, 32, 0, 14])
     packet += payload
     let events = try parser.parse(data: packet)
-    #expect(events.contains(.buttonPressed(.a)))
+    XCTAssertTrue(events.contains(.buttonPressed(.a)))
   }
-
-  @Test func parseMainInputShareButton() throws {
+  func testParseMainInputShareButton() throws {
     let parser = GIPParser()
     var payload = Data(repeating: 0, count: 15)
     payload[14] = 1
     var packet = Data([0x20, 32, 0, 15])
     packet += payload
     let events = try parser.parse(data: packet)
-    #expect(events.contains(.buttonPressed(.share)))
+    XCTAssertTrue(events.contains(.buttonPressed(.share)))
 
     payload[14] = 0
     packet = Data([0x20, 32, 1, 15])
     packet += payload
     let releaseEvents = try parser.parse(data: packet)
-    #expect(releaseEvents.contains(.buttonReleased(.share)))
+    XCTAssertTrue(releaseEvents.contains(.buttonReleased(.share)))
   }
-
-  @Test func parseMainInputMultipleButtons() throws {
+  func testParseMainInputMultipleButtons() throws {
     let parser = GIPParser()
     var payload = Data(repeating: 0, count: 14)
     // buttons0: A(16) + B(32) = 48
@@ -103,44 +93,38 @@ import Testing
     var packet = Data([0x20, 32, 0, 14])
     packet += payload
     let events = try parser.parse(data: packet)
-    #expect(events.contains(.buttonPressed(.a)))
-    #expect(events.contains(.buttonPressed(.b)))
-    #expect(events.contains(.buttonPressed(.leftBumper)))
-    #expect(events.contains(.dpadChanged(.north)))
+    XCTAssertTrue(events.contains(.buttonPressed(.a)))
+    XCTAssertTrue(events.contains(.buttonPressed(.b)))
+    XCTAssertTrue(events.contains(.buttonPressed(.leftBumper)))
+    XCTAssertTrue(events.contains(.dpadChanged(.north)))
   }
-
-  @Test func unknownCMDReturnsEmpty() throws {
+  func testUnknownCMDReturnsEmpty() throws {
     let parser = GIPParser()
     let packet = Data([3, 32, 1, 4, 32, 0, 0, 0])
     let events = try parser.parse(data: packet)
-    #expect(events.isEmpty)
+    XCTAssertTrue(events.isEmpty)
   }
-
-  @Test func parseGuideButtonPressed() throws {
+  func testParseGuideButtonPressed() throws {
     let parser = GIPParser()
     let packet = Data([7, 32, 0, 1, 1])
     let events = try parser.parse(data: packet)
-    #expect(events.contains(.buttonPressed(.guide)))
+    XCTAssertTrue(events.contains(.buttonPressed(.guide)))
   }
-
-  @Test func parseGuideButtonReleased() throws {
+  func testParseGuideButtonReleased() throws {
     let parser = GIPParser()
     let packet = Data([7, 32, 0, 1, 0])
     let events = try parser.parse(data: packet)
-    #expect(events.contains(.buttonReleased(.guide)))
+    XCTAssertTrue(events.contains(.buttonReleased(.guide)))
   }
-
-  @Test func parseShortPacketThrows() {
+  func testParseShortPacketThrows() {
     let parser = GIPParser()
-    #expect(throws: (any Error).self) { try parser.parse(data: Data([2, 32])) }
+    XCTAssertThrowsError(try parser.parse(data: Data([2, 32])))
   }
-
-  @Test func parseMalformedLengthThrows() {
+  func testParseMalformedLengthThrows() {
     let parser = GIPParser()
-    #expect(throws: (any Error).self) { try parser.parse(data: Data([2, 32, 0, 14, 0, 0])) }
+    XCTAssertThrowsError(try parser.parse(data: Data([2, 32, 0, 14, 0, 0])))
   }
-
-  @Test func triggerNormalization() throws {
+  func testTriggerNormalization() throws {
     let parser = GIPParser()
     var payload = Data(repeating: 0, count: 14)
     // LT = 1023 (max) = 0x03FF LE
@@ -154,13 +138,12 @@ import Testing
       return false
     }
     guard case .leftTriggerChanged(let ltVal) = ltEvent else {
-      Issue.record("No leftTriggerChanged event")
+      XCTFail("No leftTriggerChanged event")
       return
     }
-    #expect(abs(ltVal - 1.0) < 0.01)
+    XCTAssertTrue(abs(ltVal - 1.0) < 0.01)
   }
-
-  @Test func stickNormalization() throws {
+  func testStickNormalization() throws {
     let parser = GIPParser()
     var payload = Data(repeating: 0, count: 14)
     // LSX = Int16(-32768) = full left -> lx ~ -1.0
@@ -177,14 +160,13 @@ import Testing
       return false
     }
     guard case .leftStickChanged(let lx, let ly) = lsEvent else {
-      Issue.record("No leftStickChanged event")
+      XCTFail("No leftStickChanged event")
       return
     }
-    #expect(abs(lx - (-1.0)) < 0.01)
-    #expect(abs(ly - 1.0) < 0.01)
+    XCTAssertTrue(abs(lx - (-1.0)) < 0.01)
+    XCTAssertTrue(abs(ly - 1.0) < 0.01)
   }
-
-  @Test func dpadCombinations() throws {
+  func testDpadCombinations() throws {
     let parser = GIPParser()
     // up+right = 1+8 = 9
     var payload = Data(repeating: 0, count: 14)
@@ -192,29 +174,27 @@ import Testing
     var packet = Data([0x20, 32, 0, 14])
     packet += payload
     let events = try parser.parse(data: packet)
-    #expect(events.contains(.dpadChanged(.northEast)))
+    XCTAssertTrue(events.contains(.dpadChanged(.northEast)))
   }
-
-  @Test func unhandledReportTypeReturnsEmpty() throws {
+  func testUnhandledReportTypeReturnsEmpty() throws {
     let parser = GIPParser()
     let packet = Data([99, 32, 0, 2, 0, 0])
     let events = try parser.parse(data: packet)
-    #expect(events.isEmpty)
+    XCTAssertTrue(events.isEmpty)
   }
-
-  @Test func changeDetectionSuppressesDuplicates() throws {
+  func testChangeDetectionSuppressesDuplicates() throws {
     let parser = GIPParser()
     var payload1 = Data(repeating: 0, count: 14)
     payload1[0] = 16  // A
     var packet1 = Data([0x20, 32, 0, 14])
     packet1 += payload1
     let events1 = try parser.parse(data: packet1)
-    #expect(events1.contains(.buttonPressed(.a)))
+    XCTAssertTrue(events1.contains(.buttonPressed(.a)))
 
     // Same state again - no button changes
     let events2 = try parser.parse(data: packet1)
-    #expect(!events2.contains(.buttonPressed(.a)))
-    #expect(!events2.contains(.buttonReleased(.a)))
+    XCTAssertTrue(!events2.contains(.buttonPressed(.a)))
+    XCTAssertTrue(!events2.contains(.buttonReleased(.a)))
   }
 
 }

@@ -31,8 +31,12 @@ private func enumerateDevices(matching: [String: Any]?) -> [IOHIDDevice] {
   _ = IOHIDManagerOpen(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
   defer { IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone)) }
   return Array(((IOHIDManagerCopyDevices(mgr) as? Set<IOHIDDevice>) ?? []).sorted {
-    let a = intProp($0, kIOHIDVendorIDKey as String) * 0x1_0000 + intProp($0, kIOHIDProductIDKey as String)
-    let b = intProp($1, kIOHIDVendorIDKey as String) * 0x1_0000 + intProp($1, kIOHIDProductIDKey as String)
+    let a =
+      intProp($0, kIOHIDVendorIDKey as String) * 0x1_0000
+      + intProp($0, kIOHIDProductIDKey as String)
+    let b =
+      intProp($1, kIOHIDVendorIDKey as String) * 0x1_0000
+      + intProp($1, kIOHIDProductIDKey as String)
     return a < b
   })
 }
@@ -48,19 +52,29 @@ private func managerDevices(_ mgr: IOHIDManager) -> [IOHIDDevice] {
     guard let value = values[idx] else { return nil }
     return unsafeBitCast(value, to: IOHIDDevice.self)
   }.sorted {
-    let a = intProp($0, kIOHIDVendorIDKey as String) * 0x1_0000 + intProp($0, kIOHIDProductIDKey as String)
-    let b = intProp($1, kIOHIDVendorIDKey as String) * 0x1_0000 + intProp($1, kIOHIDProductIDKey as String)
+    let a =
+      intProp($0, kIOHIDVendorIDKey as String) * 0x1_0000
+      + intProp($0, kIOHIDProductIDKey as String)
+    let b =
+      intProp($1, kIOHIDVendorIDKey as String) * 0x1_0000
+      + intProp($1, kIOHIDProductIDKey as String)
     return a < b
   }
 }
 
 private func inputElements(_ dev: IOHIDDevice) -> [IOHIDElement] {
-  guard let rawElements = IOHIDDeviceCopyMatchingElements(dev, nil, IOOptionBits(kIOHIDOptionsTypeNone)) as? [IOHIDElement] else {
+  guard let rawElements = IOHIDDeviceCopyMatchingElements(
+    dev,
+    nil,
+    IOOptionBits(kIOHIDOptionsTypeNone)
+  ) as? [IOHIDElement] else {
     return []
   }
   return rawElements.filter { element in
     let type = IOHIDElementGetType(element)
-    return type == kIOHIDElementTypeInput_Misc || type == kIOHIDElementTypeInput_Button || type == kIOHIDElementTypeInput_Axis
+    return type == kIOHIDElementTypeInput_Misc
+      || type == kIOHIDElementTypeInput_Button
+      || type == kIOHIDElementTypeInput_Axis
   }
 }
 
@@ -72,11 +86,15 @@ private func printUsageAndExit(_ code: Int32) -> Never {
     Usage:
       OpenJoystickDriverHIDTool --list
       OpenJoystickDriverHIDTool --dump --vid 0x045e --pid 0x02ea
+      OpenJoystickDriverHIDTool --open --vid 0x045e --pid 0x028e [--service-open] [--set-report]
       OpenJoystickDriverHIDTool --monitor [--vid 0x4f4a --pid 0x4447] [--seconds 10]
 
     Options:
       --list           List HID devices (vid/pid/product/transport + report sizes).
       --dump           Dump the report descriptor for one device (as hex and Swift [UInt8]).
+      --open           Directly call IOHIDDeviceOpen on matching devices.
+      --service-open   With --open, recreate the device from IOHIDDeviceGetService first.
+      --set-report     With --open, send one Xbox 360-style rumble output report.
       --monitor        Open matching HID devices and print input value/report callbacks.
       --vid <int>      Vendor ID (decimal or 0x... hex).
       --pid <int>      Product ID (decimal or 0x... hex).
@@ -94,6 +112,9 @@ if args.contains("--help") { printUsageAndExit(0) }
 
 let list = args.contains("--list")
 let dump = args.contains("--dump")
+let open = args.contains("--open")
+let serviceOpen = args.contains("--service-open")
+let setReport = args.contains("--set-report")
 let monitor = args.contains("--monitor")
 
 func argValue(_ name: String) -> String? {
@@ -122,7 +143,10 @@ if monitor {
       let usage = IOHIDElementGetUsage(element)
       let intValue = IOHIDValueGetIntegerValue(value)
       lock.withLock { values += 1 }
-      print("VALUE page=0x\(String(page, radix: 16)) usage=0x\(String(usage, radix: 16)) value=\(intValue)")
+      print(
+        "VALUE page=0x\(String(page, radix: 16))"
+          + " usage=0x\(String(usage, radix: 16)) value=\(intValue)"
+      )
       fflush(stdout)
     }
 
@@ -165,7 +189,11 @@ if monitor {
 
   let openResult = IOHIDManagerOpen(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
   guard openResult == kIOReturnSuccess else {
-    fputs("ERROR: IOHIDManagerOpen failed: 0x\(String(UInt32(bitPattern: openResult), radix: 16))\n", stderr)
+    fputs(
+      "ERROR: IOHIDManagerOpen failed: "
+        + "0x\(String(UInt32(bitPattern: openResult), radix: 16))\n",
+      stderr
+    )
     IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
     exit(1)
   }
@@ -174,7 +202,10 @@ if monitor {
   let elementsByDevice = devices.map { inputElements($0) }
   var lastPolledValues: [String: Int] = [:]
 
-  print("Monitoring \(devices.count) device(s), VID:0x\(String(vid, radix: 16)) PID:0x\(String(pid, radix: 16)), \(seconds)s")
+  print(
+    "Monitoring \(devices.count) device(s), VID:0x\(String(vid, radix: 16))"
+      + " PID:0x\(String(pid, radix: 16)), \(seconds)s"
+  )
   for (idx, dev) in devices.enumerated() {
     print(
       "  product=\"\(strProp(dev, kIOHIDProductKey as String) ?? "(unknown)")\""
@@ -199,7 +230,10 @@ if monitor {
         let key = "\(deviceIndex):\(cookie)"
         if lastPolledValues[key] != intValue {
           lastPolledValues[key] = intValue
-          print("POLL page=0x\(String(page, radix: 16)) usage=0x\(String(usage, radix: 16)) value=\(intValue)")
+          print(
+            "POLL page=0x\(String(page, radix: 16))"
+              + " usage=0x\(String(usage, radix: 16)) value=\(intValue)"
+          )
           fflush(stdout)
         }
       }
@@ -233,6 +267,71 @@ if list {
     )
   }
   exit(0)
+}
+
+if open {
+  let vid = intArg("--vid", default: 0x045E)
+  let pid = intArg("--pid", default: 0x028E)
+  let devs = enumerateDevices(matching: [
+    kIOHIDVendorIDKey as String: vid,
+    kIOHIDProductIDKey as String: pid,
+  ])
+  print(
+    "Opening \(devs.count) device(s), VID:0x\(String(vid, radix: 16))"
+      + " PID:0x\(String(pid, radix: 16))"
+  )
+  var failures = 0
+  for dev in devs {
+    let product = strProp(dev, kIOHIDProductKey as String) ?? "(unknown)"
+    let transport = strProp(dev, kIOHIDTransportKey as String) ?? "(null)"
+    let openDevice: IOHIDDevice
+    if serviceOpen {
+      let service = IOHIDDeviceGetService(dev)
+      var entryID: UInt64 = 0
+      let idResult = IORegistryEntryGetRegistryEntryID(service, &entryID)
+      guard idResult == KERN_SUCCESS,
+        let recreated = IOHIDDeviceCreate(kCFAllocatorDefault, service)
+      else {
+        print(
+          "  product=\"\(product)\" transport=\(transport)"
+            + " service-open=create-failed idResult=0x"
+            + String(format: "%08x", UInt32(bitPattern: idResult))
+        )
+        failures += 1
+        continue
+      }
+      print("  service DevSrvsID:\(entryID)")
+      openDevice = recreated
+    } else {
+      openDevice = dev
+    }
+    let result = IOHIDDeviceOpen(openDevice, IOOptionBits(kIOHIDOptionsTypeNone))
+    print(
+      "  product=\"\(product)\" transport=\(transport)"
+        + " open=0x\(String(format: "%08x", UInt32(bitPattern: result)))"
+    )
+    if result != kIOReturnSuccess {
+      failures += 1
+      continue
+    }
+    if setReport {
+      let report: [UInt8] = [0x00, 0x08, 0x00, 180, 100, 0, 0, 0]
+      let setResult = report.withUnsafeBufferPointer { pointer -> IOReturn in
+        guard let baseAddress = pointer.baseAddress else { return kIOReturnBadArgument }
+        return IOHIDDeviceSetReport(
+          openDevice,
+          kIOHIDReportTypeOutput,
+          CFIndex(0),
+          baseAddress,
+          report.count
+        )
+      }
+      print("  setReport=0x\(String(format: "%08x", UInt32(bitPattern: setResult)))")
+      if setResult != kIOReturnSuccess { failures += 1 }
+    }
+    IOHIDDeviceClose(openDevice, IOOptionBits(kIOHIDOptionsTypeNone))
+  }
+  exit(failures == 0 ? 0 : 3)
 }
 
 if dump {

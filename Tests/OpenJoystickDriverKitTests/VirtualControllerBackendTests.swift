@@ -1,60 +1,58 @@
-import Testing
+import Foundation
+import IOKit.hid
+import XCTest
 
 @testable import OpenJoystickDriverKit
 
-@Suite("Virtual Controller Backend Tests") struct VirtualControllerBackendTests {
-
-  @Test("GameController backend is implemented through HID compatibility identity")
-  func gameControllerHIDBackendCapability() {
+final class VirtualControllerBackendTests: XCTestCase {
+  func testGameControllerHIDBackendCapability() {
     let capabilities = VirtualControllerBackendCatalog.gameControllerHIDCapabilities
 
-    #expect(capabilities.isImplemented)
-    #expect(capabilities.isSystemWide)
-    #expect(capabilities.notes.contains("apple-gamecontroller"))
+    XCTAssertTrue(capabilities.isImplemented)
+    XCTAssertTrue(capabilities.isSystemWide)
+    XCTAssertTrue(capabilities.notes.contains("apple-gamecontroller"))
   }
-
-  @Test("DriverKit backend reports system-wide entitlement requirement")
-  func driverKitBackendCapability() {
+  func testDriverKitBackendCapability() {
     let backend: any VirtualControllerBackend = DextOutputDispatcher()
 
-    #expect(backend.backendID == .driverKitHID)
-    #expect(backend.capabilities.isImplemented)
-    #expect(backend.capabilities.isSystemWide)
-    #expect(backend.capabilities.requiresEntitlement)
+    XCTAssertTrue(backend.backendID == .driverKitHID)
+    XCTAssertTrue(backend.capabilities.isImplemented)
+    XCTAssertTrue(backend.capabilities.isSystemWide)
+    XCTAssertTrue(backend.capabilities.requiresEntitlement)
   }
+  func testCompatibilityIdentityIDs() {
+    XCTAssertTrue(CompatibilityIdentity(rawValue: "generic-hid") == .genericHID)
+    XCTAssertTrue(CompatibilityIdentity(rawValue: "sdl2-3") == .sdl2_3)
+    XCTAssertTrue(CompatibilityIdentity(rawValue: "apple-gamecontroller") == .appleGameController)
+    XCTAssertTrue(CompatibilityIdentity(rawValue: "x360-hid") == .x360HID)
+    XCTAssertTrue(CompatibilityIdentity(rawValue: "xone-hid") == .xoneHID)
 
-  @Test("Compatibility identities expose stable architecture ids only")
-  func compatibilityIdentityIDs() {
-    #expect(CompatibilityIdentity(rawValue: "generic-hid") == .genericHID)
-    #expect(CompatibilityIdentity(rawValue: "sdl2-3") == .sdl2_3)
-    #expect(CompatibilityIdentity(rawValue: "apple-gamecontroller") == .appleGameController)
-    #expect(CompatibilityIdentity(rawValue: "x360-hid") == .x360HID)
-    #expect(CompatibilityIdentity(rawValue: "xone-hid") == .xoneHID)
-
-    #expect(CompatibilityIdentity(rawValue: "not-a-profile") == nil)
+    XCTAssertTrue(CompatibilityIdentity(rawValue: "not-a-profile") == nil)
   }
-
-  @Test("Compatibility profile catalog separates SDL, generic HID, and hardware spoof modes")
-  func compatibilityProfileCatalog() {
+  func testCompatibilityProfileCatalog() {
     let generic = CompatibilityOutputProfileCatalog.profile(for: .genericHID)
     let sdl = CompatibilityOutputProfileCatalog.profile(for: .sdl2_3)
     let apple = CompatibilityOutputProfileCatalog.profile(for: .appleGameController)
     let x360 = CompatibilityOutputProfileCatalog.profile(for: .x360HID)
     let xone = CompatibilityOutputProfileCatalog.profile(for: .xoneHID)
 
-    #expect(generic.deviceProfile.productID == 0x4449)
-    #expect(sdl.deviceProfile.productID == 0x4448)
-    #expect(apple.deviceProfile.productID == 0x028E)
-    #expect(!generic.isHardwareSpoof)
-    #expect(!sdl.isHardwareSpoof)
-    #expect(apple.isHardwareSpoof)
-    #expect(x360.isHardwareSpoof)
-    #expect(xone.isHardwareSpoof)
-    #expect(xone.emitsXboxGuideReport)
+    XCTAssertTrue(generic.deviceProfile.productID == 0x4449)
+    XCTAssertTrue(sdl.deviceProfile.productID == 0x4448)
+    XCTAssertTrue(apple.deviceProfile.productID == 0x028E)
+    XCTAssertTrue(!generic.isHardwareSpoof)
+    XCTAssertTrue(!sdl.isHardwareSpoof)
+    XCTAssertTrue(apple.isHardwareSpoof)
+    XCTAssertTrue(!x360.isHardwareSpoof)
+    XCTAssertTrue(x360.deviceProfile.productName == "OpenJoystickDriver X360")
+    XCTAssertTrue(xone.isHardwareSpoof)
+    XCTAssertTrue(xone.emitsXboxGuideReport)
   }
-
-  @Test("OJD generic report can expose or suppress D-pad button bits")
-  func genericReportDpadButtonPolicy() {
+  func testCompatibilityIdentitiesRequestDriverKitSeizure() {
+    for identity in CompatibilityIdentity.allCases {
+      XCTAssertTrue(identity.seizesDriverKitInCompatibilityMode)
+    }
+  }
+  func testGenericReportDpadButtonPolicy() {
     let state = VirtualGamepadState(
       buttons: GamepadHIDDescriptor.dpadButtonBits(for: .north)
         | (1 << GamepadHIDDescriptor.ButtonBit.share.rawValue),
@@ -62,18 +60,16 @@ import Testing
     )
 
     let generic = OJDGenericGamepadFormat().buildInputReport(from: state)
-    #expect((UInt16(generic[1]) & 0x88) == 0x88)
-    #expect((generic[14] & 0x0F) == GamepadHIDDescriptor.Hat.north.rawValue)
+    XCTAssertTrue((UInt16(generic[1]) & 0x88) == 0x88)
+    XCTAssertTrue((generic[14] & 0x0F) == GamepadHIDDescriptor.Hat.north.rawValue)
 
     let sdl2_3 = OJDGenericGamepadFormat(includesDpadButtonBits: false)
       .buildInputReport(from: state)
-    #expect((UInt16(sdl2_3[1]) & 0x78) == 0)
-    #expect((UInt16(sdl2_3[1]) & 0x80) == 0x80)
-    #expect((sdl2_3[14] & 0x0F) == GamepadHIDDescriptor.Hat.north.rawValue)
+    XCTAssertTrue((UInt16(sdl2_3[1]) & 0x78) == 0)
+    XCTAssertTrue((UInt16(sdl2_3[1]) & 0x80) == 0x80)
+    XCTAssertTrue((sdl2_3[14] & 0x0F) == GamepadHIDDescriptor.Hat.north.rawValue)
   }
-
-  @Test("SDL report uses button D-pad and zero-idle trigger axes")
-  func sdlReportUsesButtonDpadAndNeutralTriggers() throws {
+  func testSdlReportUsesButtonDpadAndNeutralTriggers() throws {
     let parsed = try HIDDescriptorReportFormat(descriptor: OJDSDLGamepadFormat().descriptor)
     let neutral = OJDSDLGamepadFormat().buildInputReport(from: VirtualGamepadState())
     let dpad = OJDSDLGamepadFormat().buildInputReport(
@@ -87,22 +83,97 @@ import Testing
       from: VirtualGamepadState(leftTrigger: 32_767, rightTrigger: 16_384)
     )
 
-    #expect(parsed.inputReportPayloadSize == 14)
-    #expect(!OJDSDLGamepadFormat().descriptor.contains(0x39))
-    #expect(neutral[6] == 0x00)
-    #expect(neutral[7] == 0x00)
-    #expect(neutral[12] == 0x00)
-    #expect(neutral[13] == 0x00)
-    #expect((UInt16(dpad[1]) & 0x48) == 0x48)
-    #expect(triggers[6] == 0xFF)
-    #expect(triggers[7] == 0x7F)
-    #expect(triggers[12] == 0x00)
-    #expect(triggers[13] == 0x40)
+    XCTAssertTrue(parsed.inputReportPayloadSize == 14)
+    XCTAssertTrue(!OJDSDLGamepadFormat().descriptor.contains(0x39))
+    XCTAssertTrue(OJDSDLGamepadFormat().descriptor.containsSequence([
+      0x09, 0x32,  // LT/Z
+      0x15, 0x00,  // Logical Minimum: 0
+      0x26, 0xFF, 0x7F,
+    ]))
+    XCTAssertTrue(OJDSDLGamepadFormat().descriptor.containsSequence([
+      0x09, 0x35,  // RT/Rz
+      0x15, 0x00,  // Logical Minimum: 0
+      0x26, 0xFF, 0x7F,
+    ]))
+    XCTAssertTrue(neutral[6] == 0x00)
+    XCTAssertTrue(neutral[7] == 0x00)
+    XCTAssertTrue(neutral[12] == 0x00)
+    XCTAssertTrue(neutral[13] == 0x00)
+    XCTAssertTrue((UInt16(dpad[1]) & 0x48) == 0x48)
+    XCTAssertTrue(triggers[6] == 0xFF)
+    XCTAssertTrue(triggers[7] == 0x7F)
+    XCTAssertTrue(triggers[12] == 0x00)
+    XCTAssertTrue(triggers[13] == 0x40)
+  }
+  func testSdlRumbleOutputReportUsesVendorPayload() {
+    XCTAssertTrue(SDLGamepadHIDDescriptor.maxOutputReportPayloadSize == 7)
+    XCTAssertTrue(OJDSDLGamepadFormat().outputReportPayloadSize == 7)
+    XCTAssertTrue(OJDSDLGamepadFormat().descriptor.containsSequence([
+      0x06, 0x00, 0xFF,  // vendor-defined output page
+      0x09, 0x01,
+      0x15, 0x00,
+      0x26, 0xFF, 0x00,
+      0x75, 0x08,
+      0x95, 0x07,
+      0x91, 0x02,
+    ]))
   }
 
+  func testUserSpaceSDLIdentityAdvertisesReportSizes() {
+    let properties = UserSpaceOutputDispatcher.deviceProperties(
+      profile: .openJoystickDriverSDL2_3,
+      format: OJDSDLGamepadFormat(),
+      identifier: DeviceIdentifier(vendorID: 13623, productID: 4112)
+    )
 
-  @Test("Fixed compatibility report has no hat axis and keeps button D-pad")
-  func fixedCompatibilityReportHasNoHatAxis() throws {
+    let inputSize = properties[kIOHIDMaxInputReportSizeKey as String] as? NSNumber
+    let outputSize = properties[kIOHIDMaxOutputReportSizeKey as String] as? NSNumber
+    XCTAssertTrue(inputSize?.intValue == SDLGamepadHIDDescriptor.reportSize)
+    XCTAssertTrue(outputSize?.intValue == SDLGamepadHIDDescriptor.maxOutputReportPayloadSize)
+  }
+  func testXbox360FormatDefaultsToJoystickPrimaryUsage() {
+    XCTAssertTrue(
+      UserSpaceOutputDispatcher.defaultPrimaryUsage(for: Xbox360MacHIDReportFormat())
+        == kHIDUsage_GD_Joystick
+    )
+  }
+  func testXbox360GamePadFormatDefaultsToGamePadPrimaryUsage() {
+    XCTAssertTrue(
+      UserSpaceOutputDispatcher.defaultPrimaryUsage(
+        for: Xbox360MacHIDReportFormat(topLevelUsage: UInt8(kHIDUsage_GD_GamePad))
+      ) == kHIDUsage_GD_GamePad
+    )
+  }
+  func testXboxOneCompatibilityFormatDeclaresRumbleOutputSize() throws {
+    let format = try HIDDescriptorReportFormat(
+      descriptor: XboxOneBluetoothHIDDescriptor.descriptor,
+      outputReportID: VirtualRumbleOutputReportParser.xboxOneReportID,
+      outputReportPayloadSize: VirtualRumbleOutputReportParser.xboxOneReportPayloadSize
+    )
+
+    XCTAssertTrue(format.inputReportID == 1)
+    XCTAssertTrue(format.outputReportID == VirtualRumbleOutputReportParser.xboxOneReportID)
+    XCTAssertTrue(
+      format.outputReportPayloadSize == VirtualRumbleOutputReportParser.xboxOneReportPayloadSize
+    )
+  }
+  func testXboxGIPCompatibilityFormatAdvertisesFullOutputSize() throws {
+    let format = try HIDDescriptorReportFormat(
+      descriptor: XboxOneBluetoothHIDDescriptor.descriptor,
+      outputReportID: VirtualRumbleOutputReportParser.xboxGIPReportID,
+      outputReportPayloadSize:
+        VirtualRumbleOutputReportParser.xboxGIPReportPayloadSizeWithoutReportID
+    )
+    let properties = UserSpaceOutputDispatcher.deviceProperties(
+      profile: .xboxOneS,
+      format: format,
+      identifier: DeviceIdentifier(vendorID: 13623, productID: 4112)
+    )
+
+    let outputSize = properties[kIOHIDMaxOutputReportSizeKey as String] as? NSNumber
+    XCTAssertTrue(outputSize?.intValue == 13)
+  }
+  func testFixedCompatibilityReportHasNoHatAxis() throws {
     let parsed = try HIDDescriptorReportFormat(descriptor: OJDSDLGamepadFormat().descriptor)
     let full = OJDSDLGamepadFormat().buildInputReport(
       from: VirtualGamepadState(
@@ -119,13 +190,22 @@ import Testing
       )
     )
 
-    #expect(parsed.inputReportPayloadSize == 14)
-    #expect(!OJDSDLGamepadFormat().descriptor.contains(0x39))
-    #expect(full[1] == 0x97)
-    #expect(full[6] == 0xFF)
-    #expect(full[7] == 0x7F)
-    #expect(full[12] == 0xFF)
-    #expect(full[13] == 0x7F)
+    XCTAssertTrue(parsed.inputReportPayloadSize == 14)
+    XCTAssertTrue(!OJDSDLGamepadFormat().descriptor.contains(0x39))
+    XCTAssertTrue(full[1] == 0x97)
+    XCTAssertTrue(full[6] == 0xFF)
+    XCTAssertTrue(full[7] == 0x7F)
+    XCTAssertTrue(full[12] == 0xFF)
+    XCTAssertTrue(full[13] == 0x7F)
   }
 
+}
+
+private extension Array where Element: Equatable {
+  func containsSequence(_ sequence: [Element]) -> Bool {
+    guard !sequence.isEmpty, sequence.count <= count else { return false }
+    return indices.dropLast(sequence.count - 1).contains { index in
+      self[index..<(index + sequence.count)].elementsEqual(sequence)
+    }
+  }
 }

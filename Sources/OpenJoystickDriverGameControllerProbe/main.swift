@@ -1,7 +1,12 @@
+import CoreHaptics
 import Foundation
 import GameController
 import IOKit
 import IOKit.hid
+
+func hasArg(_ name: String) -> Bool {
+  CommandLine.arguments.dropFirst().contains(name)
+}
 
 func argValue(_ name: String, default defaultValue: Int) -> Int {
   let args = Array(CommandLine.arguments.dropFirst())
@@ -18,7 +23,48 @@ func describe(_ controller: GCController) -> String {
   let productCategory = controller.productCategory
   let hasExtended = controller.extendedGamepad != nil
   let hasMicro = controller.microGamepad != nil
-  return "vendor=\"\(vendor)\" category=\"\(productCategory)\" extended=\(hasExtended) micro=\(hasMicro)"
+  let haptics = controllerHapticsDescription(controller)
+  return "vendor=\"\(vendor)\" category=\"\(productCategory)\""
+    + " extended=\(hasExtended) micro=\(hasMicro) \(haptics)"
+}
+
+func controllerHapticsDescription(_ controller: GCController) -> String {
+  if #available(macOS 11.0, *) {
+    guard let haptics = controller.haptics else { return "haptics=false" }
+    let localities = haptics.supportedLocalities
+      .map(\.rawValue)
+      .sorted()
+      .joined(separator: ",")
+    return "haptics=true localities=[\(localities)]"
+  }
+  return "haptics=unavailable"
+}
+
+func playHapticPulse(on controller: GCController) -> String {
+  guard #available(macOS 11.0, *) else { return "unavailable: macOS 11 required" }
+  guard let haptics = controller.haptics else { return "unavailable: controller has no haptics" }
+  guard let engine = haptics.createEngine(withLocality: .default) else {
+    return "unavailable: no default haptic engine"
+  }
+  do {
+    try engine.start()
+    let intensity = CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0)
+    let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
+    let event = CHHapticEvent(
+      eventType: .hapticContinuous,
+      parameters: [intensity, sharpness],
+      relativeTime: 0,
+      duration: 0.5
+    )
+    let pattern = try CHHapticPattern(events: [event], parameters: [])
+    let player = try engine.makePlayer(with: pattern)
+    try player.start(atTime: 0)
+    Thread.sleep(forTimeInterval: 0.7)
+    engine.stop()
+    return "played"
+  } catch {
+    return "failed: \(error)"
+  }
 }
 
 func intProp(_ device: IOHIDDevice, _ key: String) -> Int {
@@ -93,9 +139,13 @@ func printHIDSupport() {
 }
 
 let seconds = argValue("--seconds", default: 5)
+let shouldRumble = hasArg("--rumble")
 
 print("GameController probe")
 print("Listening for \(seconds)s")
+if shouldRumble {
+  print("Rumble pulse requested")
+}
 print("")
 if #available(macOS 11.3, *) {
   GCController.shouldMonitorBackgroundEvents = true
@@ -139,4 +189,13 @@ while Date() < end {
 
 for token in observerTokens {
   center.removeObserver(token)
+}
+
+if shouldRumble {
+  let controllers = GCController.controllers()
+  guard let controller = controllers.first else {
+    print("rumble: skipped no controller")
+    exit(1)
+  }
+  print("rumble: \(playHapticPulse(on: controller))")
 }

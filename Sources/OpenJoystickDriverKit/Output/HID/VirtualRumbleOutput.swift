@@ -24,6 +24,11 @@ public struct VirtualRumbleCommand: Equatable, Sendable {
 }
 
 public enum VirtualRumbleOutputReportParser {
+  public static let xboxOneReportID: UInt8 = 3
+  public static let xboxOneReportPayloadSize = 8
+  public static let xboxGIPReportID: UInt8 = 9
+  public static let xboxGIPReportPayloadSizeWithoutReportID = 12
+
   public static func parse(
     type: IOHIDReportType,
     reportID: UInt32,
@@ -32,6 +37,9 @@ public enum VirtualRumbleOutputReportParser {
     guard type == kIOHIDReportTypeOutput || type == kIOHIDReportTypeFeature else { return nil }
 
     if let command = parseXboxOneReport(reportID: reportID, bytes: bytes) {
+      return command
+    }
+    if let command = parseXboxGIPReport(reportID: reportID, bytes: bytes) {
       return command
     }
     if let command = parseXbox360Report(reportID: reportID, bytes: bytes) {
@@ -48,7 +56,7 @@ public enum VirtualRumbleOutputReportParser {
     bytes: [UInt8]
   ) -> VirtualRumbleCommand? {
     let payload: [UInt8]
-    if reportID == 3 {
+    if reportID == UInt32(xboxOneReportID) {
       payload = bytes
     } else if reportID == 0, bytes.first == 0x03 {
       payload = Array(bytes.dropFirst())
@@ -62,6 +70,35 @@ public enum VirtualRumbleOutputReportParser {
     let left = (activation & 0x04) != 0 ? payload[3] : 0
     let right = (activation & 0x08) != 0 ? payload[4] : 0
     let duration = payload.count >= 6 ? Int(payload[5]) * 10 : 250
+    return VirtualRumbleCommand(
+      left: left,
+      right: right,
+      leftTrigger: leftTrigger,
+      rightTrigger: rightTrigger,
+      durationMs: max(0, duration)
+    )
+  }
+
+  private static func parseXboxGIPReport(
+    reportID: UInt32,
+    bytes: [UInt8]
+  ) -> VirtualRumbleCommand? {
+    let payload: [UInt8]
+    if reportID == UInt32(xboxGIPReportID) {
+      payload = bytes.first == GIPCommand.rumble ? bytes : [GIPCommand.rumble] + bytes
+    } else if reportID == 0, bytes.first == GIPCommand.rumble {
+      payload = bytes
+    } else {
+      return nil
+    }
+    guard payload.count >= 10, payload[0] == GIPCommand.rumble else { return nil }
+
+    let activation = payload[5] & 0x0F
+    let leftTrigger = (activation & 0x01) != 0 ? payload[6] : 0
+    let rightTrigger = (activation & 0x02) != 0 ? payload[7] : 0
+    let left = (activation & 0x04) != 0 ? payload[8] : 0
+    let right = (activation & 0x08) != 0 ? payload[9] : 0
+    let duration = payload.count >= 11 ? Int(payload[10]) * 10 : 250
     return VirtualRumbleCommand(
       left: left,
       right: right,

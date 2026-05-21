@@ -11,6 +11,8 @@ public struct HIDDescriptorReportFormat: VirtualGamepadReportFormat, @unchecked 
   public let descriptor: [UInt8]
   public let inputReportPayloadSize: Int
   public let inputReportID: UInt8?
+  public let outputReportPayloadSize: Int?
+  public let outputReportID: UInt8?
 
   private let packer: HIDReportPacker
 
@@ -28,7 +30,11 @@ public struct HIDDescriptorReportFormat: VirtualGamepadReportFormat, @unchecked 
     }
   }
 
-  public init(descriptor: [UInt8]) throws {
+  public init(
+    descriptor: [UInt8],
+    outputReportID: UInt8? = nil,
+    outputReportPayloadSize: Int? = nil
+  ) throws {
     self.descriptor = descriptor
     guard let parsed = HIDReportDescriptorParser.parse(descriptor: descriptor) else {
       throw Error.cannotParseDescriptor
@@ -39,6 +45,8 @@ public struct HIDDescriptorReportFormat: VirtualGamepadReportFormat, @unchecked 
     self.packer = packer
     self.inputReportID = packer.reportID == 0 ? nil : packer.reportID
     self.inputReportPayloadSize = packer.payloadSizeBytes
+    self.outputReportID = outputReportID
+    self.outputReportPayloadSize = outputReportPayloadSize
   }
 
   public func buildInputReport(from state: VirtualGamepadState) -> [UInt8] {
@@ -318,7 +326,6 @@ private enum HIDReportDescriptorParser {
           localUsages.removeAll(keepingCapacity: true)
           usageMin = nil
           usageMax = nil
-          break
         }
       case .reserved:
         break
@@ -344,20 +351,30 @@ private struct HIDReportPacker: @unchecked Sendable {
   private let axisFields: [Int: HIDField]  // usage -> field (Generic Desktop)
   private let hatField: HIDField?
 
-  static func bestEffortGamepadPacker(from parsed: HIDParsedDescriptor) -> HIDReportPacker? {
+  static func bestEffortGamepadPacker(from parsed: HIDParsedDescriptor) -> Self? {
     // Score each report ID by how many "gamepad-ish" fields it contains.
-    let grouped = Dictionary(grouping: parsed.fields, by: { $0.reportID })
-    var best: (UInt8, Int)? = nil
+    let grouped = Dictionary(grouping: parsed.fields) { $0.reportID }
+    var best: (UInt8, Int)?
     for (rid, fields) in grouped {
-      let hasButtons = fields.contains { $0.usagePage == 0x09 && (1...32).contains($0.usage) }
-      let axisCount = fields.filter { $0.usagePage == 0x01 && (0x30...0x35).contains($0.usage) }.count
+      let hasButtons = fields.contains {
+        $0.usagePage == 0x09 && (1...32).contains($0.usage)
+      }
+      let axisCount = fields.filter {
+        $0.usagePage == 0x01 && (0x30...0x35).contains($0.usage)
+      }.count
       let hasHat = fields.contains { $0.usagePage == 0x01 && $0.usage == 0x39 }
       var score = 0
       if hasButtons { score += 10 }
       score += min(6, axisCount) * 3
       if hasHat { score += 5 }
       if let size = parsed.payloadSizeBytesByReportID[rid] { score += min(20, size) }
-      if best == nil || score > best!.1 { best = (rid, score) }
+      if let currentBest = best {
+        if score > currentBest.1 {
+          best = (rid, score)
+        }
+      } else {
+        best = (rid, score)
+      }
     }
     guard let (rid, _) = best else { return nil }
     let fields = grouped[rid] ?? []
@@ -373,7 +390,7 @@ private struct HIDReportPacker: @unchecked Sendable {
         hat = f
       }
     }
-    return HIDReportPacker(
+    return Self(
       reportID: rid,
       payloadSizeBytes: parsed.payloadSizeBytesByReportID[rid] ?? 0,
       buttonFields: buttons,
@@ -454,22 +471,46 @@ private struct HIDReportPacker: @unchecked Sendable {
 
     // Axes (Generic Desktop): X,Y,Z,Rx,Ry,Rz
     if let f = axisFields[0x30] {
-      setBits(bitOffset: f.bitOffset, bitSize: f.bitSize, value: encodeAxis(state.leftStickX, field: f, signed: true))
+      setBits(
+        bitOffset: f.bitOffset,
+        bitSize: f.bitSize,
+        value: encodeAxis(state.leftStickX, field: f, signed: true)
+      )
     }
     if let f = axisFields[0x31] {
-      setBits(bitOffset: f.bitOffset, bitSize: f.bitSize, value: encodeAxis(state.leftStickY, field: f, signed: true))
+      setBits(
+        bitOffset: f.bitOffset,
+        bitSize: f.bitSize,
+        value: encodeAxis(state.leftStickY, field: f, signed: true)
+      )
     }
     if let f = axisFields[0x32] {
-      setBits(bitOffset: f.bitOffset, bitSize: f.bitSize, value: encodeTrigger(state.leftTrigger, field: f))
+      setBits(
+        bitOffset: f.bitOffset,
+        bitSize: f.bitSize,
+        value: encodeTrigger(state.leftTrigger, field: f)
+      )
     }
     if let f = axisFields[0x33] {
-      setBits(bitOffset: f.bitOffset, bitSize: f.bitSize, value: encodeAxis(state.rightStickX, field: f, signed: true))
+      setBits(
+        bitOffset: f.bitOffset,
+        bitSize: f.bitSize,
+        value: encodeAxis(state.rightStickX, field: f, signed: true)
+      )
     }
     if let f = axisFields[0x34] {
-      setBits(bitOffset: f.bitOffset, bitSize: f.bitSize, value: encodeAxis(state.rightStickY, field: f, signed: true))
+      setBits(
+        bitOffset: f.bitOffset,
+        bitSize: f.bitSize,
+        value: encodeAxis(state.rightStickY, field: f, signed: true)
+      )
     }
     if let f = axisFields[0x35] {
-      setBits(bitOffset: f.bitOffset, bitSize: f.bitSize, value: encodeTrigger(state.rightTrigger, field: f))
+      setBits(
+        bitOffset: f.bitOffset,
+        bitSize: f.bitSize,
+        value: encodeTrigger(state.rightTrigger, field: f)
+      )
     }
 
     if let f = hatField {

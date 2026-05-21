@@ -21,7 +21,7 @@ public enum CompatibilityIdentity: Codable, CaseIterable, Sendable, Equatable {
   case x360HID
   case xoneHID
 
-  public static let allCases: [CompatibilityIdentity] = [
+  public static let allCases: [Self] = [
     .genericHID,
     .sdl2_3,
     .appleGameController,
@@ -60,7 +60,10 @@ public enum CompatibilityIdentity: Codable, CaseIterable, Sendable, Equatable {
     let raw = try decoder.singleValueContainer().decode(String.self)
     guard let value = Self(rawValue: raw) else {
       throw DecodingError.dataCorrupted(
-        .init(codingPath: decoder.codingPath, debugDescription: "Unknown compatibility identity: \(raw)")
+        .init(
+          codingPath: decoder.codingPath,
+          debugDescription: "Unknown compatibility identity: \(raw)"
+        )
       )
     }
     self = value
@@ -80,6 +83,10 @@ public enum CompatibilityIdentity: Codable, CaseIterable, Sendable, Equatable {
     case .xoneHID, .x360HID:
       false
     }
+  }
+
+  public var seizesDriverKitInCompatibilityMode: Bool {
+    true
   }
 }
 

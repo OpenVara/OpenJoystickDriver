@@ -240,7 +240,7 @@ ojd_sign() {
   if [[ "$OJD_ENV" == "release" ]]; then
     extra_args+=(--options runtime --timestamp)
   fi
-  codesign --sign "$identity" --force --generate-entitlement-der "${extra_args[@]}" "$binary"
+  codesign --sign "$identity" --force --generate-entitlement-der "${extra_args[@]+"${extra_args[@]}"}" "$binary"
 }
 
 ojd_sign_resource_bundle() {
@@ -250,7 +250,7 @@ ojd_sign_resource_bundle() {
   if [[ "$OJD_ENV" == "release" ]]; then
     extra_args+=(--timestamp)
   fi
-  codesign --sign "$identity" --force "${extra_args[@]}" "$bundle"
+  codesign --sign "$identity" --force "${extra_args[@]+"${extra_args[@]}"}" "$bundle"
 }
 
 # Resolve entitlements templates: replace ${DEVELOPMENT_TEAM} with actual value.

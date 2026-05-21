@@ -6,10 +6,10 @@ import Foundation
 ///   Bytes 0-1  : Button bitmask, buttons 1-16
 ///   Bytes 2-3  : Left Stick X, Int16 LE
 ///   Bytes 4-5  : Left Stick Y, Int16 LE
-///   Bytes 6-7  : Left Trigger, Int16 LE, zero idle
+///   Bytes 6-7  : Left Trigger, UInt16 LE, zero idle
 ///   Bytes 8-9  : Right Stick X, Int16 LE
 ///   Bytes 10-11: Right Stick Y, Int16 LE
-///   Bytes 12-13: Right Trigger, Int16 LE, zero idle
+///   Bytes 12-13: Right Trigger, UInt16 LE, zero idle
 public enum SDLGamepadHIDDescriptor {
   public static let descriptor: [UInt8] = [
     0x05, 0x01,
@@ -27,26 +27,51 @@ public enum SDLGamepadHIDDescriptor {
     0x95, 0x10,
     0x81, 0x02,
 
-    // Axes: X, Y, Z(LT), Rx, Ry, Rz(RT), all signed so idle is zero.
+    // Axes: sticks are signed; triggers are unsigned so SDL normalizes rest to 0.
     0x05, 0x01,
+
+    // Left stick: X, Y
     0x09, 0x30,
     0x09, 0x31,
-    0x09, 0x32,
-    0x09, 0x33,
-    0x09, 0x34,
-    0x09, 0x35,
     0x16, 0x01, 0x80,
     0x26, 0xFF, 0x7F,
     0x75, 0x10,
-    0x95, 0x06,
+    0x95, 0x02,
     0x81, 0x02,
 
-    // 14-byte output report mirrors the input payload for daemon -> dext relay.
+    // Left trigger: Z
+    0x09, 0x32,
+    0x15, 0x00,
+    0x26, 0xFF, 0x7F,
+    0x75, 0x10,
+    0x95, 0x01,
+    0x81, 0x02,
+
+    // Right stick: Rx, Ry
+    0x09, 0x33,
+    0x09, 0x34,
+    0x16, 0x01, 0x80,
+    0x26, 0xFF, 0x7F,
+    0x75, 0x10,
+    0x95, 0x02,
+    0x81, 0x02,
+
+    // Right trigger: Rz
+    0x09, 0x35,
+    0x15, 0x00,
+    0x26, 0xFF, 0x7F,
+    0x75, 0x10,
+    0x95, 0x01,
+    0x81, 0x02,
+
+    // 7-byte vendor output report for SDL/IOKit rumble relay:
+    // marker 0x4F, left, right, left-trigger, right-trigger, duration LE.
+    0x06, 0x00, 0xFF,
     0x09, 0x01,
     0x15, 0x00,
     0x26, 0xFF, 0x00,
     0x75, 0x08,
-    0x95, 0x0E,
+    0x95, 0x07,
     0x91, 0x02,
 
     0xC0,
@@ -54,4 +79,5 @@ public enum SDLGamepadHIDDescriptor {
   ]
 
   public static let reportSize = 14
+  public static let maxOutputReportPayloadSize = 7
 }

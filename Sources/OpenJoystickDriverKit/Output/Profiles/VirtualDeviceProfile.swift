@@ -16,7 +16,7 @@ public struct VirtualDeviceProfile: Equatable, Sendable {
 
   /// OpenJoystickDriver virtual gamepad — a standard HID GamePad identity that
   /// avoids triggering device-specific HID parsers in consumers (e.g. SDL's Xbox path).
-  public static let openJoystickDriver = VirtualDeviceProfile(
+  public static let openJoystickDriver = Self(
     vendorID: 0x4F4A,  // "OJ"
     productID: 0x4447,  // "DG" (arbitrary, stable)
     versionNumber: 0x0408,
@@ -32,7 +32,7 @@ public struct VirtualDeviceProfile: Equatable, Sendable {
     manufacturer: "OpenJoystickDriver"
   )
 
-  public static let openJoystickDriverGenericHID = VirtualDeviceProfile(
+  public static let openJoystickDriverGenericHID = Self(
     vendorID: 0x4F4A,
     productID: 0x4449,
     versionNumber: 0x0408,
@@ -42,7 +42,7 @@ public struct VirtualDeviceProfile: Equatable, Sendable {
 
   /// Xbox One S — standard for XInput/GIP controllers and the default
   /// normalization target for all protocols.
-  public static let xboxOneS = VirtualDeviceProfile(
+  public static let xboxOneS = Self(
     vendorID: 0x045E,
     productID: 0x02EA,
     // Important: SDL mapping DB entry for macOS expects version=0x0000 for GUID
@@ -56,11 +56,26 @@ public struct VirtualDeviceProfile: Equatable, Sendable {
   /// Xbox 360 Controller (Wired) — experimental on macOS.
   ///
   /// Note: many macOS stacks do not treat 045E:028E as a standard HID gamepad.
-  public static let xbox360Wired = VirtualDeviceProfile(
+  public static let xbox360Wired = Self(
     vendorID: 0x045E,
     productID: 0x028E,
     versionNumber: 0x0000,
     productName: "Xbox 360 Wired Controller",
+    manufacturer: "Microsoft"
+  )
+
+  /// SDL's macOS Steam Virtual Gamepad-compatible shape.
+  ///
+  /// SDL enables its Xbox 360 HIDAPI driver for this VID/PID/version on macOS,
+  /// while ordinary wired Xbox 360 identities are routed away from HIDAPI and
+  /// expected to use GCController. Keep the product name distinct from Steam's
+  /// `GamePad-N` slot names so Apple's synthetic GameController plugin does not
+  /// treat the device as a Steam-managed virtual controller.
+  public static let steamVirtualXbox360 = Self(
+    vendorID: 0x045E,
+    productID: 0x028E,
+    versionNumber: 0x0000,
+    productName: "OpenJoystickDriver X360",
     manufacturer: "Microsoft"
   )
 
