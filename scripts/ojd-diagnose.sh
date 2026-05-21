@@ -5,7 +5,7 @@
 #   ./scripts/ojd diagnose <subcommand>
 #
 # Subcommands:
-#   dext (default), sdl3, sdl3-gamecontroller, sdl3-patched, sdl3-patched-gamecontroller, sdl3-hidapi-x360, pcsx2-sdl3, pcsx2-gamecontroller, pcsx2-hidapi-x360, pcsx2-live, pcsx2-latency, backends
+#   dext (default), sdl3, sdl3-gamecontroller, sdl3-hidapi-x360, pcsx2-sdl3, pcsx2-gamecontroller, pcsx2-hidapi-x360, pcsx2-live, pcsx2-latency, backends
 #
 # Runs all checks regardless of individual failures.
 
@@ -23,8 +23,6 @@ Usage:
   ./scripts/ojd diagnose dext
   ./scripts/ojd diagnose sdl3 [--seconds N] [--rumble] [other args]
   ./scripts/ojd diagnose sdl3-gamecontroller [--seconds N] [--rumble]
-  ./scripts/ojd diagnose sdl3-patched [--seconds N] [--rumble]
-  ./scripts/ojd diagnose sdl3-patched-gamecontroller [--seconds N] [--rumble]
   ./scripts/ojd diagnose sdl3-hidapi-x360 [--seconds N] [--rumble]
   ./scripts/ojd diagnose pcsx2-sdl3 [--seconds N] [other args]
   ./scripts/ojd diagnose pcsx2-gamecontroller [--seconds N] [--rumble] [other args]
@@ -63,32 +61,6 @@ run_sdl3_probe_native() {
   "$OUT" "$@"
 }
 
-run_sdl3_probe_patched() {
-  local ROOT
-  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-  local SRC="$ROOT/tools/sdl3-gamepad-probe/main.c"
-  local PREFIX="$ROOT/.build/sdl-ojd/install"
-  local OUT="/tmp/ojd-sdl3-probe-patched"
-  local SDKROOT
-  SDKROOT="$(select_macos_sdk)" || return $?
-
-  [[ -f "$SRC" ]] || die "Missing probe source: $SRC"
-  [[ -f "$PREFIX/lib/libSDL3.dylib" ]] || die "Patched SDL not built. Run: ./scripts/ojd sdl build-patched"
-
-  echo "Building SDL3 probe (patched SDL submodule)..."
-  SDKROOT="$SDKROOT" clang -x objective-c -isysroot "$SDKROOT" "$SRC" \
-    -I"$PREFIX/include" -L"$PREFIX/lib" -lSDL3 \
-    -framework Foundation -framework GameController \
-    -Wl,-rpath,"$PREFIX/lib" \
-    -o "$OUT"
-
-  echo
-  echo "Running: $OUT $*"
-  echo "Using SDL: $PREFIX/lib/libSDL3.dylib"
-  echo
-  DYLD_LIBRARY_PATH="$PREFIX/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "$OUT" "$@"
-}
-
 configure_ojd_gamecontroller_route() {
   local ROOT
   ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -120,20 +92,6 @@ run_sdl3_gamecontroller_probe() {
     SDL_JOYSTICK_HIDAPI_XBOX_ONE=0 \
     SDL_JOYSTICK_HIDAPI_GIP=0 \
     run_sdl3_probe_native --gc-prewarm --wait-devices 8 --rumble --expect-rumble "$@"
-}
-
-run_sdl3_patched_gamecontroller_probe() {
-  configure_ojd_gamecontroller_route
-  SDL_JOYSTICK_MFI=1 \
-    SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1 \
-    SDL_JOYSTICK_IOKIT=0 \
-    SDL_JOYSTICK_HIDAPI=0 \
-    SDL_JOYSTICK_HIDAPI_XBOX=0 \
-    SDL_JOYSTICK_HIDAPI_XBOX_360=0 \
-    SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS=0 \
-    SDL_JOYSTICK_HIDAPI_XBOX_ONE=0 \
-    SDL_JOYSTICK_HIDAPI_GIP=0 \
-    run_sdl3_probe_patched --gc-prewarm --wait-devices 8 --rumble --expect-rumble "$@"
 }
 
 configure_ojd_hidapi_x360_route() {
@@ -483,16 +441,6 @@ fi
 
 if [[ "$cmd" == "sdl3-gamecontroller" ]]; then
   run_sdl3_gamecontroller_probe "$@"
-  exit 0
-fi
-
-if [[ "$cmd" == "sdl3-patched" ]]; then
-  run_sdl3_probe_patched "$@"
-  exit 0
-fi
-
-if [[ "$cmd" == "sdl3-patched-gamecontroller" ]]; then
-  run_sdl3_patched_gamecontroller_probe "$@"
   exit 0
 fi
 

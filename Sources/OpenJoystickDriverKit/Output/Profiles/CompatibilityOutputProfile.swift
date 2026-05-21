@@ -58,10 +58,10 @@ public enum CompatibilityOutputProfileCatalog {
     case .x360HID:
       CompatibilityOutputProfile(
         identity: identity,
-        deviceProfile: .steamVirtualXbox360,
+        deviceProfile: .sdlHIDAPIXbox360,
         displayName: "Xbox 360 HID",
         notes: "SDL macOS Xbox 360 HIDAPI identity for output-report rumble.",
-        isHardwareSpoof: false,
+        isHardwareSpoof: true,
         emitsXboxGuideReport: false
       )
     case .xoneHID:

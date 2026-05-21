@@ -64,19 +64,18 @@ public struct VirtualDeviceProfile: Equatable, Sendable {
     manufacturer: "Microsoft"
   )
 
-  /// SDL's macOS Steam Virtual Gamepad-compatible shape.
+  /// SDL's macOS Xbox 360 HIDAPI-compatible shape.
   ///
-  /// SDL enables its Xbox 360 HIDAPI driver for this VID/PID/version on macOS,
-  /// while ordinary wired Xbox 360 identities are routed away from HIDAPI and
-  /// expected to use GCController. Keep the product name distinct from Steam's
-  /// `GamePad-N` slot names so Apple's synthetic GameController plugin does not
-  /// treat the device as a Steam-managed virtual controller.
-  public static let steamVirtualXbox360 = Self(
-    vendorID: 0x045E,
-    productID: 0x028E,
+  /// Stock SDL on macOS routes ordinary Xbox 360 identities away from HIDAPI,
+  /// and hides the Steam virtual 045E:028E identity unless callers opt in. SDL
+  /// explicitly accepts the ASTRO C40 Xbox 360 mode through HIDAPI, which gives
+  /// PCSX2 a no-launch-wrapper output-report rumble path.
+  public static let sdlHIDAPIXbox360 = Self(
+    vendorID: 0x9886,
+    productID: 0x0024,
     versionNumber: 0x0000,
-    productName: "OpenJoystickDriver X360",
-    manufacturer: "Microsoft"
+    productName: "ASTRO C40 TR Controller",
+    manufacturer: "ASTRO Gaming"
   )
 
   /// SDL 2/3 compatibility identity.

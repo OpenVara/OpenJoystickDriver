@@ -42,8 +42,8 @@ final class VirtualControllerBackendTests: XCTestCase {
     XCTAssertTrue(!generic.isHardwareSpoof)
     XCTAssertTrue(!sdl.isHardwareSpoof)
     XCTAssertTrue(apple.isHardwareSpoof)
-    XCTAssertTrue(!x360.isHardwareSpoof)
-    XCTAssertTrue(x360.deviceProfile.productName == "OpenJoystickDriver X360")
+    XCTAssertTrue(x360.isHardwareSpoof)
+    XCTAssertTrue(x360.deviceProfile.productName == "ASTRO C40 TR Controller")
     XCTAssertTrue(xone.isHardwareSpoof)
     XCTAssertTrue(xone.emitsXboxGuideReport)
   }

@@ -627,7 +627,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       let identifiers = await dm.connectedDeviceIdentifiers()
       guard !identifiers.isEmpty else { return }
       for identifier in identifiers {
-        await ud.dispatch(events: [], from: identifier)
+        ud.dispatch(events: [], from: identifier)
       }
       userSpaceLock.withLock {
         if userSpaceDispatcher === ud {
@@ -785,16 +785,16 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       let userSpace = userSpaceLock.withLock { userSpaceDispatcher }
       try? await Task.sleep(nanoseconds: 250_000_000)
       await dextDispatcher.dispatch(events: [.buttonPressed(.a)], from: syntheticIdentifier)
-      await userSpace?.dispatch(events: [.buttonPressed(.a)], from: syntheticIdentifier)
+      userSpace?.dispatch(events: [.buttonPressed(.a)], from: syntheticIdentifier)
       try? await Task.sleep(nanoseconds: 250_000_000)
       await dextDispatcher.dispatch(events: [.buttonReleased(.a)], from: syntheticIdentifier)
-      await userSpace?.dispatch(events: [.buttonReleased(.a)], from: syntheticIdentifier)
+      userSpace?.dispatch(events: [.buttonReleased(.a)], from: syntheticIdentifier)
       try? await Task.sleep(nanoseconds: 250_000_000)
       await dextDispatcher.dispatch(
         events: [.leftStickChanged(x: 0.75, y: 0)],
         from: syntheticIdentifier
       )
-      await userSpace?.dispatch(
+      userSpace?.dispatch(
         events: [.leftStickChanged(x: 0.75, y: 0)],
         from: syntheticIdentifier
       )
@@ -803,7 +803,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         events: [.leftStickChanged(x: 0, y: 0)],
         from: syntheticIdentifier
       )
-      await userSpace?.dispatch(events: [.leftStickChanged(x: 0, y: 0)], from: syntheticIdentifier)
+      userSpace?.dispatch(events: [.leftStickChanged(x: 0, y: 0)], from: syntheticIdentifier)
     }
 
     try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)

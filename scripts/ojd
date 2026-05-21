@@ -40,10 +40,6 @@ Commands:
   diagnose sdl3 [--seconds N] Run SDL3 probe against the virtual device
   diagnose sdl3-gamecontroller [--seconds N]
                               Run SDL3 through GameController/MFI and test rumble
-  diagnose sdl3-patched [--seconds N]
-                              Run SDL3 probe against patched submodule SDL
-  diagnose sdl3-patched-gamecontroller [--seconds N]
-                              Run patched submodule SDL3 through GameController/MFI and test rumble
   diagnose sdl3-hidapi-x360 [--seconds N]
                               Run SDL3 through Xbox 360 HIDAPI and test rumble
   diagnose pcsx2-sdl3 [--seconds N]
@@ -65,10 +61,6 @@ Commands:
                               Launch an SDL app through GameController/MFI rumble route
   install pcsx2-sdl-db        Install merged PCSX2 SDL DB in user data dir
   install pcsx2-profile       Install the PCSX2 SDL-0 input profile
-  sdl patch                   Apply repo-local SDL patches to External/SDL
-  sdl build-patched           Build patched SDL submodule under .build/sdl-ojd
-  sdl build-pcsx2-patched     Build x86_64 patched SDL for PCSX2 override testing
-  sdl pcsx2-override ...      Temporarily symlink PCSX2 to patched SDL
   rtk install-filters         Create/update project-local RTK filters without duplicates
 
   notarize submit             Submit + poll + staple (release only)
@@ -197,12 +189,6 @@ case "$cmd" in
       sdl3-gamecontroller)
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" sdl3-gamecontroller "$@"
         ;;
-      sdl3-patched)
-        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" sdl3-patched "$@"
-        ;;
-      sdl3-patched-gamecontroller)
-        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" sdl3-patched-gamecontroller "$@"
-        ;;
       sdl3-hidapi-x360)
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" sdl3-hidapi-x360 "$@"
         ;;
@@ -231,7 +217,7 @@ case "$cmd" in
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-diagnose.sh" backends "$@"
         ;;
       *)
-        die "Unknown: diagnose $sub (expected: dext | sdl3 | sdl3-gamecontroller | sdl3-patched | sdl3-patched-gamecontroller | sdl3-hidapi-x360 | pcsx2-sdl3 | pcsx2-gamecontroller | pcsx2-hidapi-x360 | pcsx2-live | gamecontroller | catalina | pcsx2-latency | backends)"
+        die "Unknown: diagnose $sub (expected: dext | sdl3 | sdl3-gamecontroller | sdl3-hidapi-x360 | pcsx2-sdl3 | pcsx2-gamecontroller | pcsx2-hidapi-x360 | pcsx2-live | gamecontroller | catalina | pcsx2-latency | backends)"
         ;;
     esac
     ;;
@@ -288,10 +274,6 @@ case "$cmd" in
         die "Unknown: install $sub (expected: pcsx2-sdl-db | pcsx2-profile)"
         ;;
     esac
-    ;;
-
-  sdl)
-    exec /usr/bin/env bash "$SCRIPT_DIR/ojd-sdl.sh" "$@"
     ;;
 
   lint)
