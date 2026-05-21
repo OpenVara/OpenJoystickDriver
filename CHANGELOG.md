@@ -2,6 +2,17 @@
 
 All notable changes to OpenJoystickDriver are documented in this file.
 
+## 0.2.0
+
+### Added
+
+- Added stock SDL HIDAPI-compatible Xbox 360 rumble path for PCSX2 and SDL apps.
+- Added release automation for app bundle versions and drag-and-drop DMG packaging.
+
+### Changed
+
+- Switched release packaging from zip-only distribution to a standard macOS DMG.
+
 ## 0.1.0-rc.2
 
 ### Added

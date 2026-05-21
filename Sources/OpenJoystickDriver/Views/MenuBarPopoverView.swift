@@ -34,6 +34,8 @@ struct MenuBarPopoverView: View {
         inputTestRow
         selfTestRow
         Divider()
+        updateRow
+        Divider()
         footerRow
       }
       .padding(12)
@@ -366,6 +368,49 @@ struct MenuBarPopoverView: View {
       Spacer()
     }
     .font(.caption)
+  }
+
+  private var updateRow: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(spacing: 8) {
+        Text("Updates").font(.subheadline)
+        Spacer()
+        SwiftUI.Button(updateButtonTitle) {
+          Task { await model.checkForUpdates() }
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+        .disabled(model.updateCheckState == .checking)
+      }
+
+      switch model.updateCheckState {
+      case .idle:
+        Text("Current version: \(model.appVersion)").font(.caption).foregroundColor(.secondary)
+      case .checking:
+        Text("Checking GitHub releases…").font(.caption).foregroundColor(.secondary)
+      case .upToDate(let version):
+        Text("OpenJoystickDriver \(version) is current.").font(.caption).foregroundColor(.green)
+      case .available(let info):
+        HStack(spacing: 8) {
+          Text("OpenJoystickDriver \(info.tagName) is available.")
+            .font(.caption)
+            .foregroundColor(.orange)
+          Spacer()
+          SwiftUI.Button("Open") { model.openLatestRelease() }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+        }
+      case .failed(let message):
+        Text("Update check failed: \(message)")
+          .font(.caption)
+          .foregroundColor(.orange)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+  }
+
+  private var updateButtonTitle: String {
+    model.updateCheckState == .checking ? "Checking…" : "Check"
   }
 }
 
