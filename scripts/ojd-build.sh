@@ -53,7 +53,7 @@ _require_codesign_identity() {
 
 _codesign_identity_available() {
   local identity="$1"
-  security find-identity -v -p codesigning 2>/dev/null | grep -F "$identity" >/dev/null
+  security find-identity -v -p codesigning 2>/dev/null | grep -Fi "$identity" >/dev/null
 }
 
 # ---------------------------------------------------------------------------
