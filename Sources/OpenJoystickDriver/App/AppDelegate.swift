@@ -9,7 +9,8 @@ import SwiftUI
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
   private var statusItem: NSStatusItem?
   private var popover: NSPopover?
-  private var statusItemRightClickMonitor: Any?
+  private var statusItemLocalRightClickMonitor: Any?
+  private var statusItemGlobalRightClickMonitor: Any?
   private(set) var model: AppModel
 
   init(developerMode: Bool = false) { self.model = AppModel(developerMode: developerMode) }
@@ -63,15 +64,18 @@ import SwiftUI
 
   @objc private func handleStatusItemClick(_ sender: Any?) {
     if NSApp.currentEvent?.type == .rightMouseDown {
-      showStatusMenu()
+      showPopover(sender)
     } else {
       togglePopover(sender)
     }
   }
 
   private func installStatusItemRightClickMonitor() {
-    guard statusItemRightClickMonitor == nil else { return }
-    statusItemRightClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) {
+    guard statusItemLocalRightClickMonitor == nil, statusItemGlobalRightClickMonitor == nil else {
+      return
+    }
+
+    statusItemLocalRightClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) {
       [weak self] event in
       guard let self, let button = self.statusItem?.button, event.window === button.window else {
         return event
@@ -80,79 +84,52 @@ import SwiftUI
       let point = button.convert(event.locationInWindow, from: nil)
       guard button.bounds.contains(point) else { return event }
 
-      self.showStatusMenu()
+      self.showPopover(event)
       return nil
     }
+
+    statusItemGlobalRightClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.rightMouseDown]) {
+      [weak self] event in
+      Task { @MainActor [weak self] in
+        guard let self, self.eventIsInsideStatusItem(event) else { return }
+        self.showPopover(event)
+      }
+    }
   }
 
-  private func showStatusMenu() {
-    guard let button = statusItem?.button else {
-      togglePopover(nil)
-      return
-    }
-
-    let menu = NSMenu()
-    let openItem = NSMenuItem(
-      title: "Open OpenJoystickDriver",
-      action: #selector(openFromStatusMenu(_:)),
-      keyEquivalent: ""
-    )
-    openItem.target = self
-    let quitItem = NSMenuItem(
-      title: "Quit OpenJoystickDriver",
-      action: #selector(quitFromStatusMenu(_:)),
-      keyEquivalent: ""
-    )
-    quitItem.target = self
-
-    if #available(macOS 11.0, *) {
-      openItem.image = NSImage(
-        systemSymbolName: "rectangle.grid.1x2",
-        accessibilityDescription: "Open"
-      )
-      quitItem.image = NSImage(
-        systemSymbolName: "power",
-        accessibilityDescription: "Quit"
-      )
-    }
-
-    menu.addItem(openItem)
-    menu.addItem(.separator())
-    menu.addItem(quitItem)
-    menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height), in: button)
-  }
-
-  @objc private func openFromStatusMenu(_ sender: Any?) {
-    if popover?.isShown == true {
-      return
-    }
-    togglePopover(sender)
-  }
-
-  @objc private func quitFromStatusMenu(_ sender: Any?) {
-    NSApplication.shared.terminate(sender)
+  private func eventIsInsideStatusItem(_ event: NSEvent) -> Bool {
+    guard let frame = statusItem?.button?.window?.frame else { return false }
+    return frame.contains(event.locationInWindow)
   }
 
   @objc private func togglePopover(_ sender: Any?) {
-    guard let button = statusItem?.button else { return }
-
-    if popover == nil {
-      let pop = NSPopover()
-      pop.behavior = .transient
-      let contentView = MenuBarPopoverView().environmentObject(model)
-      let controller = NSHostingController(rootView: contentView)
-      pop.contentViewController = controller
-      pop.contentSize = NSSize(width: 440, height: 560)
-      popover = pop
-    }
+    ensurePopover()
 
     guard let popover else { return }
     if popover.isShown {
       popover.performClose(sender)
     } else {
-      popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-      NSApp.activate(ignoringOtherApps: true)
+      showPopover(sender)
     }
+  }
+
+  private func showPopover(_ sender: Any?) {
+    guard let button = statusItem?.button else { return }
+    ensurePopover()
+    guard let popover, !popover.isShown else { return }
+    popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    NSApp.activate(ignoringOtherApps: true)
+  }
+
+  private func ensurePopover() {
+    guard popover == nil else { return }
+    let pop = NSPopover()
+    pop.behavior = .transient
+    let contentView = MenuBarPopoverView().environmentObject(model)
+    let controller = NSHostingController(rootView: contentView)
+    pop.contentViewController = controller
+    pop.contentSize = NSSize(width: 440, height: 560)
+    popover = pop
   }
 
 }
