@@ -108,7 +108,8 @@ public final class ForegroundConsumerCompatibilityDispatcherPool:
     let created: (any CompatibilityUserSpaceOutputDispatching)?
     let identifiers: [DeviceIdentifier]
 
-    if let existing = lock.withLock { dedicatedDispatchers[routeToken] } {
+    let existing = lock.withLock { dedicatedDispatchers[routeToken] }
+    if let existing {
       existing.suppressOutput = suppressOutput
       return
     }
