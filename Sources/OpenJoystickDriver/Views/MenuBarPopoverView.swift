@@ -232,23 +232,46 @@ struct MenuBarPopoverView: View {
       VStack(alignment: .leading, spacing: 8) {
         PermissionRow(
           title: "OpenJoystickDriver",
-          subtitle: "Lets the app ask macOS for Input Monitoring.",
+          subtitle: permissionSubtitle(for: model.appInputMonitoring, owner: "the app"),
           state: model.appInputMonitoring,
-          actionTitle: "Grant App"
+          actionTitle: permissionActionTitle(for: model.appInputMonitoring, owner: "App")
         ) {
-          Task { await model.requestAppInputMonitoringAccess() }
+          if model.appInputMonitoring == "denied" {
+            model.openInputMonitoringSettings()
+          } else {
+            Task { await model.requestAppInputMonitoringAccess() }
+          }
         }
         Divider()
         PermissionRow(
           title: "Helper",
-          subtitle: "Lets the background driver read controller input.",
+          subtitle: permissionSubtitle(for: model.inputMonitoring, owner: "the helper"),
           state: model.inputMonitoring,
-          actionTitle: "Grant Helper",
-          disabled: !model.daemonConnected
+          actionTitle: permissionActionTitle(for: model.inputMonitoring, owner: "Helper"),
+          disabled: !model.daemonConnected && model.inputMonitoring != "denied"
         ) {
-          Task { await model.requestDaemonInputMonitoringAccess() }
+          if model.inputMonitoring == "denied" {
+            model.openInputMonitoringSettings()
+          } else {
+            Task { await model.requestDaemonInputMonitoringAccess() }
+          }
         }
       }
+    }
+  }
+
+  private func permissionActionTitle(for state: String, owner: String) -> String {
+    state == "denied" ? "Open Settings" : "Grant \(owner)"
+  }
+
+  private func permissionSubtitle(for state: String, owner: String) -> String {
+    switch state {
+    case "granted":
+      return "Ready."
+    case "denied":
+      return "Open System Settings and turn on Input Monitoring for \(owner)."
+    default:
+      return "Lets \(owner) read controller input."
     }
   }
 

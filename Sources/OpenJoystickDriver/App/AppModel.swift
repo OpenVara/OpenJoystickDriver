@@ -283,6 +283,9 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
 
   func requestAppInputMonitoringAccess() async {
     appInputMonitoring = "\(await permissionManager.requestAccess())"
+    if appInputMonitoring == "denied" {
+      openInputMonitoringSettings()
+    }
   }
 
   func requestDaemonInputMonitoringAccess() async {
@@ -292,10 +295,19 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     }
     do {
       inputMonitoring = try await client.requestInputMonitoringAccess()
+      if inputMonitoring == "denied" {
+        openInputMonitoringSettings()
+      }
       await syncFromDaemonNow()
     } catch {
       daemonError = formatDaemonError(error)
     }
+  }
+
+  func openInputMonitoringSettings() {
+    let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
+    if let url, NSWorkspace.shared.open(url) { return }
+    NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
   }
 
   // MARK: - Private
