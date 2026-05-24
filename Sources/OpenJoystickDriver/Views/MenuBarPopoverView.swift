@@ -81,19 +81,19 @@ struct MenuBarPopoverView: View {
   private var readinessCard: some View {
     let daemonStatusLabel =
       model.daemonRestarting
-      ? "restarting..."
+      ? "restarting…"
       : (model.daemonConnected ? "running" : (model.daemonInstalled ? "installed" : "missing"))
     let permissionsReady =
       model.appInputMonitoring == "granted" && model.inputMonitoring == "granted"
     let ready = model.daemonConnected && permissionsReady
-    let title = ready ? "Ready for games" : "Setup needs attention"
+    let title = ready ? "Ready" : "Setup needs attention"
     let summary: String = {
       if model.daemonRestarting { return "The helper is restarting." }
       if !model.daemonInstalled { return "Install the helper to read controller input." }
       if !model.daemonConnected { return "Start the helper to connect controllers." }
-      if model.appInputMonitoring != "granted" { return "Grant Input Monitoring for OpenJoystickDriver." }
-      if model.inputMonitoring != "granted" { return "Grant Input Monitoring for OpenJoystickDriver Helper." }
-      if model.devices.isEmpty { return "Connect a controller to start playing." }
+      if model.appInputMonitoring != "granted" { return "Allow Input Monitoring for OpenJoystickDriver." }
+      if model.inputMonitoring != "granted" { return "Allow Input Monitoring for OpenJoystickDriver Helper." }
+      if model.devices.isEmpty { return "Connect a controller." }
       return "\(model.devices.count) controller\(model.devices.count == 1 ? "" : "s") connected."
     }()
 
@@ -161,13 +161,13 @@ struct MenuBarPopoverView: View {
       .controlSize(.small)
       .padding(.top, 2)
     } else if model.appInputMonitoring != "granted" {
-      SwiftUI.Button("Ask macOS") {
+      SwiftUI.Button("Request Access") {
         Task { await model.requestAppInputMonitoringAccess() }
       }
       .controlSize(.small)
       .padding(.top, 2)
     } else if model.inputMonitoring != "granted" {
-      SwiftUI.Button("Ask macOS") {
+      SwiftUI.Button("Request Access") {
         Task { await model.requestDaemonInputMonitoringAccess() }
       }
       .controlSize(.small)
@@ -301,7 +301,7 @@ struct MenuBarPopoverView: View {
   }
 
   private func permissionActionTitle(for state: String) -> String {
-    state == "granted" ? "Allowed" : "Ask macOS"
+    state == "granted" ? "Allowed" : "Request Access"
   }
 
   private func permissionSubtitle(
@@ -311,30 +311,30 @@ struct MenuBarPopoverView: View {
   ) -> String {
     switch state {
     case "granted":
-      return "Ready."
+      return "Access is allowed."
     case "denied":
       let name = settingsName ?? owner
-      return "Open System Settings and turn on Input Monitoring for \(name)."
+      return "Open System Settings, then turn on Input Monitoring for \(name)."
     default:
-      return "Ask macOS to add this item to Input Monitoring."
+      return "Request access so macOS can add this item to Input Monitoring."
     }
   }
 
   private var gameProfileCard: some View {
-    OJDCard(title: "Games") {
+    OJDCard(title: "Game profile") {
       VStack(alignment: .leading, spacing: 10) {
         HStack(alignment: .top, spacing: 10) {
           VStack(alignment: .leading, spacing: 3) {
-            Text("Choose the game profile.")
+            Text("Select the profile apps should see.")
               .font(.caption.weight(.semibold))
-            Text("Compatibility works best for Steam, emulators, and most games.")
+            Text("Compatibility mode works well for Steam, emulators, and SDL-based apps.")
               .font(.caption)
               .foregroundColor(.secondary)
               .fixedSize(horizontal: false, vertical: true)
           }
           Spacer()
           if model.virtualDeviceMode != VirtualDeviceMode.compatUserSpace.rawValue {
-            SwiftUI.Button("Use for Games") {
+            SwiftUI.Button("Use Compatibility") {
               Task { await model.setVirtualDeviceMode(VirtualDeviceMode.compatUserSpace.rawValue) }
             }
             .controlSize(.small)
@@ -365,7 +365,7 @@ struct MenuBarPopoverView: View {
         }
 
         if !compatSelected {
-          Text("Switch to game mode before changing profiles.")
+          Text("Switch to Compatibility mode before changing profiles.")
             .font(.caption)
             .foregroundColor(.secondary)
         }
@@ -442,7 +442,7 @@ struct MenuBarPopoverView: View {
     OJDCard(title: "Self-test") {
       VStack(alignment: .leading, spacing: 8) {
       HStack {
-        Text("Verify virtual output for five seconds.")
+        Text("Check virtual output for 5 seconds.")
           .font(.caption)
           .foregroundColor(.secondary)
         Spacer()
@@ -476,17 +476,17 @@ struct MenuBarPopoverView: View {
           statusLine("User-space", "value \(t.userSpaceValueEvents), report \(t.userSpaceReportEvents)")
         }
       } else {
-        Text("Press buttons while it runs.").font(.caption).foregroundColor(.secondary)
+        Text("Press controller buttons during the check.").font(.caption).foregroundColor(.secondary)
       }
       }
     }
   }
 
   private var inputTestRow: some View {
-    OJDCard(title: "Input test") {
+    OJDCard(title: "Input Test") {
       VStack(alignment: .leading, spacing: 8) {
         HStack {
-          Text("Live buttons, sticks, packet log, and rumble.")
+          Text("View live buttons, sticks, packets, and rumble controls.")
             .font(.caption)
             .foregroundColor(.secondary)
           Spacer()
@@ -584,7 +584,7 @@ struct MenuBarPopoverView: View {
     case .idle: return "Current version \(model.appVersion)."
     case .checking: return "Checking GitHub releases…"
     case .upToDate(let version): return "OpenJoystickDriver \(version) is current."
-    case .available: return "A newer release is ready."
+    case .available: return "Update available."
     case .failed(let message): return "Update check failed: \(message)"
     }
   }
@@ -679,10 +679,10 @@ private struct PermissionRow: View {
 
   private var isGranted: Bool { state == "granted" }
   private var isDenied: Bool { state == "denied" }
-  private var symbol: String {
-    if isGranted { return "✓" }
-    if isDenied { return "!" }
-    return "…"
+  private var symbolName: String {
+    if isGranted { return "checkmark" }
+    if isDenied { return "exclamationmark" }
+    return "ellipsis"
   }
   private var statusLabel: String {
     switch state {
@@ -699,11 +699,7 @@ private struct PermissionRow: View {
 
   var body: some View {
     HStack(alignment: .center, spacing: 10) {
-      Text(symbol)
-        .font(.caption.weight(.bold))
-        .foregroundColor(statusColor)
-        .frame(width: 22, height: 22)
-        .background(Circle().fill(statusColor.opacity(0.12)))
+      permissionIndicator
 
       VStack(alignment: .leading, spacing: 2) {
         HStack(spacing: 6) {
@@ -722,6 +718,23 @@ private struct PermissionRow: View {
       SwiftUI.Button(actionTitle, action: action)
         .controlSize(.small)
         .disabled(disabled || isGranted)
+    }
+  }
+
+  @ViewBuilder
+  private var permissionIndicator: some View {
+    if #available(macOS 11.0, *) {
+      Image(systemName: symbolName)
+        .font(.system(size: 10, weight: .bold))
+        .foregroundColor(statusColor)
+        .frame(width: 22, height: 22)
+        .background(Circle().fill(statusColor.opacity(0.12)))
+    } else {
+      Text(isGranted ? "✓" : (isDenied ? "!" : "…"))
+        .font(.caption.weight(.bold))
+        .foregroundColor(statusColor)
+        .frame(width: 22, height: 22)
+        .background(Circle().fill(statusColor.opacity(0.12)))
     }
   }
 }
@@ -857,7 +870,7 @@ private struct InputTestWindowView: View {
             VStack(spacing: 10) {
               StatusOrb(isReady: false, isBusy: false)
               Text("No controller selected").font(.headline)
-              Text("Connect a controller or restart the helper, then refresh.")
+              Text("Connect a controller, then refresh.")
                 .font(.caption)
                 .foregroundColor(.secondary)
             }
@@ -893,7 +906,7 @@ private struct InputTestWindowView: View {
       VStack(alignment: .leading, spacing: 2) {
         Text("Input Test")
           .font(.system(size: 24, weight: .semibold))
-        Text("Live controller input and feedback checks.")
+        Text("Live input, packet log, and rumble controls.")
           .font(.caption)
           .foregroundColor(.secondary)
       }
@@ -954,7 +967,7 @@ private struct InputTestWindowView: View {
         }
         Spacer()
         VStack(alignment: .trailing, spacing: 4) {
-          Text(state == nil ? "Move any control" : "Input received")
+          Text(state == nil ? "Waiting for input" : "Reading input")
             .font(.caption.weight(.semibold))
           Text(buttonSummary)
             .font(.caption)
@@ -1096,7 +1109,7 @@ private struct InputTestWindowView: View {
     return OJDCard(title: "Rumble test") {
       VStack(alignment: .leading, spacing: 12) {
         HStack {
-          Text(canRumble ? "Send a short pulse to confirm feedback." : "This controller does not expose rumble.")
+          Text(canRumble ? "Send a short rumble command to the controller." : "This controller does not expose rumble.")
             .font(.caption)
             .foregroundColor(.secondary)
           Spacer()
@@ -1123,7 +1136,7 @@ private struct InputTestWindowView: View {
           HStack(spacing: 8) {
             rumbleIconButton(
               rumbleRunning ? "Sending" : "Pulse",
-              systemName: rumbleRunning ? "hourglass" : "waveform.path.ecg"
+              systemName: rumbleRunning ? "hourglass" : "dot.radiowaves.left.and.right"
             ) {
               sendRumble(to: device, durationMs: Int(rumbleDurationMs))
             }
@@ -1166,9 +1179,9 @@ private struct InputTestWindowView: View {
           }
           HStack(spacing: 8) {
             if let rumbleResult {
-              Text("Last rumble: \(rumbleResult)").font(.caption).foregroundColor(.secondary)
+              Text("Last command: \(rumbleResult)").font(.caption).foregroundColor(.secondary)
             } else {
-              Text("Rumble changes only affect the physical controller.")
+              Text("Rumble commands affect the physical controller only.")
                 .font(.caption)
                 .foregroundColor(.secondary)
             }
@@ -1208,7 +1221,7 @@ private struct InputTestWindowView: View {
 
   private func rumbleGlyphCaption(_ title: String) -> String {
     switch title {
-    case "Sending": return "..."
+    case "Sending": return "sending"
     case "Pulse": return "pulse"
     case "Hold": return "hold"
     case "Stop": return "stop"

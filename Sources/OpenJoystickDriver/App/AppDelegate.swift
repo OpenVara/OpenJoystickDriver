@@ -51,13 +51,69 @@ import SwiftUI
         button.image = NSImage(named: NSImage.actionTemplateName)
       }
       button.target = self
-      button.action = #selector(togglePopover(_:))
-      button.sendAction(on: [.leftMouseUp])
+      button.action = #selector(handleStatusItemClick(_:))
+      button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
     statusItem = item
   }
 
   // MARK: - Popover
+
+  @objc private func handleStatusItemClick(_ sender: Any?) {
+    if NSApp.currentEvent?.type == .rightMouseUp {
+      showStatusMenu()
+    } else {
+      togglePopover(sender)
+    }
+  }
+
+  private func showStatusMenu() {
+    guard let button = statusItem?.button else {
+      togglePopover(nil)
+      return
+    }
+
+    let menu = NSMenu()
+    let openItem = NSMenuItem(
+      title: "Open OpenJoystickDriver",
+      action: #selector(openFromStatusMenu(_:)),
+      keyEquivalent: ""
+    )
+    openItem.target = self
+    let quitItem = NSMenuItem(
+      title: "Quit OpenJoystickDriver",
+      action: #selector(quitFromStatusMenu(_:)),
+      keyEquivalent: ""
+    )
+    quitItem.target = self
+
+    if #available(macOS 11.0, *) {
+      openItem.image = NSImage(
+        systemSymbolName: "rectangle.grid.1x2",
+        accessibilityDescription: "Open"
+      )
+      quitItem.image = NSImage(
+        systemSymbolName: "power",
+        accessibilityDescription: "Quit"
+      )
+    }
+
+    menu.addItem(openItem)
+    menu.addItem(.separator())
+    menu.addItem(quitItem)
+    menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height), in: button)
+  }
+
+  @objc private func openFromStatusMenu(_ sender: Any?) {
+    if popover?.isShown == true {
+      return
+    }
+    togglePopover(sender)
+  }
+
+  @objc private func quitFromStatusMenu(_ sender: Any?) {
+    NSApplication.shared.terminate(sender)
+  }
 
   @objc private func togglePopover(_ sender: Any?) {
     guard let button = statusItem?.button else { return }
