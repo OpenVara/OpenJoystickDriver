@@ -759,7 +759,7 @@ private struct MiniBadge: View {
 }
 
 @MainActor private final class InputTestWindowController {
-  private let compactSize = NSSize(width: 780, height: 560)
+  private let compactSize = NSSize(width: 860, height: 560)
   private var window: NSWindow?
 
   func show(model: AppModel) {
@@ -802,28 +802,28 @@ private struct InputTestWindowView: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 14) {
+      VStack(alignment: .leading, spacing: 16) {
         header
         if let device = selectedDevice {
-          HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 10) {
-              deviceSummaryCard(device)
+          VStack(alignment: .leading, spacing: 14) {
+            controllerHero(device)
+            HStack(alignment: .top, spacing: 16) {
               OJDCard(title: "Live input") {
                 axesGrid
                 Divider()
                 buttonGrid
               }
-            }
-            .frame(width: 330, alignment: .topLeading)
+              .frame(width: 350, alignment: .topLeading)
 
-            VStack(alignment: .leading, spacing: 10) {
-              outputTestRow(device)
-              packetLogToggle
-              if showPackets {
-                packetLogView
+              VStack(alignment: .leading, spacing: 12) {
+                outputTestRow(device)
+                packetLogToggle
+                if showPackets {
+                  packetLogView
+                }
               }
+              .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
           }
         } else {
           OJDCard {
@@ -838,9 +838,9 @@ private struct InputTestWindowView: View {
           }
         }
       }
-      .padding(16)
+      .padding(18)
     }
-    .frame(minWidth: 780, minHeight: 560)
+    .frame(minWidth: 860, minHeight: 560)
     .onAppear {
       selectedDeviceID = selectedDeviceID ?? model.devices.first?.id
       startRefreshTasks()
@@ -864,47 +864,71 @@ private struct InputTestWindowView: View {
     HStack(spacing: 12) {
       VStack(alignment: .leading, spacing: 2) {
         Text("Input Test")
-          .font(.system(size: 20, weight: .semibold))
-        Text("Check what games will see from this controller.")
+          .font(.system(size: 24, weight: .semibold))
+        Text("Live controller input and feedback checks.")
           .font(.caption)
           .foregroundColor(.secondary)
       }
       Spacer()
-      Picker("Controller", selection: Binding(get: {
-        selectedDevice?.id ?? ""
-      }, set: { value in
-        selectedDeviceID = value
-      })) {
-        ForEach(model.devices) { device in
-          Text(device.name).tag(device.id)
+      HStack(spacing: 8) {
+        Text("Controller")
+          .font(.caption.weight(.semibold))
+          .foregroundColor(.secondary)
+        Picker("", selection: Binding(get: {
+          selectedDevice?.id ?? ""
+        }, set: { value in
+          selectedDeviceID = value
+        })) {
+          ForEach(model.devices) { device in
+            Text(device.name).tag(device.id)
+          }
         }
-      }
-      .frame(width: 260)
-      .disabled(model.devices.isEmpty)
-      SwiftUI.Button("Refresh") {
-        Task {
-          await model.syncFromDaemonNow()
-          await refreshState()
-          await refreshPacketLog()
+        .labelsHidden()
+        .frame(width: 260)
+        .disabled(model.devices.isEmpty)
+        SwiftUI.Button("Refresh") {
+          Task {
+            await model.syncFromDaemonNow()
+            await refreshState()
+            await refreshPacketLog()
+          }
         }
+        .controlSize(.small)
       }
-      .controlSize(.small)
     }
   }
 
-  private func deviceSummaryCard(_ device: DeviceViewModel) -> some View {
+  private func controllerHero(_ device: DeviceViewModel) -> some View {
     OJDCard {
-      VStack(alignment: .leading, spacing: 8) {
-        Text(device.name)
-          .font(.system(size: 15, weight: .semibold))
-          .lineLimit(2)
-        HStack(spacing: 8) {
-          MiniBadge(device.parser)
-          MiniBadge(device.connection)
-          MiniBadge(String(format: "%04X:%04X", device.vendorID, device.productID))
+      HStack(alignment: .center, spacing: 14) {
+        StatusOrb(isReady: state != nil, isBusy: false)
+        VStack(alignment: .leading, spacing: 7) {
+          HStack(spacing: 8) {
+            Text(device.name)
+              .font(.system(size: 19, weight: .semibold))
+              .lineLimit(1)
+            Text(state == nil ? "idle" : "live")
+              .font(.system(size: 10, weight: .bold))
+              .foregroundColor(state == nil ? .secondary : .green)
+              .padding(.horizontal, 7)
+              .padding(.vertical, 3)
+              .background(Capsule().fill((state == nil ? Color.secondary : Color.green).opacity(0.12)))
+          }
+          HStack(spacing: 7) {
+            MiniBadge(device.parser)
+            MiniBadge(device.connection)
+            MiniBadge(String(format: "%04X:%04X", device.vendorID, device.productID))
+            if let serial = device.serialNumber, !serial.isEmpty {
+              MiniBadge("Serial \(serial)")
+                .layoutPriority(-1)
+            }
+          }
         }
-        if let serial = device.serialNumber, !serial.isEmpty {
-          Text("Serial \(serial)")
+        Spacer()
+        VStack(alignment: .trailing, spacing: 4) {
+          Text(state == nil ? "Move any control" : "Input received")
+            .font(.caption.weight(.semibold))
+          Text(buttonSummary)
             .font(.caption)
             .foregroundColor(.secondary)
             .lineLimit(1)
@@ -918,19 +942,19 @@ private struct InputTestWindowView: View {
       HStack {
         Text("Sticks and triggers").font(.caption.weight(.semibold))
         Spacer()
-        Text(state == nil ? "waiting" : "live")
+        Text(state == nil ? "idle" : "live")
           .font(.system(size: 10, weight: .semibold))
           .foregroundColor(state == nil ? .secondary : .green)
       }
-      HStack(spacing: 10) {
+      HStack(spacing: 12) {
         AxisMeter(label: "Left X", value: state?.leftStickX ?? 0, range: -1...1)
         AxisMeter(label: "Left Y", value: state?.leftStickY ?? 0, range: -1...1)
       }
-      HStack(spacing: 10) {
+      HStack(spacing: 12) {
         AxisMeter(label: "Right X", value: state?.rightStickX ?? 0, range: -1...1)
         AxisMeter(label: "Right Y", value: state?.rightStickY ?? 0, range: -1...1)
       }
-      HStack(spacing: 10) {
+      HStack(spacing: 12) {
         AxisMeter(label: "LT", value: state?.leftTrigger ?? 0, range: 0...1)
         AxisMeter(label: "RT", value: state?.rightTrigger ?? 0, range: 0...1)
       }
@@ -964,6 +988,14 @@ private struct InputTestWindowView: View {
         }
       }
     }
+  }
+
+  private var buttonSummary: String {
+    let pressed = state?.pressedButtons ?? []
+    if pressed.isEmpty {
+      return "No buttons pressed"
+    }
+    return "\(pressed.count) button\(pressed.count == 1 ? "" : "s") pressed"
   }
 
   @ViewBuilder
@@ -1025,7 +1057,7 @@ private struct InputTestWindowView: View {
   private func outputTestRow(_ device: DeviceViewModel) -> some View {
     let canRumble = device.supportsPhysicalRumble
     return OJDCard(title: "Rumble test") {
-      VStack(alignment: .leading, spacing: 8) {
+      VStack(alignment: .leading, spacing: 12) {
         HStack {
           Text(canRumble ? "Send a short pulse to confirm feedback." : "This controller does not expose rumble.")
             .font(.caption)
@@ -1035,14 +1067,19 @@ private struct InputTestWindowView: View {
             .font(.system(size: 10, weight: .semibold))
             .foregroundColor(canRumble ? .green : .secondary)
         }
-        HStack(alignment: .top, spacing: 18) {
-          VStack(alignment: .leading, spacing: 4) {
-            RumbleSlider(label: "L", value: $rumbleLeft)
-            RumbleSlider(label: "R", value: $rumbleRight)
-          }
-          VStack(alignment: .leading, spacing: 4) {
-            RumbleSlider(label: "LT", value: $rumbleLT)
-            RumbleSlider(label: "RT", value: $rumbleRT)
+        VStack(alignment: .leading, spacing: 7) {
+          Text("Motors")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(.secondary)
+          HStack(alignment: .top, spacing: 18) {
+            VStack(alignment: .leading, spacing: 5) {
+              RumbleSlider(label: "Left", value: $rumbleLeft)
+              RumbleSlider(label: "Right", value: $rumbleRight)
+            }
+            VStack(alignment: .leading, spacing: 5) {
+              RumbleSlider(label: "LT", value: $rumbleLT)
+              RumbleSlider(label: "RT", value: $rumbleRT)
+            }
           }
         }
         VStack(alignment: .leading, spacing: 6) {
@@ -1204,7 +1241,12 @@ private struct InputTestWindowView: View {
       HStack {
         Text(showPackets ? "Hide packet log" : "Show packet log")
         Spacer()
-        Text(showPackets ? "▴" : "▾")
+        if #available(macOS 11.0, *) {
+          Image(systemName: showPackets ? "chevron.up" : "chevron.down")
+            .font(.system(size: 10, weight: .semibold))
+        } else {
+          Text(showPackets ? "▴" : "▾")
+        }
       }
       .font(.caption.weight(.semibold))
       .foregroundColor(.secondary)
@@ -1263,9 +1305,9 @@ private struct RumbleSlider: View {
     HStack(spacing: 8) {
       Text(label)
         .font(.caption.weight(.semibold))
-        .frame(width: 24, alignment: .leading)
+        .frame(width: 34, alignment: .leading)
       Slider(value: $value, in: 0...255, step: 1)
-        .frame(width: 110)
+        .frame(width: 116)
       Text("\(Int(value))")
         .font(.system(.caption, design: .monospaced))
         .frame(width: 30, alignment: .trailing)
