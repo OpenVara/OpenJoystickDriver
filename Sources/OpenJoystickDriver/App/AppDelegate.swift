@@ -50,22 +50,10 @@ import SwiftUI
       } else {
         button.image = NSImage(named: NSImage.actionTemplateName)
       }
+      button.target = self
+      button.action = #selector(togglePopover(_:))
+      button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
-    let menu = NSMenu()
-    let openItem = NSMenuItem(
-      title: "Open OpenJoystickDriver",
-      action: #selector(togglePopover(_:)),
-      keyEquivalent: ""
-    )
-    openItem.target = self
-    menu.addItem(openItem)
-    menu.addItem(.separator())
-    menu.addItem(NSMenuItem(
-      title: "Quit OpenJoystickDriver",
-      action: #selector(NSApplication.terminate(_:)),
-      keyEquivalent: "q"
-    ))
-    item.menu = menu
     statusItem = item
   }
 
@@ -80,7 +68,7 @@ import SwiftUI
       let contentView = MenuBarPopoverView().environmentObject(model)
       let controller = NSHostingController(rootView: contentView)
       pop.contentViewController = controller
-      pop.contentSize = NSSize(width: 420, height: 460)
+      pop.contentSize = NSSize(width: 440, height: 560)
       popover = pop
     }
 
