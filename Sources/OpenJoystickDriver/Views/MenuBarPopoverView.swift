@@ -833,7 +833,7 @@ private struct InputTestWindowView: View {
       VStack(alignment: .leading, spacing: 2) {
         Text("Input Test")
           .font(.system(size: 20, weight: .semibold))
-        Text("Move a stick, press a button, or test physical rumble.")
+        Text("Check what games will see from this controller.")
           .font(.caption)
           .foregroundColor(.secondary)
       }
@@ -891,12 +891,12 @@ private struct InputTestWindowView: View {
           .foregroundColor(state == nil ? .secondary : .green)
       }
       HStack(spacing: 10) {
-        AxisMeter(label: "LX", value: state?.leftStickX ?? 0, range: -1...1)
-        AxisMeter(label: "LY", value: state?.leftStickY ?? 0, range: -1...1)
+        AxisMeter(label: "Left X", value: state?.leftStickX ?? 0, range: -1...1)
+        AxisMeter(label: "Left Y", value: state?.leftStickY ?? 0, range: -1...1)
       }
       HStack(spacing: 10) {
-        AxisMeter(label: "RX", value: state?.rightStickX ?? 0, range: -1...1)
-        AxisMeter(label: "RY", value: state?.rightStickY ?? 0, range: -1...1)
+        AxisMeter(label: "Right X", value: state?.rightStickX ?? 0, range: -1...1)
+        AxisMeter(label: "Right Y", value: state?.rightStickY ?? 0, range: -1...1)
       }
       HStack(spacing: 10) {
         AxisMeter(label: "LT", value: state?.leftTrigger ?? 0, range: 0...1)
@@ -911,7 +911,13 @@ private struct InputTestWindowView: View {
     let columnCount = 6
     let rowCount = (buttons.count + columnCount - 1) / columnCount
     return VStack(alignment: .leading, spacing: 6) {
-      Text("Buttons").font(.caption.weight(.semibold))
+      HStack {
+        Text("Buttons").font(.caption.weight(.semibold))
+        Spacer()
+        Text(pressed.isEmpty ? "none pressed" : "\(pressed.count) pressed")
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundColor(pressed.isEmpty ? .secondary : .accentColor)
+      }
       VStack(alignment: .leading, spacing: 6) {
         ForEach(0..<rowCount, id: \.self) { row in
           HStack(spacing: 6) {
@@ -986,10 +992,10 @@ private struct InputTestWindowView: View {
 
   private func outputTestRow(_ device: DeviceViewModel) -> some View {
     let canRumble = device.supportsPhysicalRumble
-    return OJDCard(title: "Physical output") {
+    return OJDCard(title: "Rumble test") {
       VStack(alignment: .leading, spacing: 8) {
         HStack {
-          Text(canRumble ? "Rumble is available for this controller." : "This controller does not expose physical rumble.")
+          Text(canRumble ? "Send a short pulse to confirm feedback." : "This controller does not expose rumble.")
             .font(.caption)
             .foregroundColor(.secondary)
           Spacer()
@@ -1053,11 +1059,12 @@ private struct InputTestWindowView: View {
             }
           }
           HStack(spacing: 8) {
-            Text("LED is not exposed.")
-              .font(.caption)
-              .foregroundColor(.secondary)
             if let rumbleResult {
-              Text("Rumble: \(rumbleResult)").font(.caption).foregroundColor(.secondary)
+              Text("Last rumble: \(rumbleResult)").font(.caption).foregroundColor(.secondary)
+            } else {
+              Text("Rumble changes only affect the physical controller.")
+                .font(.caption)
+                .foregroundColor(.secondary)
             }
           }
         }
