@@ -787,7 +787,30 @@ private struct MiniBadge: View {
   }
 }
 
+private actor InputTestSampler {
+  private let client = XPCClient()
+
+  init() {
+    client.connect()
+  }
+
+  func disconnect() {
+    client.disconnect()
+  }
+
+  func deviceInputState(vendorID: UInt16, productID: UInt16) async -> DeviceInputState? {
+    try? await client.deviceInputState(vendorID: vendorID, productID: productID)
+  }
+
+  func packetLog(vendorID: UInt16, productID: UInt16) async -> [PacketLogEntry] {
+    (try? await client.packetLog(vendorID: vendorID, productID: productID)) ?? []
+  }
+}
+
 private struct InputTestWindowView: View {
+  private let inputRefreshIntervalNanoseconds: UInt64 = 8_333_333
+  private let packetLogRefreshIntervalNanoseconds: UInt64 = 1_000_000_000
+
   @EnvironmentObject var model: AppModel
   @State private var selectedDeviceID: String?
   @State private var state: DeviceInputState?
@@ -802,6 +825,7 @@ private struct InputTestWindowView: View {
   @State private var showPackets = false
   @State private var stateTask: Task<Void, Never>?
   @State private var packetLogTask: Task<Void, Never>?
+  @State private var sampler = InputTestSampler()
 
   var body: some View {
     ScrollView {
@@ -853,6 +877,7 @@ private struct InputTestWindowView: View {
       packetLogTask?.cancel()
       stateTask = nil
       packetLogTask = nil
+      Task { await sampler.disconnect() }
     }
   }
 
@@ -1268,7 +1293,7 @@ private struct InputTestWindowView: View {
       stateTask = Task {
         while !Task.isCancelled {
           await refreshState()
-          try? await Task.sleep(nanoseconds: 33_000_000)
+          try? await Task.sleep(nanoseconds: inputRefreshIntervalNanoseconds)
         }
       }
     }
@@ -1276,7 +1301,7 @@ private struct InputTestWindowView: View {
       packetLogTask = Task {
         await refreshPacketLog()
         while !Task.isCancelled {
-          try? await Task.sleep(nanoseconds: 1_000_000_000)
+          try? await Task.sleep(nanoseconds: packetLogRefreshIntervalNanoseconds)
           await refreshPacketLog()
         }
       }
@@ -1288,7 +1313,13 @@ private struct InputTestWindowView: View {
       state = nil
       return
     }
-    state = await model.deviceInputState(vendorID: device.vendorID, productID: device.productID)
+    let nextState = await sampler.deviceInputState(
+      vendorID: device.vendorID,
+      productID: device.productID
+    )
+    if state != nextState {
+      state = nextState
+    }
   }
 
   private func refreshPacketLog() async {
@@ -1296,7 +1327,7 @@ private struct InputTestWindowView: View {
       packetLog = []
       return
     }
-    packetLog = await model.packetLog(vendorID: device.vendorID, productID: device.productID)
+    packetLog = await sampler.packetLog(vendorID: device.vendorID, productID: device.productID)
   }
 }
 
