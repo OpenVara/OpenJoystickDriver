@@ -106,26 +106,26 @@ trap '/usr/bin/hdiutil detach "$mount_dir" -quiet 2>/dev/null || true' EXIT
 if ! OJD_DMG_MOUNT_DIR="$mount_dir" /usr/bin/osascript <<'OSA'
 on run argv
   set mountPath to system attribute "OJD_DMG_MOUNT_DIR"
-  set volumeRoot to POSIX file mountPath as alias
+  set volumeName to "OpenJoystickDriver"
   set backgroundPath to POSIX file (mountPath & "/.background/background.png") as alias
   tell application "Finder"
-    tell volumeRoot
-      open
-      set current view of container window to icon view
-      set toolbar visible of container window to false
-      set statusbar visible of container window to false
-      set the bounds of container window to {100, 100, 760, 500}
-      set viewOptions to the icon view options of container window
-      set arrangement of viewOptions to not arranged
-      set icon size of viewOptions to 96
-      set background picture of viewOptions to backgroundPath
-      set position of item "OpenJoystickDriver.app" of container window to {160, 205}
-      set position of item "Applications" of container window to {520, 205}
-      close
-      open
-      update without registering applications
-      delay 1
-    end tell
+    set volumeDisk to disk volumeName
+    open volumeDisk
+    set containerWindow to container window of volumeDisk
+    set current view of containerWindow to icon view
+    set toolbar visible of containerWindow to false
+    set statusbar visible of containerWindow to false
+    set the bounds of containerWindow to {100, 100, 760, 500}
+    set viewOptions to the icon view options of containerWindow
+    set arrangement of viewOptions to not arranged
+    set icon size of viewOptions to 96
+    set background picture of viewOptions to backgroundPath
+    set position of item "OpenJoystickDriver.app" of volumeDisk to {160, 205}
+    set position of item "Applications" of volumeDisk to {520, 205}
+    close containerWindow
+    open volumeDisk
+    update volumeDisk without registering applications
+    delay 1
   end tell
 end run
 OSA
