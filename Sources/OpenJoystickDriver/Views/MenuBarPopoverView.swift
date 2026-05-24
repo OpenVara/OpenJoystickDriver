@@ -159,21 +159,13 @@ struct MenuBarPopoverView: View {
       .padding(.top, 2)
     } else if model.appInputMonitoring != "granted" {
       SwiftUI.Button("Open Settings") {
-        if model.appInputMonitoring == "denied" {
-          model.openInputMonitoringSettings()
-        } else {
-          Task { await model.requestAppInputMonitoringAccess() }
-        }
+        Task { await model.requestAppInputMonitoringAccess() }
       }
       .controlSize(.small)
       .padding(.top, 2)
     } else if model.inputMonitoring != "granted" {
       SwiftUI.Button("Open Settings") {
-        if model.inputMonitoring == "denied" {
-          model.openInputMonitoringSettings()
-        } else {
-          Task { await model.requestDaemonInputMonitoringAccess() }
-        }
+        Task { await model.requestDaemonInputMonitoringAccess() }
       }
       .controlSize(.small)
       .padding(.top, 2)
@@ -282,11 +274,7 @@ struct MenuBarPopoverView: View {
           state: model.appInputMonitoring,
           actionTitle: permissionActionTitle(for: model.appInputMonitoring)
         ) {
-          if model.appInputMonitoring == "denied" {
-            model.openInputMonitoringSettings()
-          } else {
-            Task { await model.requestAppInputMonitoringAccess() }
-          }
+          Task { await model.requestAppInputMonitoringAccess() }
         }
         Divider()
         PermissionRow(
@@ -300,11 +288,10 @@ struct MenuBarPopoverView: View {
           actionTitle: permissionActionTitle(for: model.inputMonitoring),
           disabled: !model.daemonConnected && model.inputMonitoring != "denied"
         ) {
-          if model.inputMonitoring == "denied" {
-            model.openInputMonitoringSettings()
-          } else {
-            Task { await model.requestDaemonInputMonitoringAccess() }
-          }
+          Task { await model.requestDaemonInputMonitoringAccess() }
+        }
+        if let assist = model.inputMonitoringAssist {
+          PermissionAssistView(message: assist)
         }
       }
     }
@@ -326,7 +313,7 @@ struct MenuBarPopoverView: View {
       let name = settingsName ?? owner
       return "Open System Settings and turn on Input Monitoring for \(name)."
     default:
-      return "Open System Settings if macOS does not show a prompt."
+      return "Click to ask macOS for access. If needed, Settings opens automatically."
     }
   }
 
@@ -733,6 +720,23 @@ private struct PermissionRow: View {
         .controlSize(.small)
         .disabled(disabled || isGranted)
     }
+  }
+}
+
+private struct PermissionAssistView: View {
+  let message: String
+
+  var body: some View {
+    Text(message)
+      .font(.caption)
+      .foregroundColor(.secondary)
+      .fixedSize(horizontal: false, vertical: true)
+      .padding(8)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+          .fill(Color.secondary.opacity(0.08))
+      )
   }
 }
 

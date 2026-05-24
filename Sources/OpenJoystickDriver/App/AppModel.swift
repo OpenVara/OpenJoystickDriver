@@ -41,6 +41,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   @Published var devices: [DeviceViewModel] = []
   @Published var appInputMonitoring = "unknown"
   @Published var inputMonitoring = "unknown"
+  @Published var inputMonitoringAssist: String?
   @Published var extensionManager = SystemExtensionManager()
 
   @Published var userSpaceVirtualDeviceEnabled = false
@@ -282,29 +283,37 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   }
 
   func requestAppInputMonitoringAccess() async {
+    inputMonitoringAssist = nil
     appInputMonitoring = "\(await permissionManager.requestAccess())"
+    try? await Task.sleep(nanoseconds: 500_000_000)
+    appInputMonitoring = "\(await permissionManager.checkAccess())"
     if appInputMonitoring != "granted" {
-      openInputMonitoringSettings()
+      openInputMonitoringSettings(for: ["OpenJoystickDriver"])
     }
   }
 
   func requestDaemonInputMonitoringAccess() async {
+    inputMonitoringAssist = nil
     guard daemonConnected else {
       daemonError = "Start the helper first, then click Grant Helper."
       return
     }
     do {
       inputMonitoring = try await client.requestInputMonitoringAccess()
-      if inputMonitoring != "granted" {
-        openInputMonitoringSettings()
-      }
+      try? await Task.sleep(nanoseconds: 500_000_000)
       await syncFromDaemonNow()
+      if inputMonitoring != "granted" {
+        openInputMonitoringSettings(for: ["OpenJoystickDriver Helper"])
+      }
     } catch {
       daemonError = formatDaemonError(error)
     }
   }
 
-  func openInputMonitoringSettings() {
+  func openInputMonitoringSettings(for appNames: [String] = ["OpenJoystickDriver", "OpenJoystickDriver Helper"]) {
+    let names = appNames.joined(separator: " and ")
+    inputMonitoringAssist =
+      "In System Settings, turn on Input Monitoring for \(names). If macOS asks to quit and reopen, allow it."
     let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
     if let url, NSWorkspace.shared.open(url) { return }
     NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
