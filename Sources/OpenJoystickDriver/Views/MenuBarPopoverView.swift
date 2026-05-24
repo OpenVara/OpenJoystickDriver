@@ -1016,6 +1016,9 @@ private struct InputTestWindowView: View {
         }
       }
     }
+    .transaction { transaction in
+      transaction.animation = nil
+    }
   }
 
   private var buttonSummary: String {
@@ -1035,6 +1038,9 @@ private struct InputTestWindowView: View {
         .background(isDown ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.14))
         .foregroundColor(isDown ? .white : .primary)
         .clipShape(RoundedRectangle(cornerRadius: 6))
+        .transaction { transaction in
+          transaction.animation = nil
+        }
         .accessibilityLabel(Text(button.displayName))
     } else {
       Text(button.displayName)
@@ -1045,6 +1051,9 @@ private struct InputTestWindowView: View {
         .background(isDown ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.14))
         .foregroundColor(isDown ? .white : .primary)
         .clipShape(RoundedRectangle(cornerRadius: 6))
+        .transaction { transaction in
+          transaction.animation = nil
+        }
     }
   }
 
