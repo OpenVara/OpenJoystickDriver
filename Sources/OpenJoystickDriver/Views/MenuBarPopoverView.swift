@@ -72,6 +72,9 @@ struct MenuBarPopoverView: View {
           .font(.system(size: 17, weight: .semibold))
       }
       Spacer()
+      SwiftUI.Button("Quit") { NSApplication.shared.terminate(nil) }
+        .buttonStyle(.borderless)
+        .foregroundColor(.secondary)
     }
   }
 
