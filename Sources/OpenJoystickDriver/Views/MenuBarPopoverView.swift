@@ -6,6 +6,7 @@ struct MenuBarPopoverView: View {
   @EnvironmentObject var model: AppModel
   @State private var runningSelfTest = false
   @State private var showUninstallConfirm = false
+  @State private var showAdvanced = false
   @State private var inputTester = InputTestWindowController()
 
   private var gameControllerSupportLabel: String {
@@ -30,11 +31,14 @@ struct MenuBarPopoverView: View {
         readinessCard
         permissionsCard
         outputCard
-        helperCard
         inputTestRow
-        selfTestRow
-        updateRow
-        footerRow
+        advancedToggle
+        if showAdvanced {
+          helperCard
+          selfTestRow
+          updateRow
+          footerRow
+        }
       }
       .padding(14)
     }
@@ -392,19 +396,40 @@ struct MenuBarPopoverView: View {
   private var inputTestRow: some View {
     OJDCard(title: "Input test") {
       VStack(alignment: .leading, spacing: 8) {
-      HStack {
-        Text("Live buttons, sticks, packet log, and rumble.")
-          .font(.caption)
-          .foregroundColor(.secondary)
-        Spacer()
-        SwiftUI.Button("Open Input Test") {
-          inputTester.show(model: model)
+        HStack {
+          Text("Live buttons, sticks, packet log, and rumble.")
+            .font(.caption)
+            .foregroundColor(.secondary)
+          Spacer()
+          SwiftUI.Button("Open Input Test") {
+            inputTester.show(model: model)
+          }
+          .controlSize(.small)
+          .disabled(!model.daemonConnected)
         }
-        .controlSize(.small)
-        .disabled(!model.daemonConnected)
-      }
       }
     }
+  }
+
+  private var advancedToggle: some View {
+    SwiftUI.Button {
+      showAdvanced.toggle()
+    } label: {
+      HStack {
+        Text(showAdvanced ? "Hide details" : "Show details")
+        Spacer()
+        Text(showAdvanced ? "▴" : "▾")
+      }
+      .font(.caption.weight(.semibold))
+      .foregroundColor(.secondary)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+      .background(
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+          .fill(Color.secondary.opacity(0.08))
+      )
+    }
+    .buttonStyle(.plain)
   }
 
   private var footerRow: some View {
@@ -429,31 +454,31 @@ struct MenuBarPopoverView: View {
   private var updateRow: some View {
     OJDCard(title: "Updates") {
       VStack(alignment: .leading, spacing: 8) {
-      HStack(spacing: 8) {
-        Text(updateStatusLine)
-          .font(.caption)
-          .foregroundColor(updateStatusColor)
-          .fixedSize(horizontal: false, vertical: true)
-        Spacer()
-        SwiftUI.Button(updateButtonTitle) {
-          Task { await model.checkForUpdates() }
-        }
-        .buttonStyle(.borderless)
-        .controlSize(.small)
-        .disabled(model.updateCheckState == .checking)
-      }
-
-      if case .available(let info) = model.updateCheckState {
         HStack(spacing: 8) {
-          Text("OpenJoystickDriver \(info.tagName) is available.")
+          Text(updateStatusLine)
             .font(.caption)
-            .foregroundColor(.orange)
+            .foregroundColor(updateStatusColor)
+            .fixedSize(horizontal: false, vertical: true)
           Spacer()
-          SwiftUI.Button("Open") { model.openLatestRelease() }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
+          SwiftUI.Button(updateButtonTitle) {
+            Task { await model.checkForUpdates() }
+          }
+          .buttonStyle(.borderless)
+          .controlSize(.small)
+          .disabled(model.updateCheckState == .checking)
         }
-      }
+
+        if case .available(let info) = model.updateCheckState {
+          HStack(spacing: 8) {
+            Text("OpenJoystickDriver \(info.tagName) is available.")
+              .font(.caption)
+              .foregroundColor(.orange)
+            Spacer()
+            SwiftUI.Button("Open") { model.openLatestRelease() }
+              .buttonStyle(.borderless)
+              .controlSize(.small)
+          }
+        }
       }
     }
   }
@@ -647,6 +672,7 @@ private struct InputTestWindowView: View {
   @State private var rumbleLT = 0.0
   @State private var rumbleRT = 0.0
   @State private var rumbleDurationMs = 450.0
+  @State private var showPackets = false
   @State private var stateTask: Task<Void, Never>?
   @State private var packetLogTask: Task<Void, Never>?
 
@@ -668,7 +694,10 @@ private struct InputTestWindowView: View {
 
             VStack(alignment: .leading, spacing: 10) {
               outputTestRow(device)
-              packetLogView
+              packetLogToggle
+              if showPackets {
+                packetLogView
+              }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
           }
@@ -867,79 +896,79 @@ private struct InputTestWindowView: View {
     let canRumble = device.supportsPhysicalRumble
     return OJDCard(title: "Physical output") {
       VStack(alignment: .leading, spacing: 8) {
-      HStack {
-        Text(canRumble ? "Rumble is available for this controller." : "This controller does not expose physical rumble.")
-          .font(.caption)
-          .foregroundColor(.secondary)
-        Spacer()
-        Text(canRumble ? "supported" : "unavailable")
-          .font(.system(size: 10, weight: .semibold))
-          .foregroundColor(canRumble ? .green : .secondary)
-      }
-      HStack(alignment: .top, spacing: 18) {
-        VStack(alignment: .leading, spacing: 4) {
-          RumbleSlider(label: "L", value: $rumbleLeft)
-          RumbleSlider(label: "R", value: $rumbleRight)
-        }
-        VStack(alignment: .leading, spacing: 4) {
-          RumbleSlider(label: "LT", value: $rumbleLT)
-          RumbleSlider(label: "RT", value: $rumbleRT)
-        }
-      }
-      VStack(alignment: .leading, spacing: 6) {
-        HStack(spacing: 8) {
-          rumbleIconButton(
-            rumbleRunning ? "Sending" : "Pulse",
-            systemName: rumbleRunning ? "hourglass" : "waveform.path.ecg"
-          ) {
-            sendRumble(to: device, durationMs: Int(rumbleDurationMs))
-          }
-          .disabled(rumbleRunning || !canRumble)
-          rumbleIconButton("Hold", systemName: "infinity") {
-            sendRumble(to: device, durationMs: 0)
-          }
-          .disabled(!canRumble)
-          rumbleIconButton("Stop", systemName: "stop.fill") {
-            sendRumble(to: device, left: 0, right: 0, lt: 0, rt: 0, durationMs: 0)
-          }
-          .disabled(!canRumble)
-          Divider().frame(height: 18)
-          Stepper("Duration \(Int(rumbleDurationMs)) ms", value: $rumbleDurationMs, in: 50...5000, step: 50)
-            .font(.caption)
-            .frame(width: 160)
-        }
-        HStack(spacing: 8) {
-          rumbleIconButton("Left motor", systemName: "l.circle") {
-            sendRumble(to: device, left: UInt8(clamping: Int(rumbleLeft)), right: 0, lt: 0, rt: 0)
-          }
-          .disabled(rumbleRunning || !canRumble)
-          rumbleIconButton("Right motor", systemName: "r.circle") {
-            sendRumble(to: device, left: 0, right: UInt8(clamping: Int(rumbleRight)), lt: 0, rt: 0)
-          }
-          .disabled(rumbleRunning || !canRumble)
-          Divider().frame(height: 16)
-          rumbleIconButton("Low", systemName: "speaker.wave.1.fill") {
-            setRumbleValues(left: 32, right: 32, lt: 32, rt: 32)
-          }
-          rumbleIconButton("Mid", systemName: "speaker.wave.2.fill") {
-            setRumbleValues(left: 128, right: 128, lt: 128, rt: 128)
-          }
-          rumbleIconButton("Max", systemName: "speaker.wave.3.fill") {
-            setRumbleValues(left: 255, right: 255, lt: 255, rt: 255)
-          }
-          rumbleIconButton("Zero", systemName: "speaker.slash.fill") {
-            setRumbleValues(left: 0, right: 0, lt: 0, rt: 0)
-          }
-        }
-        HStack(spacing: 8) {
-          Text("LED is not exposed.")
+        HStack {
+          Text(canRumble ? "Rumble is available for this controller." : "This controller does not expose physical rumble.")
             .font(.caption)
             .foregroundColor(.secondary)
-          if let rumbleResult {
-            Text("Rumble: \(rumbleResult)").font(.caption).foregroundColor(.secondary)
+          Spacer()
+          Text(canRumble ? "supported" : "unavailable")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(canRumble ? .green : .secondary)
+        }
+        HStack(alignment: .top, spacing: 18) {
+          VStack(alignment: .leading, spacing: 4) {
+            RumbleSlider(label: "L", value: $rumbleLeft)
+            RumbleSlider(label: "R", value: $rumbleRight)
+          }
+          VStack(alignment: .leading, spacing: 4) {
+            RumbleSlider(label: "LT", value: $rumbleLT)
+            RumbleSlider(label: "RT", value: $rumbleRT)
           }
         }
-      }
+        VStack(alignment: .leading, spacing: 6) {
+          HStack(spacing: 8) {
+            rumbleIconButton(
+              rumbleRunning ? "Sending" : "Pulse",
+              systemName: rumbleRunning ? "hourglass" : "waveform.path.ecg"
+            ) {
+              sendRumble(to: device, durationMs: Int(rumbleDurationMs))
+            }
+            .disabled(rumbleRunning || !canRumble)
+            rumbleIconButton("Hold", systemName: "infinity") {
+              sendRumble(to: device, durationMs: 0)
+            }
+            .disabled(!canRumble)
+            rumbleIconButton("Stop", systemName: "stop.fill") {
+              sendRumble(to: device, left: 0, right: 0, lt: 0, rt: 0, durationMs: 0)
+            }
+            .disabled(!canRumble)
+            Divider().frame(height: 18)
+            Stepper("Duration \(Int(rumbleDurationMs)) ms", value: $rumbleDurationMs, in: 50...5000, step: 50)
+              .font(.caption)
+              .frame(width: 160)
+          }
+          HStack(spacing: 8) {
+            rumbleIconButton("Left motor", systemName: "l.circle") {
+              sendRumble(to: device, left: UInt8(clamping: Int(rumbleLeft)), right: 0, lt: 0, rt: 0)
+            }
+            .disabled(rumbleRunning || !canRumble)
+            rumbleIconButton("Right motor", systemName: "r.circle") {
+              sendRumble(to: device, left: 0, right: UInt8(clamping: Int(rumbleRight)), lt: 0, rt: 0)
+            }
+            .disabled(rumbleRunning || !canRumble)
+            Divider().frame(height: 16)
+            rumbleIconButton("Low", systemName: "speaker.wave.1.fill") {
+              setRumbleValues(left: 32, right: 32, lt: 32, rt: 32)
+            }
+            rumbleIconButton("Mid", systemName: "speaker.wave.2.fill") {
+              setRumbleValues(left: 128, right: 128, lt: 128, rt: 128)
+            }
+            rumbleIconButton("Max", systemName: "speaker.wave.3.fill") {
+              setRumbleValues(left: 255, right: 255, lt: 255, rt: 255)
+            }
+            rumbleIconButton("Zero", systemName: "speaker.slash.fill") {
+              setRumbleValues(left: 0, right: 0, lt: 0, rt: 0)
+            }
+          }
+          HStack(spacing: 8) {
+            Text("LED is not exposed.")
+              .font(.caption)
+              .foregroundColor(.secondary)
+            if let rumbleResult {
+              Text("Rumble: \(rumbleResult)").font(.caption).foregroundColor(.secondary)
+            }
+          }
+        }
       }
     }
   }
@@ -1023,18 +1052,39 @@ private struct InputTestWindowView: View {
   private var packetLogView: some View {
     OJDCard(title: "Recent packets") {
       VStack(alignment: .leading, spacing: 8) {
-      if packetLog.isEmpty {
-        Text("No packets captured yet.").font(.caption).foregroundColor(.secondary)
-      } else {
-        ForEach(Array(packetLog.suffix(8).enumerated()), id: \.offset) { _, entry in
-          Text("\(entry.direction) \(entry.length)b \(entry.hex)")
-            .font(.system(.caption, design: .monospaced))
-            .lineLimit(1)
-            .padding(.vertical, 1)
+        if packetLog.isEmpty {
+          Text("No packets captured yet.").font(.caption).foregroundColor(.secondary)
+        } else {
+          ForEach(Array(packetLog.suffix(8).enumerated()), id: \.offset) { _, entry in
+            Text("\(entry.direction) \(entry.length)b \(entry.hex)")
+              .font(.system(.caption, design: .monospaced))
+              .lineLimit(1)
+              .padding(.vertical, 1)
+          }
         }
       }
-      }
     }
+  }
+
+  private var packetLogToggle: some View {
+    SwiftUI.Button {
+      showPackets.toggle()
+    } label: {
+      HStack {
+        Text(showPackets ? "Hide packet log" : "Show packet log")
+        Spacer()
+        Text(showPackets ? "▴" : "▾")
+      }
+      .font(.caption.weight(.semibold))
+      .foregroundColor(.secondary)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+      .background(
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+          .fill(Color.secondary.opacity(0.08))
+      )
+    }
+    .buttonStyle(.plain)
   }
 
   private func startRefreshTasks() {
