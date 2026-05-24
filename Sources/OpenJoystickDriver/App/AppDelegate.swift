@@ -9,6 +9,7 @@ import SwiftUI
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
   private var statusItem: NSStatusItem?
   private var popover: NSPopover?
+  private var statusItemRightClickMonitor: Any?
   private(set) var model: AppModel
 
   init(developerMode: Bool = false) { self.model = AppModel(developerMode: developerMode) }
@@ -52,18 +53,35 @@ import SwiftUI
       }
       button.target = self
       button.action = #selector(handleStatusItemClick(_:))
-      button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+      button.sendAction(on: [.leftMouseUp, .rightMouseDown])
     }
     statusItem = item
+    installStatusItemRightClickMonitor()
   }
 
   // MARK: - Popover
 
   @objc private func handleStatusItemClick(_ sender: Any?) {
-    if NSApp.currentEvent?.type == .rightMouseUp {
+    if NSApp.currentEvent?.type == .rightMouseDown {
       showStatusMenu()
     } else {
       togglePopover(sender)
+    }
+  }
+
+  private func installStatusItemRightClickMonitor() {
+    guard statusItemRightClickMonitor == nil else { return }
+    statusItemRightClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) {
+      [weak self] event in
+      guard let self, let button = self.statusItem?.button, event.window === button.window else {
+        return event
+      }
+
+      let point = button.convert(event.locationInWindow, from: nil)
+      guard button.bounds.contains(point) else { return event }
+
+      self.showStatusMenu()
+      return nil
     }
   }
 
