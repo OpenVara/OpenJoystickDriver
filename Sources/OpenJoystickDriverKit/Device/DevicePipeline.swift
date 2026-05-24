@@ -129,10 +129,11 @@ actor DevicePipeline {
   }
 
   /// Stop pipeline and clean up resources.
-  func stop() {
+  func stop() async {
     isActive = false
     idleMonitorTask?.cancel()
     idleMonitorTask = nil
+    await neutralizeOutput()
     if let handle = usbHandle {
       try? handle.releaseInterface(0)
       usbHandle = nil
@@ -203,6 +204,13 @@ actor DevicePipeline {
 
   private func updateOutputState(from events: [ControllerEvent]) {
     outputState.apply(events: events)
+  }
+
+  private func neutralizeOutput() async {
+    let neutralizingEvents = outputState.neutralizingEvents()
+    guard !neutralizingEvents.isEmpty else { return }
+    await dispatcher.dispatch(events: neutralizingEvents, from: identifier)
+    updateOutputState(from: neutralizingEvents)
   }
 
   private func appendToPacketLog(bytes: [UInt8], direction: String) {
@@ -434,6 +442,7 @@ actor DevicePipeline {
       }
     }
 
+    await neutralizeOutput()
     try? handle.releaseInterface(0)
     usbHandle = nil
     print("[DevicePipeline] Input loop ended:" + " \(identifier)")

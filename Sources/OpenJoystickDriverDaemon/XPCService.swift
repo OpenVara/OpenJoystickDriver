@@ -855,13 +855,13 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     Task {
       let userSpace = userSpaceLock.withLock { userSpaceDispatcher }
       try? await Task.sleep(nanoseconds: 250_000_000)
-      await dextDispatcher.dispatch(events: [.buttonPressed(.a)], from: syntheticIdentifier)
+      dextDispatcher.dispatch(events: [.buttonPressed(.a)], from: syntheticIdentifier)
       await userSpace?.dispatch(events: [.buttonPressed(.a)], from: syntheticIdentifier)
       try? await Task.sleep(nanoseconds: 250_000_000)
-      await dextDispatcher.dispatch(events: [.buttonReleased(.a)], from: syntheticIdentifier)
+      dextDispatcher.dispatch(events: [.buttonReleased(.a)], from: syntheticIdentifier)
       await userSpace?.dispatch(events: [.buttonReleased(.a)], from: syntheticIdentifier)
       try? await Task.sleep(nanoseconds: 250_000_000)
-      await dextDispatcher.dispatch(
+      dextDispatcher.dispatch(
         events: [.leftStickChanged(x: 0.75, y: 0)],
         from: syntheticIdentifier
       )
@@ -870,7 +870,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         from: syntheticIdentifier
       )
       try? await Task.sleep(nanoseconds: 250_000_000)
-      await dextDispatcher.dispatch(
+      dextDispatcher.dispatch(
         events: [.leftStickChanged(x: 0, y: 0)],
         from: syntheticIdentifier
       )
@@ -969,8 +969,8 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
         )?.takeRetainedValue() as? [String: Any]
       else { return nil }
 
-      if let n = debug["InputReportCount"] as? NSNumber { return n.intValue }
       if let i = debug["InputReportCount"] as? Int { return i }
+      if let d = debug["InputReportCount"] as? Double { return Int(d) }
       return nil
     }
 

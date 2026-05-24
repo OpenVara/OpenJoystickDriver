@@ -23,4 +23,3 @@ struct ResetSettingsCommand {
     print("Next: open the menubar app, set Mode → Compatibility, then pick Compatibility identity.")
   }
 }
-

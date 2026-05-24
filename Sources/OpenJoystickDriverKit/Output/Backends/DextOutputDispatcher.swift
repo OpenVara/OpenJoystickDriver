@@ -133,7 +133,9 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
         seizedManager = nil
         return (d, m)
       }
-      if let device = oldDevice { IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeSeizeDevice)) }
+      if let device = oldDevice {
+        IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeSeizeDevice))
+      }
       if let mgr = oldMgr { IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone)) }
     }
   }
@@ -178,7 +180,8 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       hidManager = mgr
     }
     print(
-      "[DextOutputDispatcher] Connected to virtual gamepad (VID:\(profile.vendorID) PID:\(profile.productID))"
+      "[DextOutputDispatcher] Connected to virtual gamepad " +
+        "(VID:\(profile.vendorID) PID:\(profile.productID))"
     )
     return true
   }
@@ -306,7 +309,9 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
         let ret = IOHIDDeviceOpen(device, openOptions)
         recordDiscoverySummary(
-          "service-open \(productName ?? "?")|\(serial ?? "?")|\(ioUserClass ?? "?")|\(vendorID):\(productID)|score=\(score) ret=\(String(format: "0x%08x", UInt32(bitPattern: ret)))"
+          "service-open \(productName ?? "?")|\(serial ?? "?")|\(ioUserClass ?? "?")|" +
+            "\(vendorID):\(productID)|score=\(score) " +
+            "ret=\(String(format: "0x%08x", UInt32(bitPattern: ret)))"
         )
         return (device, ret)
       }
@@ -353,8 +358,9 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       }
       // Extra guard: our user-space devices live in the OJ namespace.
       let rawLocation = UInt32(truncatingIfNeeded: location)
-      if rawLocation != VirtualDeviceIdentityConstants.driverKitLocationID
-        && (rawLocation & 0xFFFF_0000) == VirtualDeviceIdentityConstants.userSpaceLocationIDNamespace
+      let isUserSpaceLocation =
+        (rawLocation & 0xFFFF_0000) == VirtualDeviceIdentityConstants.userSpaceLocationIDNamespace
+      if rawLocation != VirtualDeviceIdentityConstants.driverKitLocationID && isUserSpaceLocation
       {
         return Int.min / 2
       }
@@ -388,14 +394,17 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       let productID = intProp(device, kIOHIDProductIDKey as String)
       return "\(product)|\(serial)|\(ioUserClass)|\(vendorID):\(productID)|score=\(score)"
     }.joined(separator: "; ")
-    recordDiscoverySummary("devices=\(devices.count), candidates=\(candidates.count), top=[\(summary)]")
+    recordDiscoverySummary(
+      "devices=\(devices.count), candidates=\(candidates.count), top=[\(summary)]"
+    )
 
     var lastOpenResult: IOReturn = kIOReturnNotFound
     for (device, s) in candidates {
       if s <= Int.min / 4 { continue }  // filtered (likely our user-space device)
       let ret = IOHIDDeviceOpen(device, openOptions)
       recordDiscoverySummary(
-        "open \(strProp(device, kIOHIDProductKey as String) ?? "?") score=\(s) ret=\(String(format: "0x%08x", UInt32(bitPattern: ret)))"
+        "open \(strProp(device, kIOHIDProductKey as String) ?? "?") score=\(s) " +
+          "ret=\(String(format: "0x%08x", UInt32(bitPattern: ret)))"
       )
       lastOpenResult = ret
       if ret == kIOReturnSuccess {
@@ -411,7 +420,7 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
 
   // MARK: - OutputDispatcher
 
-  public func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) async {
+  public func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) {
     guard !suppressOutput else { return }
     guard connectionLock.withLock({ enabled }) else { return }
 
@@ -476,7 +485,9 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
         lastConnectionLostLogNs = now
         return true
       }
-      if shouldLog { print("[DextOutputDispatcher] Connection lost (\(lastResult)); will reconnect") }
+      if shouldLog {
+        print("[DextOutputDispatcher] Connection lost (\(lastResult)); will reconnect")
+      }
       recordFailure(now: now)
       closeDevice()
       connectionLock.withLock {

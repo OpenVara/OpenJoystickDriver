@@ -106,11 +106,18 @@ public enum DaemonManager: Sendable {
     let blameOut =
       (try? launchctl(["blame", target]))?.trimmingCharacters(in: .whitespacesAndNewlines)
 
+    let rawPrint: String
+    if let printErr {
+      rawPrint = "launchctl print failed:\n\(printErr)"
+    } else {
+      rawPrint = printOut
+    }
+
     var health = DaemonHealth(
       installed: true,
       state: printErr == nil ? nil : "NOT_LOADED",
       blame: blameOut,
-      rawPrint: (printErr == nil) ? printOut : "launchctl print failed:\n\(printErr!)"
+      rawPrint: rawPrint
     )
 
     if printErr != nil {
@@ -233,7 +240,7 @@ public enum DaemonManager: Sendable {
         code: 2,
         userInfo: [
           NSLocalizedDescriptionKey:
-            "LaunchAgent plist not found at \(bundledLaunchAgentURL.path)."
+            "LaunchAgent plist not found at \(bundledLaunchAgentURL.path).",
         ]
       )
     }
@@ -273,7 +280,9 @@ public enum DaemonManager: Sendable {
   private static func restartHint() -> String {
     """
     Fix checklist:
-      1) Try uninstall+install: `OpenJoystickDriver --headless uninstall` then `OpenJoystickDriver --headless install`.
+      1) Try uninstall+install:
+         `OpenJoystickDriver --headless uninstall`
+         `OpenJoystickDriver --headless install`.
       2) Check daemon log: `tail -n 80 /tmp/\(label).out` and `/tmp/\(label).err`.
       3) Check launchd health: `launchctl print gui/$(id -u)/\(label) | head -n 80`
     """

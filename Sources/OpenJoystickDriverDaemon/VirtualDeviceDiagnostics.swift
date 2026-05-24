@@ -60,7 +60,7 @@ enum VirtualDeviceDiagnostics {
       }
 
       let serialKind: XPCSerialKind =
-        (serial == nil || serial == "") ? .none
+        (serial == nil || serial?.isEmpty == true) ? .none
         : (UserSpaceVirtualDeviceConstants.isOJDUserSpaceSerial(serial) ? .ojdUserSpace : .present)
 
       return XPCHIDGamepadSnapshot(

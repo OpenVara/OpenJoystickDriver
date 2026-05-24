@@ -51,6 +51,14 @@ func runSyncResult<T: Sendable>(
   return result
 }
 
+func runSyncOptionalResult<T: Sendable>(
+  timeout seconds: Double,
+  _ block: @Sendable @escaping () async -> T?
+) -> T? {
+  guard let result = runSyncResult(timeout: seconds, block) else { return nil }
+  return result
+}
+
 /// Ensures the CLI is executed from an app bundle installed under `/Applications`.
 ///
 /// This repo's LaunchAgent plist uses an absolute ProgramArguments path under
@@ -60,7 +68,11 @@ func requireApplicationsBundleOrExit() {
   guard path.hasPrefix("/Applications/") else {
     print("ERROR: This command must be run from the /Applications-installed app bundle.")
     print("  Current bundle: \(path)")
-    print("  Fix: run: /Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless <command>")
+    print(
+      "  Fix: run: " +
+        "/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver " +
+        "--headless <command>"
+    )
     exit(1)
   }
 }
@@ -80,18 +92,28 @@ func requireValidBundleSignatureOrExit(action: String) {
   do {
     try process.run()
   } catch {
-    print("ERROR: \(action) failed: could not run codesign verification: \(error.localizedDescription)")
+    print(
+      "ERROR: \(action) failed: could not run codesign verification: " +
+        "\(error.localizedDescription)"
+    )
     exit(1)
   }
   process.waitUntilExit()
   let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
   guard process.terminationStatus == 0 else {
     if out.contains("a sealed resource is missing or invalid") {
-      print("ERROR: \(action) failed: this app bundle's signature is INVALID (modified after signing).")
+      print(
+        "ERROR: \(action) failed: this app bundle's signature is INVALID " +
+          "(modified after signing)."
+      )
       print("")
       print("Fix:")
       print("  1) Run: ./scripts/ojd rebuild-fast dev")
-      print("  2) Then re-run: /Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless \(action.lowercased())")
+      print(
+        "  2) Then re-run: " +
+          "/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver " +
+          "--headless \(action.lowercased())"
+      )
       print("")
       print("Diagnostic command:")
       print("  /usr/bin/codesign --verify --deep --strict --verbose=2 \(appPath)")

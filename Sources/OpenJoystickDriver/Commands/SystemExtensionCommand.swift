@@ -159,7 +159,8 @@ private final class SystemExtensionSubmission: NSObject, OSSystemExtensionReques
   func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
     let nsError = error as NSError
     result = .failed(
-      "System extension request failed: \(nsError.domain) code=\(nsError.code) \(nsError.localizedDescription)"
+      "System extension request failed: \(nsError.domain) " +
+        "code=\(nsError.code) \(nsError.localizedDescription)"
     )
   }
 
@@ -173,7 +174,8 @@ private final class SystemExtensionSubmission: NSObject, OSSystemExtensionReques
     withExtension ext: OSSystemExtensionProperties
   ) -> OSSystemExtensionRequest.ReplacementAction {
     print(
-      "Replacing \(existing.bundleIdentifier) v\(existing.bundleVersion) with v\(ext.bundleVersion)."
+      "Replacing \(existing.bundleIdentifier) v\(existing.bundleVersion) " +
+        "with v\(ext.bundleVersion)."
     )
     return .replace
   }

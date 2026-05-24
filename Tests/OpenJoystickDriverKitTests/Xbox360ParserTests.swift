@@ -139,7 +139,10 @@ struct Xbox360ParserTests {
     guard case .dpadChanged(let e) = try dpadEvent(bits: 8) else { Issue.record("no dpad"); return }
     #expect(e == .east)
     // northEast = up + right
-    guard case .dpadChanged(let ne) = try dpadEvent(bits: 9) else { Issue.record("no dpad"); return }
+    guard case .dpadChanged(let ne) = try dpadEvent(bits: 9) else {
+      Issue.record("no dpad")
+      return
+    }
     #expect(ne == .northEast)
   }
   @Test

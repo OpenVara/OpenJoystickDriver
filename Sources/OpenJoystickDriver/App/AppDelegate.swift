@@ -75,8 +75,9 @@ import SwiftUI
       return
     }
 
-    statusItemLocalRightClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) {
-      [weak self] event in
+    statusItemLocalRightClickMonitor = NSEvent.addLocalMonitorForEvents(
+      matching: [.rightMouseDown]
+    ) { [weak self] event in
       guard let self, let button = self.statusItem?.button, event.window === button.window else {
         return event
       }
@@ -88,8 +89,9 @@ import SwiftUI
       return nil
     }
 
-    statusItemGlobalRightClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.rightMouseDown]) {
-      [weak self] event in
+    statusItemGlobalRightClickMonitor = NSEvent.addGlobalMonitorForEvents(
+      matching: [.rightMouseDown]
+    ) { [weak self] event in
       Task { @MainActor [weak self] in
         guard let self, self.eventIsInsideStatusItem(event) else { return }
         self.showPopover(event)

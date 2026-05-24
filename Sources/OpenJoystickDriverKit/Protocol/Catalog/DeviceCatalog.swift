@@ -218,7 +218,9 @@ struct DeviceCatalog: Sendable {
     return options
   }
 
-  private func defaultProtocolVariant(for identifier: DeviceIdentifier) -> ControllerProtocolVariant {
+  private func defaultProtocolVariant(
+    for identifier: DeviceIdentifier
+  ) -> ControllerProtocolVariant {
     switch parserName(for: identifier) {
     case "GIP": return .xboxOne
     case "DS4": return .dualShock4

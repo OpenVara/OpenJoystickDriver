@@ -119,6 +119,56 @@ struct DevicePipelineSleepTests {
 
     #expect(dispatcher.flattenedEvents == [.buttonPressed(.b)])
   }
+
+  @Test
+  func testStopNeutralizesForwardedButtonState() async {
+    let dispatcher = RecordingOutputDispatcher()
+    let pipeline = DevicePipeline(
+      identifier: DeviceIdentifier(vendorID: 100, productID: 200),
+      transport: .hid(locationID: 1),
+      parser: ScriptedInputParser(),
+      dispatcher: dispatcher,
+      usbContext: nil,
+      idleTimeoutNanoseconds: 5_000_000_000,
+      idleMonitorIntervalNanoseconds: 5_000_000_000
+    )
+
+    await pipeline.start()
+    await pipeline.feedHIDData(Data([1]))
+    await pipeline.stop()
+    try? await Task.sleep(nanoseconds: 20_000_000)
+
+    #expect(dispatcher.flattenedEvents == [.buttonPressed(.a), .buttonReleased(.a)])
+  }
+
+  @Test
+  func testStopNeutralizesForwardedDpadAndAxesState() async {
+    let dispatcher = RecordingOutputDispatcher()
+    let pipeline = DevicePipeline(
+      identifier: DeviceIdentifier(vendorID: 100, productID: 200),
+      transport: .hid(locationID: 1),
+      parser: ScriptedInputParser(),
+      dispatcher: dispatcher,
+      usbContext: nil,
+      idleTimeoutNanoseconds: 5_000_000_000,
+      idleMonitorIntervalNanoseconds: 5_000_000_000
+    )
+
+    await pipeline.start()
+    await pipeline.feedHIDData(Data([6]))
+    await pipeline.feedHIDData(Data([3]))
+    await pipeline.stop()
+    try? await Task.sleep(nanoseconds: 20_000_000)
+
+    #expect(
+      dispatcher.flattenedEvents == [
+        .dpadChanged(.north),
+        .leftStickChanged(x: 0.8, y: 0),
+        .dpadChanged(.neutral),
+        .leftStickChanged(x: 0, y: 0),
+      ]
+    )
+  }
 }
 
 private final class ScriptedInputParser: InputParser, @unchecked Sendable {
@@ -137,6 +187,8 @@ private final class ScriptedInputParser: InputParser, @unchecked Sendable {
       return [.buttonPressed(.b)]
     case 5:
       return [.leftStickChanged(x: 0.6, y: 0)]
+    case 6:
+      return [.dpadChanged(.north)]
     default:
       return []
     }

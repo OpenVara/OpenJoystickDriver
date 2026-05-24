@@ -186,7 +186,8 @@ public final class XPCClient: @unchecked Sendable {
     let data: Data = try await xpcCall { service, reply in
       service.getVirtualDeviceDiagnostics(reply: reply)
     }
-    guard let payload = try? JSONDecoder().decode(XPCVirtualDeviceDiagnosticsPayload.self, from: data)
+    guard
+      let payload = try? JSONDecoder().decode(XPCVirtualDeviceDiagnosticsPayload.self, from: data)
     else {
       throw XPCError.invalidResponse
     }

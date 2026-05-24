@@ -180,4 +180,3 @@ public enum GamepadHIDDescriptor {
     }
   }
 }
-

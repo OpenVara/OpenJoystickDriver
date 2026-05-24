@@ -2,6 +2,26 @@
 
 All notable changes to OpenJoystickDriver are documented in this file.
 
+## 0.4.0
+
+### Added
+
+- Added regression coverage for stale active input across parser release events,
+  compatibility route handoff, virtual HID neutral reports, and pipeline stop.
+
+### Changed
+
+- Refined the menu-bar and Input Test UI for clearer permissions, game profile,
+  live input, packet log, and rumble workflows.
+- Added right-click menu-bar fallback behavior so right-click opens the popover.
+
+### Fixed
+
+- Neutralized forwarded virtual output when a controller pipeline stops or a USB
+  input loop exits, preventing stale held buttons after disconnect or teardown.
+- Fixed Xbox 360 HID compatibility reports so SDL HIDAPI receives the expected
+  state packet header, preventing intermittent LB/RB latch/stuck-active states.
+
 ## 0.3.1
 
 ### Fixed

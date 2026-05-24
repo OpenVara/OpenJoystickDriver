@@ -171,10 +171,21 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
         lines.append(nsError.localizedDescription)
         lines.append("")
         lines.append("Fix checklist (no guesswork):")
-        lines.append("  1) Make sure you are running `/Applications/OpenJoystickDriver.app` (not `.build/...`).")
-        lines.append("  2) If you are streaming / cannot reboot: use `./scripts/ojd rebuild-fast dev` to avoid sysext upgrades.")
-        lines.append("  3) If you see \"stale sysext copies\" in diagnostics, macOS typically needs a reboot to fully clean up old versions.")
-        lines.append("  4) Meanwhile, you can still use Compatibility mode (user-space virtual device) without touching the system extension.")
+        lines.append(
+          "  1) Make sure you are running `/Applications/OpenJoystickDriver.app` " +
+            "(not `.build/...`)."
+        )
+        lines.append(
+          "  2) If you are streaming / cannot reboot: use " +
+            "`./scripts/ojd rebuild-fast dev` to avoid sysext upgrades."
+        )
+        lines.append(
+          "  3) If diagnostics mention stale sysext copies, macOS usually needs " +
+            "a reboot to clean up old versions."
+        )
+        lines.append(
+          "  4) Compatibility mode still works without touching the system extension."
+        )
         return lines.joined(separator: "\n")
       }
       return "\(nsError.localizedDescription) [code=\(nsError.code)]"
@@ -191,7 +202,8 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
       // to clean up stale copies.
       if Self.isSysextActive(extensionID: self.extensionBundleID) {
         self.installWarning =
-          "DriverKit extension appears active, but the last install request failed. If diagnostics mention stale copies, a reboot cleans them up."
+          "DriverKit extension appears active, but the last install request failed. " +
+          "If diagnostics mention stale copies, a reboot cleans them up."
         self.installState = .installed
       }
     }
@@ -265,7 +277,9 @@ extension SystemExtensionManager {
       if bundleID == extensionBundleID { hasExpected = true }
     }
 
-    details.append("Result: " + (hasExpected ? "expected extension present" : "expected extension missing"))
+    details.append(
+      "Result: " + (hasExpected ? "expected extension present" : "expected extension missing")
+    )
     return Preflight(hasExpectedDext: hasExpected, details: details)
   }
 

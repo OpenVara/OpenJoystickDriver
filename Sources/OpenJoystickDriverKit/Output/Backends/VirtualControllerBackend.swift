@@ -77,7 +77,7 @@ extension DextOutputDispatcher: VirtualControllerBackend {
     )
   }
 
-  public func startBackend() async -> VirtualControllerBackendStatus {
+  public func startBackend() -> VirtualControllerBackendStatus {
     setEnabled(true)
     let connected = connect()
     return VirtualControllerBackendStatus(
@@ -87,7 +87,7 @@ extension DextOutputDispatcher: VirtualControllerBackend {
     )
   }
 
-  public func stopBackend() async {
+  public func stopBackend() {
     setEnabled(false)
   }
 
@@ -114,11 +114,11 @@ extension UserSpaceOutputDispatcher: VirtualControllerBackend {
     )
   }
 
-  public func startBackend() async -> VirtualControllerBackendStatus {
+  public func startBackend() -> VirtualControllerBackendStatus {
     VirtualControllerBackendStatus(id: backendID, isRunning: true, detail: status)
   }
 
-  public func stopBackend() async {
+  public func stopBackend() {
     close()
   }
 

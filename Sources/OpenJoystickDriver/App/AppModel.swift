@@ -56,7 +56,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   var developerMode: Bool
 
   var appVersion: String {
-    Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.3.1"
+    Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.4.0"
   }
 
   private let client = XPCClient()
@@ -295,7 +295,8 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   func requestDaemonInputMonitoringAccess() async {
     inputMonitoringAssist = nil
     guard daemonConnected else {
-      inputMonitoringAssist = "Start OpenJoystickDriver Helper first so it can ask macOS for access."
+      inputMonitoringAssist =
+        "Start OpenJoystickDriver Helper first so it can ask macOS for access."
       return
     }
     do {
@@ -310,11 +311,16 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     }
   }
 
-  func openInputMonitoringSettings(for appNames: [String] = ["OpenJoystickDriver", "OpenJoystickDriver Helper"]) {
+  func openInputMonitoringSettings(
+    for appNames: [String] = ["OpenJoystickDriver", "OpenJoystickDriver Helper"]
+  ) {
     let names = appNames.joined(separator: " and ")
     inputMonitoringAssist =
-      "OpenJoystickDriver asked macOS for access. In Input Monitoring, turn on \(names). If macOS asks to quit and reopen, allow it."
-    let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
+      "OpenJoystickDriver asked macOS for access. In Input Monitoring, turn on \(names). " +
+      "If macOS asks to quit and reopen, allow it."
+    let url = URL(
+      string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+    )
     if let url, NSWorkspace.shared.open(url) { return }
     NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
   }
@@ -328,7 +334,9 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
         let runs = h.runs.map { "\($0)" } ?? "unknown"
         let active = h.activeCount.map { "\($0)" } ?? "unknown"
         return
-          "Daemon was killed by launchd (reason: inefficient, active=\(active), runs=\(runs)). Restart or reinstall the daemon."
+          "Daemon was killed by launchd " +
+          "(reason: inefficient, active=\(active), runs=\(runs)). " +
+          "Restart or reinstall the daemon."
       }
       return "Lost connection to daemon (helper application). Restart the daemon."
     }
@@ -376,7 +384,8 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       // If launchd says the job is loaded/running but XPC isn't responding, call that out.
       if let h = daemonHealth, h.pid != nil {
         daemonError =
-          "Couldn't communicate with the helper application. The daemon is running but the connection was lost. Restart the daemon."
+          "Couldn't communicate with the helper application. " +
+          "The daemon is running but the connection was lost. Restart the daemon."
       } else {
         daemonError = formatDaemonError(error)
       }
@@ -387,7 +396,8 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     let path = Bundle.main.bundlePath
     if path.hasPrefix("/Applications/") { return true }
     daemonError =
-      "Daemon install/restart requires running the app from /Applications. Current app bundle: \(path)"
+      "Daemon install/restart requires running the app from /Applications. " +
+      "Current app bundle: \(path)"
     return false
   }
 
@@ -407,7 +417,9 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     do {
       try process.run()
     } catch {
-      daemonError = "\(action) failed: could not run codesign verification (\(error.localizedDescription))."
+      daemonError =
+        "\(action) failed: could not run codesign verification " +
+        "(\(error.localizedDescription))."
       return false
     }
     process.waitUntilExit()
@@ -418,7 +430,8 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     if out.contains("a sealed resource is missing or invalid") {
       daemonError =
         """
-        \(action) failed: this app bundle's signature is INVALID (macOS thinks it was modified after signing).
+        \(action) failed: this app bundle's signature is INVALID.
+        macOS thinks it was modified after signing.
 
         Typical cause: the system extension (.dext) was copied into the app without re-signing.
 

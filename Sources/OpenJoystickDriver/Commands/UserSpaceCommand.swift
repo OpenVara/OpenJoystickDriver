@@ -26,7 +26,7 @@ struct UserSpaceCommand {
         exit(1)
       }
       let status: XPCStatusPayload? =
-        runSyncResult(timeout: xpcCallTimeoutSeconds) { try? await client.getStatus() } ?? nil
+        runSyncOptionalResult(timeout: xpcCallTimeoutSeconds) { try? await client.getStatus() }
       print("user-space: enabled")
       if let s = status?.userSpaceVirtualDeviceStatus { print("status: \(s)") }
     case "off":
@@ -44,12 +44,12 @@ struct UserSpaceCommand {
       }
       print("user-space: disabled")
     case "status":
-      let enabled: Bool? = runSyncResult(timeout: xpcCallTimeoutSeconds) {
+      let enabled: Bool? = runSyncOptionalResult(timeout: xpcCallTimeoutSeconds) {
         try? await client.getUserSpaceVirtualDeviceEnabled()
-      } ?? nil
-      let status: String? = runSyncResult(timeout: xpcCallTimeoutSeconds) {
+      }
+      let status: String? = runSyncOptionalResult(timeout: xpcCallTimeoutSeconds) {
         try? await client.getUserSpaceVirtualDeviceStatus()
-      } ?? nil
+      }
       print("user-space: " + ((enabled ?? false) ? "enabled" : "disabled"))
       if let status { print("status: \(status)") }
     default:

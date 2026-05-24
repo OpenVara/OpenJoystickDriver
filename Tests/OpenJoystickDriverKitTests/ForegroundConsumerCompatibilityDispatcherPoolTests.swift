@@ -32,6 +32,76 @@ struct ForegroundConsumerCompatibilityDispatcherPoolTests {
     #expect(dedicated.recordedDispatches.map(\.events) == [[], []])
     #expect(shared.recordedDispatches.map(\.events) == [[]])
   }
+
+  @Test
+  func testRouteHandoffNeutralizesPreviousActiveButtonState() async throws {
+    let identifier = DeviceIdentifier(vendorID: 0x1234, productID: 0x5678)
+    let firstBundleRoot = "/Applications/PCSX2.app"
+    let secondBundleRoot = "/Applications/DuckStation.app"
+    let firstRoute = UserSpaceVirtualDeviceConstants.dedicatedRouteToken(
+      forConsumerBundleRootPath: firstBundleRoot
+    )
+    let secondRoute = UserSpaceVirtualDeviceConstants.dedicatedRouteToken(
+      forConsumerBundleRootPath: secondBundleRoot
+    )
+
+    let shared = RecordingCompatibilityDispatcher(
+      routeToken: UserSpaceVirtualDeviceConstants.sharedRouteToken
+    )
+    let dedicatedByRoute = LockedRouteDispatchers()
+    let pool = try ForegroundConsumerCompatibilityDispatcherPool { requestedRouteToken in
+      if let requestedRouteToken {
+        return dedicatedByRoute.dispatcher(for: requestedRouteToken)
+      }
+      return shared
+    }
+
+    try await pool.ensureDedicatedRoute(forConsumerBundleRootPath: firstBundleRoot)
+    try await pool.ensureDedicatedRoute(forConsumerBundleRootPath: secondBundleRoot)
+    await pool.setActiveRouteToken(firstRoute)
+    await pool.dispatch(events: [.buttonPressed(.a)], from: identifier)
+    await pool.setActiveRouteToken(secondRoute)
+
+    let first = try #require(dedicatedByRoute.dispatcherIfPresent(for: firstRoute))
+    let second = try #require(dedicatedByRoute.dispatcherIfPresent(for: secondRoute))
+    #expect(first.recordedDispatches.map(\.events).contains([.buttonReleased(.a)]))
+    #expect(second.recordedDispatches.map(\.events).contains([.buttonPressed(.a)]))
+  }
+
+  @Test
+  func testRouteHandoffNeutralizesPreviousActiveDpadState() async throws {
+    let identifier = DeviceIdentifier(vendorID: 0x1234, productID: 0x5678)
+    let firstBundleRoot = "/Applications/PCSX2.app"
+    let secondBundleRoot = "/Applications/DuckStation.app"
+    let firstRoute = UserSpaceVirtualDeviceConstants.dedicatedRouteToken(
+      forConsumerBundleRootPath: firstBundleRoot
+    )
+    let secondRoute = UserSpaceVirtualDeviceConstants.dedicatedRouteToken(
+      forConsumerBundleRootPath: secondBundleRoot
+    )
+
+    let shared = RecordingCompatibilityDispatcher(
+      routeToken: UserSpaceVirtualDeviceConstants.sharedRouteToken
+    )
+    let dedicatedByRoute = LockedRouteDispatchers()
+    let pool = try ForegroundConsumerCompatibilityDispatcherPool { requestedRouteToken in
+      if let requestedRouteToken {
+        return dedicatedByRoute.dispatcher(for: requestedRouteToken)
+      }
+      return shared
+    }
+
+    try await pool.ensureDedicatedRoute(forConsumerBundleRootPath: firstBundleRoot)
+    try await pool.ensureDedicatedRoute(forConsumerBundleRootPath: secondBundleRoot)
+    await pool.setActiveRouteToken(firstRoute)
+    await pool.dispatch(events: [.dpadChanged(.north)], from: identifier)
+    await pool.setActiveRouteToken(secondRoute)
+
+    let first = try #require(dedicatedByRoute.dispatcherIfPresent(for: firstRoute))
+    let second = try #require(dedicatedByRoute.dispatcherIfPresent(for: secondRoute))
+    #expect(first.recordedDispatches.map(\.events).contains([.dpadChanged(.neutral)]))
+    #expect(second.recordedDispatches.map(\.events).contains([.dpadChanged(.north)]))
+  }
 }
 
 private final class LockedRouteDispatchers: @unchecked Sendable {

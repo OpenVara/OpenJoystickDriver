@@ -210,4 +210,23 @@ struct GIPParserTests {
     #expect(!events2.contains(.buttonReleased(.a)))
   }
 
+  @Test
+  func testReleaseClearsHeldButtonAndDoesNotRepeatWhileNeutral() throws {
+    let parser = GIPParser()
+    var held = Data(repeating: 0, count: 14)
+    held[1] = 1  // D-pad up
+    var heldPacket = Data([0x20, 32, 0, 14])
+    heldPacket += held
+    let pressEvents = try parser.parse(data: heldPacket)
+    #expect(pressEvents.contains(.dpadChanged(.north)))
+
+    var neutralPacket = Data([0x20, 32, 1, 14])
+    neutralPacket += Data(repeating: 0, count: 14)
+    let releaseEvents = try parser.parse(data: neutralPacket)
+    #expect(releaseEvents.contains(.dpadChanged(.neutral)))
+
+    let repeatedNeutralEvents = try parser.parse(data: neutralPacket)
+    #expect(repeatedNeutralEvents.isEmpty)
+  }
+
 }

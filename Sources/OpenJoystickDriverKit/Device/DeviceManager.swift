@@ -73,7 +73,7 @@ public actor DeviceManager {
   /// Returns the latest input snapshot for a device matched by vendor and product ID.
   ///
   /// Returns nil if no pipeline is active for the device.
-  public func inputState(for identifier: DeviceIdentifier) async -> DeviceInputState? {
+  public func inputState(for identifier: DeviceIdentifier) -> DeviceInputState? {
     guard let key = pipelines.keys.first(where: { $0.modelMatches(identifier) }) else { return nil }
     return pipelines[key]?.inputState()
   }
@@ -81,7 +81,7 @@ public actor DeviceManager {
   /// Returns recent raw USB packets for a device matched by vendor and product ID.
   ///
   /// Returns an empty array if no pipeline is active for the device.
-  public func packetLog(for identifier: DeviceIdentifier) async -> [PacketLogEntry] {
+  public func packetLog(for identifier: DeviceIdentifier) -> [PacketLogEntry] {
     guard let key = pipelines.keys.first(where: { $0.modelMatches(identifier) }) else { return [] }
     return pipelines[key]?.getPacketLog() ?? []
   }
@@ -151,7 +151,9 @@ public actor DeviceManager {
         inputEndpoint: profile.transportProfile.inputEndpoint,
         outputEndpoint: profile.transportProfile.outputEndpoint,
         needsSetConfiguration: profile.transportProfile.needsSetConfiguration,
-        postHandshakeSettleMs: Int(profile.transportProfile.postHandshakeSettleNanoseconds / 1_000_000),
+        postHandshakeSettleMs: Int(
+          profile.transportProfile.postHandshakeSettleNanoseconds / 1_000_000
+        ),
         preferredBackends: profile.preferredBackends.map(\.rawValue),
         supportsPhysicalRumble: pipelines[id]?.supportsPhysicalRumble() ?? false
       )

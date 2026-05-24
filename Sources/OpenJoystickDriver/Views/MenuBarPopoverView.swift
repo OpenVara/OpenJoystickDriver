@@ -91,8 +91,12 @@ struct MenuBarPopoverView: View {
       if model.daemonRestarting { return "The helper is restarting." }
       if !model.daemonInstalled { return "Install the helper to read controller input." }
       if !model.daemonConnected { return "Start the helper to connect controllers." }
-      if model.appInputMonitoring != "granted" { return "Allow Input Monitoring for OpenJoystickDriver." }
-      if model.inputMonitoring != "granted" { return "Allow Input Monitoring for OpenJoystickDriver Helper." }
+      if model.appInputMonitoring != "granted" {
+        return "Allow Input Monitoring for OpenJoystickDriver."
+      }
+      if model.inputMonitoring != "granted" {
+        return "Allow Input Monitoring for OpenJoystickDriver Helper."
+      }
       if model.devices.isEmpty { return "Connect a controller." }
       return "\(model.devices.count) controller\(model.devices.count == 1 ? "" : "s") connected."
     }()
@@ -224,7 +228,9 @@ struct MenuBarPopoverView: View {
             .foregroundColor(.red)
             .fixedSize(horizontal: false, vertical: true)
         }
-        if let warning = model.extensionManager.installWarning, model.extensionManager.installState.isInstalled {
+        if let warning = model.extensionManager.installWarning,
+          model.extensionManager.installState.isInstalled
+        {
           Text(warning)
             .font(.caption)
             .foregroundColor(.orange)
@@ -325,8 +331,6 @@ struct MenuBarPopoverView: View {
       VStack(alignment: .leading, spacing: 10) {
         HStack(alignment: .top, spacing: 10) {
           VStack(alignment: .leading, spacing: 3) {
-            Text("Select the profile apps should see.")
-              .font(.caption.weight(.semibold))
             Text("Compatibility mode works well for Steam, emulators, and SDL-based apps.")
               .font(.caption)
               .foregroundColor(.secondary)
@@ -344,11 +348,11 @@ struct MenuBarPopoverView: View {
 
         let compatSelected = model.virtualDeviceMode == VirtualDeviceMode.compatUserSpace.rawValue
         HStack(spacing: 10) {
-          Text("Profile")
+          Text("Identity")
             .font(.caption)
             .foregroundColor(.secondary)
           Picker(
-            "Game profile",
+            "Compatibility identity",
             selection: Binding(
               get: { model.compatibilityIdentity },
               set: { v in Task { await model.setCompatibilityIdentity(v) } }
@@ -395,17 +399,33 @@ struct MenuBarPopoverView: View {
 
         VStack(alignment: .leading, spacing: 3) {
           statusLine("Active", activeOutputLabel)
-          statusLine("Backend", model.userSpaceVirtualDeviceStatus, warning: model.userSpaceVirtualDeviceStatus.hasPrefix("error:"))
-          statusLine("GameController", gameControllerSupportLabel, success: gameControllerSupportLabel == "yes")
+          statusLine(
+            "Backend",
+            model.userSpaceVirtualDeviceStatus,
+            warning: model.userSpaceVirtualDeviceStatus.hasPrefix("error:")
+          )
+          statusLine(
+            "GameController",
+            gameControllerSupportLabel,
+            success: gameControllerSupportLabel == "yes"
+          )
           if let s = model.virtualDeviceDiagnostics?.driverKitOutputStats {
-            statusLine("DriverKit reports", "ok \(s.successes), fail \(s.failures), last \(s.lastErrorHex ?? "none")")
+            statusLine(
+              "DriverKit reports",
+              "ok \(s.successes), fail \(s.failures), last \(s.lastErrorHex ?? "none")"
+            )
           }
         }
       }
     }
   }
 
-  private func statusLine(_ label: String, _ value: String, success: Bool = false, warning: Bool = false) -> some View {
+  private func statusLine(
+    _ label: String,
+    _ value: String,
+    success: Bool = false,
+    warning: Bool = false
+  ) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
       Text(label)
         .font(.caption)
@@ -449,10 +469,11 @@ struct MenuBarPopoverView: View {
         SwiftUI.Button(runningSelfTest ? "Running…" : "Run 5s") {
           runningSelfTest = true
           Task {
-            await model.syncFromDaemonNow()
+              await model.syncFromDaemonNow()
             if model.daemonHealth?.isInefficientKillLoop == true {
               model.daemonError =
-                "Daemon is being killed by launchd (inefficient). Fix daemon stability before self-test."
+                "Daemon is being killed by launchd (inefficient). " +
+                "Fix daemon stability before self-test."
               runningSelfTest = false
               return
             }
@@ -466,17 +487,25 @@ struct MenuBarPopoverView: View {
       }
       if let t = model.virtualDeviceSelfTest {
         VStack(alignment: .leading, spacing: 3) {
-          statusLine("DriverKit", "value \(t.driverKitValueEvents), report \(t.driverKitReportEvents)")
+          statusLine(
+            "DriverKit",
+            "value \(t.driverKitValueEvents), report \(t.driverKitReportEvents)"
+          )
           if let delta = t.driverKitInputReportDelta {
             statusLine("ioreg input", "Δ \(delta)")
           }
           if let delta = t.driverKitSetReportSuccessDelta {
             statusLine("daemon setReport", "ok Δ \(delta)")
           }
-          statusLine("User-space", "value \(t.userSpaceValueEvents), report \(t.userSpaceReportEvents)")
+          statusLine(
+            "User-space",
+            "value \(t.userSpaceValueEvents), report \(t.userSpaceReportEvents)"
+          )
         }
       } else {
-        Text("Press controller buttons during the check.").font(.caption).foregroundColor(.secondary)
+        Text("Press controller buttons during the check.")
+          .font(.caption)
+          .foregroundColor(.secondary)
       }
       }
     }
@@ -531,7 +560,10 @@ struct MenuBarPopoverView: View {
       .buttonStyle(.borderless)
 
       SwiftUI.Button("Show Log") {
-        NSWorkspace.shared.selectFile("/tmp/com.openjoystickdriver.daemon.out", inFileViewerRootedAtPath: "")
+        NSWorkspace.shared.selectFile(
+          "/tmp/com.openjoystickdriver.daemon.out",
+          inFileViewerRootedAtPath: ""
+        )
       }
       .buttonStyle(.borderless)
 
@@ -953,7 +985,9 @@ private struct InputTestWindowView: View {
               .foregroundColor(state == nil ? .secondary : .green)
               .padding(.horizontal, 7)
               .padding(.vertical, 3)
-              .background(Capsule().fill((state == nil ? Color.secondary : Color.green).opacity(0.12)))
+              .background(
+                Capsule().fill((state == nil ? Color.secondary : Color.green).opacity(0.12))
+              )
           }
           HStack(spacing: 7) {
             MiniBadge(device.parser)
@@ -1109,7 +1143,11 @@ private struct InputTestWindowView: View {
     return OJDCard(title: "Rumble test") {
       VStack(alignment: .leading, spacing: 12) {
         HStack {
-          Text(canRumble ? "Send a short rumble command to the controller." : "This controller does not expose rumble.")
+          Text(
+            canRumble
+              ? "Send a short rumble command to the controller."
+              : "This controller does not expose rumble."
+          )
             .font(.caption)
             .foregroundColor(.secondary)
           Spacer()
@@ -1150,17 +1188,34 @@ private struct InputTestWindowView: View {
             }
             .disabled(!canRumble)
             Divider().frame(height: 18)
-            Stepper("Duration \(Int(rumbleDurationMs)) ms", value: $rumbleDurationMs, in: 50...5000, step: 50)
+            Stepper(
+              "Duration \(Int(rumbleDurationMs)) ms",
+              value: $rumbleDurationMs,
+              in: 50...5000,
+              step: 50
+            )
               .font(.caption)
               .frame(width: 160)
           }
           HStack(spacing: 8) {
             rumbleIconButton("Left motor", systemName: "l.circle") {
-              sendRumble(to: device, left: UInt8(clamping: Int(rumbleLeft)), right: 0, lt: 0, rt: 0)
+              sendRumble(
+                to: device,
+                left: UInt8(clamping: Int(rumbleLeft)),
+                right: 0,
+                lt: 0,
+                rt: 0
+              )
             }
             .disabled(rumbleRunning || !canRumble)
             rumbleIconButton("Right motor", systemName: "r.circle") {
-              sendRumble(to: device, left: 0, right: UInt8(clamping: Int(rumbleRight)), lt: 0, rt: 0)
+              sendRumble(
+                to: device,
+                left: 0,
+                right: UInt8(clamping: Int(rumbleRight)),
+                lt: 0,
+                rt: 0
+              )
             }
             .disabled(rumbleRunning || !canRumble)
             Divider().frame(height: 16)

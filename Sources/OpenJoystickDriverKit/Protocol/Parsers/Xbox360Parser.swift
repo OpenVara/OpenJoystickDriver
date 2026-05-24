@@ -9,7 +9,7 @@ private let xbox360InputReportLength = 20
 /// Maximum value for a trigger axis (UInt8).
 private let xbox360TriggerMax: Float = 255
 /// Maximum positive value for a signed stick axis.
-private let xbox360StickMax: Float = Float(Int16.max)
+private let xbox360StickMax = Float(Int16.max)
 
 /// Xbox 360 LED pattern constants for `sendLED(_:handle:pattern:)`.
 public enum Xbox360LEDPattern: UInt8, Sendable {
