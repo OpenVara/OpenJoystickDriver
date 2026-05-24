@@ -283,7 +283,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
 
   func requestAppInputMonitoringAccess() async {
     appInputMonitoring = "\(await permissionManager.requestAccess())"
-    if appInputMonitoring == "denied" {
+    if appInputMonitoring != "granted" {
       openInputMonitoringSettings()
     }
   }
@@ -295,7 +295,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     }
     do {
       inputMonitoring = try await client.requestInputMonitoringAccess()
-      if inputMonitoring == "denied" {
+      if inputMonitoring != "granted" {
         openInputMonitoringSettings()
       }
       await syncFromDaemonNow()

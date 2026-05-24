@@ -52,7 +52,7 @@ import SwiftUI
       }
       button.target = self
       button.action = #selector(togglePopover(_:))
-      button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+      button.sendAction(on: [.leftMouseUp])
     }
     statusItem = item
   }

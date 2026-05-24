@@ -70,14 +70,8 @@ struct MenuBarPopoverView: View {
       VStack(alignment: .leading, spacing: 2) {
         Text("OpenJoystickDriver")
           .font(.system(size: 17, weight: .semibold))
-        Text("Gamepad bridge for macOS")
-          .font(.caption)
-          .foregroundColor(.secondary)
       }
       Spacer()
-      SwiftUI.Button("Quit") { NSApplication.shared.terminate(nil) }
-        .buttonStyle(.borderless)
-        .foregroundColor(.secondary)
     }
   }
 
@@ -164,7 +158,7 @@ struct MenuBarPopoverView: View {
       .controlSize(.small)
       .padding(.top, 2)
     } else if model.appInputMonitoring != "granted" {
-      SwiftUI.Button(model.appInputMonitoring == "denied" ? "Open Settings" : "Grant Access") {
+      SwiftUI.Button("Open Settings") {
         if model.appInputMonitoring == "denied" {
           model.openInputMonitoringSettings()
         } else {
@@ -174,7 +168,7 @@ struct MenuBarPopoverView: View {
       .controlSize(.small)
       .padding(.top, 2)
     } else if model.inputMonitoring != "granted" {
-      SwiftUI.Button(model.inputMonitoring == "denied" ? "Open Settings" : "Grant Access") {
+      SwiftUI.Button("Open Settings") {
         if model.inputMonitoring == "denied" {
           model.openInputMonitoringSettings()
         } else {
@@ -286,7 +280,7 @@ struct MenuBarPopoverView: View {
           title: "OpenJoystickDriver",
           subtitle: permissionSubtitle(for: model.appInputMonitoring, owner: "the app"),
           state: model.appInputMonitoring,
-          actionTitle: permissionActionTitle(for: model.appInputMonitoring, owner: "App")
+          actionTitle: permissionActionTitle(for: model.appInputMonitoring)
         ) {
           if model.appInputMonitoring == "denied" {
             model.openInputMonitoringSettings()
@@ -303,7 +297,7 @@ struct MenuBarPopoverView: View {
             settingsName: "OpenJoystickDriver Helper"
           ),
           state: model.inputMonitoring,
-          actionTitle: permissionActionTitle(for: model.inputMonitoring, owner: "Helper"),
+          actionTitle: permissionActionTitle(for: model.inputMonitoring),
           disabled: !model.daemonConnected && model.inputMonitoring != "denied"
         ) {
           if model.inputMonitoring == "denied" {
@@ -316,8 +310,8 @@ struct MenuBarPopoverView: View {
     }
   }
 
-  private func permissionActionTitle(for state: String, owner: String) -> String {
-    state == "denied" ? "Open Settings" : "Grant \(owner)"
+  private func permissionActionTitle(for state: String) -> String {
+    state == "granted" ? "Allowed" : "Open Settings"
   }
 
   private func permissionSubtitle(
@@ -332,7 +326,7 @@ struct MenuBarPopoverView: View {
       let name = settingsName ?? owner
       return "Open System Settings and turn on Input Monitoring for \(name)."
     default:
-      return "Lets \(owner) read controller input."
+      return "Open System Settings if macOS does not show a prompt."
     }
   }
 
@@ -550,6 +544,9 @@ struct MenuBarPopoverView: View {
         NSWorkspace.shared.selectFile("/tmp/com.openjoystickdriver.daemon.out", inFileViewerRootedAtPath: "")
       }
       .buttonStyle(.borderless)
+
+      SwiftUI.Button("Quit") { NSApplication.shared.terminate(nil) }
+        .buttonStyle(.borderless)
 
       Spacer()
     }
