@@ -244,8 +244,12 @@ struct MenuBarPopoverView: View {
         }
         Divider()
         PermissionRow(
-          title: "Helper",
-          subtitle: permissionSubtitle(for: model.inputMonitoring, owner: "the helper"),
+          title: "OpenJoystickDriver Helper",
+          subtitle: permissionSubtitle(
+            for: model.inputMonitoring,
+            owner: "the helper",
+            settingsName: "OpenJoystickDriver Helper"
+          ),
           state: model.inputMonitoring,
           actionTitle: permissionActionTitle(for: model.inputMonitoring, owner: "Helper"),
           disabled: !model.daemonConnected && model.inputMonitoring != "denied"
@@ -264,12 +268,17 @@ struct MenuBarPopoverView: View {
     state == "denied" ? "Open Settings" : "Grant \(owner)"
   }
 
-  private func permissionSubtitle(for state: String, owner: String) -> String {
+  private func permissionSubtitle(
+    for state: String,
+    owner: String,
+    settingsName: String? = nil
+  ) -> String {
     switch state {
     case "granted":
       return "Ready."
     case "denied":
-      return "Open System Settings and turn on Input Monitoring for \(owner)."
+      let name = settingsName ?? owner
+      return "Open System Settings and turn on Input Monitoring for \(name)."
     default:
       return "Lets \(owner) read controller input."
     }

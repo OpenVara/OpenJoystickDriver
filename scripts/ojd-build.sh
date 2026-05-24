@@ -359,6 +359,8 @@ PLIST
     <string>com.openjoystickdriver.daemon</string>
     <key>CFBundleName</key>
     <string>OpenJoystickDriverDaemon</string>
+    <key>CFBundleDisplayName</key>
+    <string>OpenJoystickDriver Helper</string>
     <key>CFBundleExecutable</key>
     <string>OpenJoystickDriverDaemon</string>
     <key>CFBundlePackageType</key>
