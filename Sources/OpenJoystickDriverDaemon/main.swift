@@ -22,6 +22,16 @@ let xpcService = XPCService(
   dispatcher: dispatcher,
   dextDispatcher: dextDispatcher
 )
+let foregroundConsumerOutputMonitor = ForegroundConsumerOutputMonitor(
+  deviceManager: manager
+) { frontmostBundleRootPath, effectiveConsumerBundleRoots, observedConsumerBundleRoots, activeRouteToken in
+  await xpcService.applyForegroundCompatibilityRoutingUpdate(
+    frontmostBundleRootPath: frontmostBundleRootPath,
+    effectiveConsumerBundleRoots: effectiveConsumerBundleRoots,
+    observedConsumerBundleRoots: observedConsumerBundleRoots,
+    activeRouteToken: activeRouteToken
+  )
+}
 
 manager.setupGracefulShutdown(label: "Daemon")
 
@@ -30,6 +40,7 @@ print("[Daemon] OpenJoystickDriverDaemon starting...")
 Task { await permissionManager.startPolling() }
 
 xpcService.start()
+foregroundConsumerOutputMonitor.start()
 
 Task { await manager.start() }
 

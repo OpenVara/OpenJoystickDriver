@@ -39,16 +39,16 @@ mapping and caveats live here.
 
 ## Pick A Mode
 
-| User goal                                       | Choose                   | Why                                                               |
-| ----------------------------------------------- | ------------------------ | ----------------------------------------------------------------- |
-| Most games and emulators                        | ✅ `sdl2-3`               | Best default for SDL-based apps.                                  |
+| User goal                                       | Choose                   | Why                                                                      |
+| ----------------------------------------------- | ------------------------ | ------------------------------------------------------------------------ |
+| Most games and emulators                        | ✅ `sdl2-3`               | Best default for SDL-based apps.                                         |
 | Native macOS app using GameController.framework | ✅ `apple-gamecontroller` | Publishes a `GCController`-friendly Xbox-style HID surface with haptics. |
-| SDL app needs output-report rumble              | 🚧 `x360-hid`             | Test with `./scripts/ojd diagnose sdl3-hidapi-x360 --seconds 5`.  |
-| SDL app needs macOS GameController rumble       | 🚧 `apple-gamecontroller` | GameController haptics work; SDL MFI enumeration is still gated.  |
-| Direct HID testing                              | ⚠️ `generic-hid`          | Keeps OJD's own VID/PID and exposes a plain HID GamePad.          |
-| App expects Xbox 360 HID                        | 🚧 `x360-hid`             | Experimental Microsoft-style HID identity.                        |
-| App expects Xbox One HID                        | 🚧 `xone-hid`             | Experimental Microsoft-style HID identity.                        |
-| DualShock 4 over Bluetooth                      | ✅ `sdl2-3`               | Uses Sony Bluetooth HID report parsing with compatibility output. |
+| SDL app needs output-report rumble              | 🚧 `x360-hid`             | Test with `./scripts/ojd diagnose sdl3-hidapi-x360 --seconds 5`.         |
+| SDL app needs macOS GameController rumble       | 🚧 `apple-gamecontroller` | GameController haptics work; SDL MFI enumeration is still gated.         |
+| Direct HID testing                              | ⚠️ `generic-hid`          | Keeps OJD's own VID/PID and exposes a plain HID GamePad.                 |
+| App expects Xbox 360 HID                        | 🚧 `x360-hid`             | Experimental Microsoft-style HID identity.                               |
+| App expects Xbox One HID                        | 🚧 `xone-hid`             | Experimental Microsoft-style HID identity.                               |
+| DualShock 4 over Bluetooth                      | ✅ `sdl2-3`               | Uses Sony Bluetooth HID report parsing with compatibility output.        |
 
 CLI examples:
 
@@ -143,8 +143,10 @@ PCSX2 reads this user data file before its bundled database:
 ~/Library/Application Support/PCSX2/game_controller_db.txt
 ```
 
-The included input profile binds the single expected `SDL-0` OJD Compatibility
-controller.
+The included input profile is a starting template. Focus-routed builds can
+expose multiple OJD SDL instances, so in PCSX2 bind the OJD controller that
+only responds while the PCSX2 window is focused instead of assuming it will
+always be `SDL-0`.
 
 For SDL apps that need rumble through macOS GameController haptics, use:
 
@@ -164,6 +166,7 @@ Before calling a mapping fully verified, check the exact app and mode:
 
 1. Browser Gamepad API: buttons and axes match the active identity table.
 2. SDL 2/3: `A2` and `A5` idle at zero, D-pad releases cleanly.
-3. PCSX2 or DuckStation: face buttons, View/Menu, L3/R3, D-pad, and triggers bind once.
+3. PCSX2 or DuckStation: face buttons, View/Menu, L3/R3, D-pad, and triggers
+   bind once on the OJD SDL instance that responds only while that window is focused.
 4. Parsec macOS to Windows: D-pad and A/B/X/Y stay stable on the Windows host.
 5. Rumble: app output report reaches the physical controller if the controller supports rumble.

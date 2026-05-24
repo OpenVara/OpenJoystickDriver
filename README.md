@@ -109,7 +109,10 @@ For PCSX2, use SDL 2/3 Compatibility with user-space-only output:
 ```
 
 The launcher sets the known-good routing before starting PCSX2. The input
-profile binds the single expected `SDL-0` OJD Compatibility controller.
+profile is a starting template for Pad 1. Focus-routed builds can expose
+multiple OJD SDL instances, so in PCSX2 bind the OJD controller that only
+responds while the PCSX2 window is focused instead of assuming it will always
+be `SDL-0`.
 
 ## Useful Commands
 

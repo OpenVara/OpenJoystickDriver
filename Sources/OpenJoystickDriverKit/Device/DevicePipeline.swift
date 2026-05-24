@@ -14,6 +14,8 @@ private let usbIOErrorReconnectThreshold = 10
 private let usbIOErrorBackoffBaseNs: UInt64 = 250_000_000  // 250ms
 private let usbIOErrorBackoffMaxNs: UInt64 = 2_000_000_000  // 2s
 private let usbIOErrorLogIntervalNs: UInt64 = 5_000_000_000  // 5s
+private let defaultControllerIdleTimeoutNanoseconds: UInt64 = 30_000_000_000
+private let defaultIdleMonitorIntervalNanoseconds: UInt64 = 1_000_000_000
 
 private final class DevicePipelineSnapshots: @unchecked Sendable {
   private let lock = NSLock()
@@ -65,12 +67,18 @@ actor DevicePipeline {
   private let dispatcher: any OutputDispatcher
   private let usbContext: USBContext?
   private let transportProfile: DeviceTransportProfile
+  private let idleMonitorIntervalNanoseconds: UInt64
   private var isActive = false
   private var usbHandle: USBDeviceHandle?
   private var currentInputState: DeviceInputState
+  private var outputState: DeviceInputState
   private var packetLog: [PacketLogEntry] = []
   private let maxPacketLogEntries = 200
   private let snapshots: DevicePipelineSnapshots
+  private var sleepGate = ControllerSleepGate()
+  private var idleMonitorTask: Task<Void, Never>?
+  private var externalOutputAllowed: Bool
+  private var waitingForExternalNeutral = false
   private var consecutiveUSBIOErrors: Int = 0
   private var lastUSBIOErrorLogNs: UInt64 = 0
 
@@ -80,7 +88,10 @@ actor DevicePipeline {
     parser: any InputParser,
     dispatcher: any OutputDispatcher,
     usbContext: USBContext?,
-    transportProfile: DeviceTransportProfile = .gipDefault
+    transportProfile: DeviceTransportProfile = .gipDefault,
+    externalOutputAllowed: Bool = true,
+    idleTimeoutNanoseconds: UInt64 = defaultControllerIdleTimeoutNanoseconds,
+    idleMonitorIntervalNanoseconds: UInt64 = defaultIdleMonitorIntervalNanoseconds
   ) {
     self.identifier = identifier
     self.transport = transport
@@ -88,21 +99,26 @@ actor DevicePipeline {
     self.dispatcher = dispatcher
     self.usbContext = usbContext
     self.transportProfile = transportProfile
+    self.idleMonitorIntervalNanoseconds = idleMonitorIntervalNanoseconds
+    self.externalOutputAllowed = externalOutputAllowed
     let initialState = DeviceInputState(
       vendorID: identifier.vendorID,
       productID: identifier.productID
     )
     self.currentInputState = initialState
+    self.outputState = initialState
     self.snapshots = DevicePipelineSnapshots(
       inputState: initialState,
       maxPacketLogEntries: maxPacketLogEntries
     )
+    self.sleepGate = ControllerSleepGate(idleTimeoutNanoseconds: idleTimeoutNanoseconds)
   }
 
   /// Start pipeline: open device, handshake, begin input loop.
   func start() async {
     guard !isActive else { return }
     isActive = true
+    startIdleMonitor()
 
     switch transport {
     case .usb(let vid, let pid): await startUSBPipeline(vendorID: vid, productID: pid)
@@ -115,6 +131,8 @@ actor DevicePipeline {
   /// Stop pipeline and clean up resources.
   func stop() {
     isActive = false
+    idleMonitorTask?.cancel()
+    idleMonitorTask = nil
     if let handle = usbHandle {
       try? handle.releaseInterface(0)
       usbHandle = nil
@@ -128,8 +146,7 @@ actor DevicePipeline {
     appendToPacketLog(bytes: Array(data), direction: "rx")
     do {
       let events = try parser.parse(data: data)
-      if !events.isEmpty { await dispatcher.dispatch(events: events, from: identifier) }
-      updateInputState(from: events)
+      await handleParsedEvents(events, now: DispatchTime.now().uptimeNanoseconds)
     } catch { print("[DevicePipeline] Parse error" + " for \(identifier): \(error)") }
   }
 
@@ -148,71 +165,41 @@ actor DevicePipeline {
   nonisolated func inputState() -> DeviceInputState { snapshots.currentInputState() }
   nonisolated func getPacketLog() -> [PacketLogEntry] { snapshots.currentPacketLog() }
 
-  private func updateInputState(from events: [ControllerEvent]) {
-    for event in events {
-      switch event {
-      case .buttonPressed(let button):
-        let raw = button.rawValue
-        if !currentInputState.pressedButtons.contains(raw) {
-          currentInputState.pressedButtons.append(raw)
-        }
-      case .buttonReleased(let button):
-        currentInputState.pressedButtons.removeAll { $0 == button.rawValue }
-      case .leftStickChanged(let x, let y):
-        currentInputState.leftStickX = x
-        currentInputState.leftStickY = y
-      case .rightStickChanged(let x, let y):
-        currentInputState.rightStickX = x
-        currentInputState.rightStickY = y
-      case .leftTriggerChanged(let v): currentInputState.leftTrigger = v
-      case .rightTriggerChanged(let v): currentInputState.rightTrigger = v
-      case .dpadChanged(let direction):
-        updateDpadButtons(direction)
+  func setExternalOutputAllowed(_ allowed: Bool) async {
+    let changed = externalOutputAllowed != allowed
+    guard changed else { return }
+    externalOutputAllowed = allowed
+
+    if !allowed {
+      waitingForExternalNeutral = false
+      let neutralizingEvents = outputState.neutralizingEvents()
+      if !neutralizingEvents.isEmpty {
+        await dispatcher.dispatch(events: neutralizingEvents, from: identifier)
+        updateOutputState(from: neutralizingEvents)
       }
+      print("[DevicePipeline] Output gated by foreground consumer: \(identifier)")
+      return
     }
+
+    let shouldWaitForNeutral = !currentInputState.isEffectivelyNeutral
+    waitingForExternalNeutral = shouldWaitForNeutral
+
+    if shouldWaitForNeutral {
+      print(
+        "[DevicePipeline] Foreground gate lifted; suppressing hidden non-neutral state: \(identifier)"
+      )
+    } else {
+      print("[DevicePipeline] Output ungated by foreground consumer: \(identifier)")
+    }
+  }
+
+  private func updateObservedInputState(from events: [ControllerEvent]) {
+    currentInputState.apply(events: events)
     snapshots.updateInputState(currentInputState)
   }
 
-  private func updateDpadButtons(_ direction: DpadDirection) {
-    let dpadButtons = Set([
-      Button.dpadUp.rawValue,
-      Button.dpadDown.rawValue,
-      Button.dpadLeft.rawValue,
-      Button.dpadRight.rawValue,
-    ])
-    currentInputState.pressedButtons.removeAll { dpadButtons.contains($0) }
-
-    func append(_ button: Button) {
-      let raw = button.rawValue
-      if !currentInputState.pressedButtons.contains(raw) {
-        currentInputState.pressedButtons.append(raw)
-      }
-    }
-
-    switch direction {
-    case .neutral:
-      break
-    case .north:
-      append(.dpadUp)
-    case .northEast:
-      append(.dpadUp)
-      append(.dpadRight)
-    case .east:
-      append(.dpadRight)
-    case .southEast:
-      append(.dpadDown)
-      append(.dpadRight)
-    case .south:
-      append(.dpadDown)
-    case .southWest:
-      append(.dpadDown)
-      append(.dpadLeft)
-    case .west:
-      append(.dpadLeft)
-    case .northWest:
-      append(.dpadUp)
-      append(.dpadLeft)
-    }
+  private func updateOutputState(from events: [ControllerEvent]) {
+    outputState.apply(events: events)
   }
 
   private func appendToPacketLog(bytes: [UInt8], direction: String) {
@@ -379,7 +366,7 @@ actor DevicePipeline {
 
     while isActive {
       let loopStartNs = DispatchTime.now().uptimeNanoseconds
-      if shouldSendKeepAlive(lastKeepAliveNs: lastKeepAliveNs, now: loopStartNs) {
+      if !sleepGate.isSleeping && shouldSendKeepAlive(lastKeepAliveNs: lastKeepAliveNs, now: loopStartNs) {
         lastKeepAliveNs = loopStartNs
         runKeepAlive(handle: handle)
       }
@@ -390,8 +377,7 @@ actor DevicePipeline {
         consecutiveUSBIOErrors = 0
         appendToPacketLog(bytes: bytes, direction: "rx")
         let events = try parseEvents(from: bytes)
-        if !events.isEmpty { await dispatcher.dispatch(events: events, from: identifier) }
-        updateInputState(from: events)
+        await handleParsedEvents(events, now: DispatchTime.now().uptimeNanoseconds)
       } catch let error as USBError where error.isTimeout {
         // No data in this interval; throttle below to avoid a hot timeout loop.
         shouldThrottleIdle = true
@@ -462,5 +448,70 @@ actor DevicePipeline {
 
   private func parseEvents(from bytes: [UInt8]) throws -> [ControllerEvent] {
     try parser.parse(data: Data(bytes))
+  }
+
+  private func startIdleMonitor() {
+    idleMonitorTask?.cancel()
+    idleMonitorTask = Task {
+      while !Task.isCancelled {
+        try? await Task.sleep(nanoseconds: idleMonitorIntervalNanoseconds)
+        await self.evaluateIdleSleep()
+      }
+    }
+  }
+
+  private func evaluateIdleSleep() async {
+    guard isActive else { return }
+    guard
+      sleepGate.idleTransition(
+        currentState: currentInputState,
+        now: DispatchTime.now().uptimeNanoseconds
+      )
+        != nil
+    else { return }
+
+    let neutralizingEvents = outputState.neutralizingEvents()
+    print("[DevicePipeline] Controller sleeping after idle: \(identifier)")
+    if !neutralizingEvents.isEmpty {
+      await dispatcher.dispatch(events: neutralizingEvents, from: identifier)
+      updateOutputState(from: neutralizingEvents)
+    }
+  }
+
+  private func handleParsedEvents(_ events: [ControllerEvent], now: UInt64) async {
+    let previousState = currentInputState
+    let nextState = currentInputState.applying(events: events)
+    updateObservedInputState(from: events)
+
+    switch sleepGate.handleInput(
+      events: events,
+      previousState: previousState,
+      nextState: nextState,
+      now: now
+    ) {
+    case .forward:
+      if !externalOutputAllowed { return }
+      if waitingForExternalNeutral {
+        if nextState.isEffectivelyNeutral {
+          waitingForExternalNeutral = false
+          print("[DevicePipeline] Foreground gate re-armed after neutral: \(identifier)")
+          return
+        } else if !events.isEmpty {
+          waitingForExternalNeutral = false
+          print("[DevicePipeline] Foreground gate re-armed after first post-focus change: \(identifier)")
+          return
+        }
+        return
+      }
+      if !events.isEmpty {
+        await dispatcher.dispatch(events: events, from: identifier)
+      }
+      updateOutputState(from: events)
+    case .consumeWhileSleeping:
+      break
+    case .consumeWake:
+      print("[DevicePipeline] Controller woke from sleep: \(identifier)")
+      break
+    }
   }
 }

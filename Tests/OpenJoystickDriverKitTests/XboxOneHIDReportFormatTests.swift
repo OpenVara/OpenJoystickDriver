@@ -1,8 +1,8 @@
-import XCTest
+import Testing
 
 @testable import OpenJoystickDriverKit
 
-final class XboxOneHIDReportFormatTests: XCTestCase {
+struct XboxOneHIDReportFormatTests {
   private func format() throws -> HIDDescriptorReportFormat {
     try HIDDescriptorReportFormat(descriptor: XboxOneBluetoothHIDDescriptor.descriptor)
   }
@@ -10,15 +10,17 @@ final class XboxOneHIDReportFormatTests: XCTestCase {
   private func report(buttonBit: Int) throws -> [UInt8] {
     try format().buildInputReport(from: VirtualGamepadState(buttons: 1 << UInt32(buttonBit)))
   }
+  @Test
   func testMapsFaceAndShoulderButtonsDirectly() throws {
     let a = try report(buttonBit: 0)
     let rb = try report(buttonBit: 5)
 
-    XCTAssertTrue(a.count == 16)
-    XCTAssertTrue(a[0] == 1)
-    XCTAssertTrue(a[14] == 0x01)
-    XCTAssertTrue(rb[14] == 0x20)
+    #expect(a.count == 16)
+    #expect(a[0] == 1)
+    #expect(a[14] == 0x01)
+    #expect(rb[14] == 0x20)
   }
+  @Test
   func testParsesAndPacksPrimaryAxes() throws {
     let full = try format().buildInputReport(
       from: VirtualGamepadState(
@@ -31,33 +33,35 @@ final class XboxOneHIDReportFormatTests: XCTestCase {
       )
     )
 
-    XCTAssertTrue(full[0] == 1)
-    XCTAssertTrue(full[1] == 0xFF)
-    XCTAssertTrue(full[2] == 0xFF)
-    XCTAssertTrue(full[3] == 0xFF)
-    XCTAssertTrue(full[4] == 0xBF)
-    XCTAssertTrue(full[5] == 0x00)
-    XCTAssertTrue(full[6] == 0x00)
-    XCTAssertTrue(full[7] == 0xFF)
-    XCTAssertTrue(full[8] == 0x3F)
-    XCTAssertTrue(full[9] == 0xFF)
-    XCTAssertTrue(full[10] == 0x03)
-    XCTAssertTrue(full[11] == 0xFF)
-    XCTAssertTrue(full[12] == 0x01)
-    XCTAssertTrue(full[13] == 0x00)
-    XCTAssertTrue(full[14] == 0x00)
+    #expect(full[0] == 1)
+    #expect(full[1] == 0xFF)
+    #expect(full[2] == 0xFF)
+    #expect(full[3] == 0xFF)
+    #expect(full[4] == 0xBF)
+    #expect(full[5] == 0x00)
+    #expect(full[6] == 0x00)
+    #expect(full[7] == 0xFF)
+    #expect(full[8] == 0x3F)
+    #expect(full[9] == 0xFF)
+    #expect(full[10] == 0x03)
+    #expect(full[11] == 0xFF)
+    #expect(full[12] == 0x01)
+    #expect(full[13] == 0x00)
+    #expect(full[14] == 0x00)
   }
+  @Test
   func testMapsStickClicksAndMenuButtonsInRawHIDOrder() throws {
     let view = try report(buttonBit: 9)
     let menu = try report(buttonBit: 8)
     let leftStick = try report(buttonBit: 6)
     let rightStick = try report(buttonBit: 7)
 
-    XCTAssertTrue(leftStick[14] == 0x40)
-    XCTAssertTrue(rightStick[14] == 0x80)
-    XCTAssertTrue(menu[15] == 0x01)
-    XCTAssertTrue(view[15] == 0x02)
+    #expect(leftStick[14] == 0x40)
+    #expect(rightStick[14] == 0x80)
+    #expect(menu[15] == 0x01)
+    #expect(view[15] == 0x02)
   }
+  @Test
   func testPacksDpadAsHatSwitch() throws {
     let north = try format().buildInputReport(
       from: VirtualGamepadState(hat: .north)
@@ -69,10 +73,11 @@ final class XboxOneHIDReportFormatTests: XCTestCase {
       from: VirtualGamepadState(hat: .neutral)
     )
 
-    XCTAssertTrue(north[13] == 0x01)
-    XCTAssertTrue(east[13] == 0x03)
-    XCTAssertTrue(neutral[13] == 0x00)
+    #expect(north[13] == 0x01)
+    #expect(east[13] == 0x03)
+    #expect(neutral[13] == 0x00)
   }
+  @Test
   func testPacksDpadAsDigitalButtons() throws {
     let north = try format().buildInputReport(
       from: VirtualGamepadState(buttons: GamepadHIDDescriptor.dpadButtonBits(for: .north))
@@ -81,7 +86,7 @@ final class XboxOneHIDReportFormatTests: XCTestCase {
       from: VirtualGamepadState(buttons: GamepadHIDDescriptor.dpadButtonBits(for: .east))
     )
 
-    XCTAssertTrue(north[15] == 0x08)
-    XCTAssertTrue(east[15] == 0x40)
+    #expect(north[15] == 0x08)
+    #expect(east[15] == 0x40)
   }
 }

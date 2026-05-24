@@ -28,5 +28,7 @@ Installed PCSX2 input profile:
 In PCSX2, select input profile:
   OpenJoystickDriver
 
-The profile binds the single expected SDL-0 OJD Compatibility controller to Pad 1.
+The installed profile uses SDL-0 as a starting point for Pad 1.
+If PCSX2 shows multiple OJD SDL instances, rebind/select the OJD controller
+that only responds while the PCSX2 window is focused.
 TXT

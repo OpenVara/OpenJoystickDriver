@@ -152,7 +152,9 @@ best-effort applies `compat sdl2-3` plus `output secondary` before launch.
 For normal PCSX2 launches, `./scripts/ojd install pcsx2-sdl-db` installs a
 merged user-data SDL database at `~/Library/Application Support/PCSX2`, and
 `./scripts/ojd install pcsx2-profile` installs an `OpenJoystickDriver` input
-profile that binds the single expected `SDL-0` OJD device.
+profile template. Focus-routed builds can expose multiple OJD SDL instances, so
+PCSX2 should bind the OJD instance that only responds while the PCSX2 window is
+focused instead of assuming `SDL-0`.
 
 GameSir G7 SE was manually verified through hardwaretester.com Gamepad API in
 Xbox One HID compatibility mode as a standard `Xbox Wireless Controller`

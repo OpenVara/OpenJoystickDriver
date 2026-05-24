@@ -21,17 +21,6 @@ let package = Package(
       ]
     ),
 
-    // SwiftPM 6.x generates a package test runner that conditionally imports a
-    // module named `Testing` whenever one is importable. On recent Xcode builds,
-    // Apple's Testing.framework can require a newer OS than OJD's deployment
-    // floor. The XCTest test target depends on this tiny package-local shim so
-    // the generated runner resolves `import Testing` without linking Apple's
-    // framework, preserving the macOS 10.15 minimum.
-    .target(
-      name: "Testing",
-      path: "Tests/TestingShim"
-    ),
-
     .executableTarget(
       name: "OpenJoystickDriverDaemon",
       dependencies: ["OpenJoystickDriverKit"],
@@ -76,7 +65,6 @@ let package = Package(
       name: "OpenJoystickDriverKitTests",
       dependencies: [
         "OpenJoystickDriverKit",
-        "Testing",
         .product(name: "SwiftUSB", package: "SwiftUSB"),
       ],
       path: "Tests/OpenJoystickDriverKitTests"

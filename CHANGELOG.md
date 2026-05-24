@@ -2,6 +2,24 @@
 
 All notable changes to OpenJoystickDriver are documented in this file.
 
+## 0.3.0
+
+### Added
+
+- Added focused Compatibility routing with dedicated per-consumer user-space
+  routes for simultaneous SDL apps such as PCSX2 and DuckStation.
+- Added per-controller idle sleep gating that neutralizes forwarded state and
+  stops keep-alive traffic while a controller is idle.
+- Added focused foreground-routing and sleep-gate regression coverage while
+  migrating the test suite to Swift Testing.
+
+### Fixed
+
+- Fixed focused-app handoff so simultaneous SDL consumers no longer hijack each
+  other's active controller route.
+- Fixed a foreground-consumer misclassification that could freeze controller
+  input for a few seconds mid-game.
+
 ## 0.2.0
 
 ### Added

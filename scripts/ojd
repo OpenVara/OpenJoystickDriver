@@ -60,7 +60,7 @@ Commands:
   launch sdl-gamecontroller <app>
                               Launch an SDL app through GameController/MFI rumble route
   install pcsx2-sdl-db        Install merged PCSX2 SDL DB in user data dir
-  install pcsx2-profile       Install the PCSX2 SDL-0 input profile
+  install pcsx2-profile       Install the PCSX2 OJD input profile template
   rtk install-filters         Create/update project-local RTK filters without duplicates
 
   notarize submit             Submit + poll + staple (release only)

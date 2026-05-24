@@ -47,7 +47,9 @@ DriverKit HID or IOHIDUserDevice compatibility mode.
   the known-good daemon routing before launch.
 - For normal PCSX2 launches, `./scripts/ojd install pcsx2-sdl-db` installs a
   merged user-data SDL database and `./scripts/ojd install pcsx2-profile`
-  installs an input profile that binds the single expected `SDL-0` OJD device.
+  installs a starting input profile. Focus-routed builds can expose multiple
+  OJD SDL instances, so PCSX2 should bind the one that only responds while the
+  PCSX2 window is focused instead of assuming `SDL-0`.
 - Flydigi Vader 5S: GIP USB path supported with endpoint configuration,
   `setConfiguration(1)` before claim, and post-handshake settle delay.
 - xpad.c Xbox batches: Xbox 360 wired-style profiles use the `Xbox360` parser;

@@ -1,5 +1,5 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import OpenJoystickDriverKit
 
@@ -60,15 +60,17 @@ private func containsEvent(_ events: [ControllerEvent], _ expected: ControllerEv
   events.contains(expected)
 }
 
-final class DS4ParserTests: XCTestCase {
+struct DS4ParserTests {
+  @Test
   func testWiredIOHIDReportWithoutReportIDParsesFaceButtons() throws {
     let parser = DS4Parser()
     _ = try parser.parse(data: makeDS4Report())
 
     let events = try parser.parse(data: makeDS4Report(buttons0: 0x28))
 
-    XCTAssertTrue(containsEvent(events, .buttonPressed(.cross)))
+    #expect(containsEvent(events, .buttonPressed(.cross)))
   }
+  @Test
   func testRawUSBReportWithReportIDParsesFaceButtons() throws {
     let parser = DS4Parser()
     _ = try parser.parse(data: makeDS4Report(includesReportID: true))
@@ -77,16 +79,18 @@ final class DS4ParserTests: XCTestCase {
       data: makeDS4Report(includesReportID: true, buttons0: 0x28)
     )
 
-    XCTAssertTrue(containsEvent(events, .buttonPressed(.cross)))
+    #expect(containsEvent(events, .buttonPressed(.cross)))
   }
+  @Test
   func testBluetoothReport11ParsesFaceButtons() throws {
     let parser = DS4Parser()
     _ = try parser.parse(data: makeDS4BluetoothReport())
 
     let events = try parser.parse(data: makeDS4BluetoothReport(buttons0: 0x28))
 
-    XCTAssertTrue(containsEvent(events, .buttonPressed(.cross)))
+    #expect(containsEvent(events, .buttonPressed(.cross)))
   }
+  @Test
   func testBluetoothHIDTransactionReportParsesSticksTriggersAndSystemButtons() throws {
     let parser = DS4Parser()
     _ = try parser.parse(data: makeDS4BluetoothReport(includesHIDTransaction: true))
@@ -105,15 +109,16 @@ final class DS4ParserTests: XCTestCase {
       )
     )
 
-    XCTAssertTrue(containsEvent(events, .leftStickChanged(x: 127.0 / 128.0, y: 1.0)))
-    XCTAssertTrue(containsEvent(events, .rightStickChanged(x: -1.0, y: -127.0 / 128.0)))
-    XCTAssertTrue(containsEvent(events, .leftTriggerChanged(1.0)))
-    XCTAssertTrue(containsEvent(events, .rightTriggerChanged(128.0 / 255.0)))
-    XCTAssertTrue(containsEvent(events, .buttonPressed(.share)))
-    XCTAssertTrue(containsEvent(events, .buttonPressed(.options)))
-    XCTAssertTrue(containsEvent(events, .buttonPressed(.ps)))
-    XCTAssertTrue(containsEvent(events, .buttonPressed(.touchpad)))
+    #expect(containsEvent(events, .leftStickChanged(x: 127.0 / 128.0, y: 1.0)))
+    #expect(containsEvent(events, .rightStickChanged(x: -1.0, y: -127.0 / 128.0)))
+    #expect(containsEvent(events, .leftTriggerChanged(1.0)))
+    #expect(containsEvent(events, .rightTriggerChanged(128.0 / 255.0)))
+    #expect(containsEvent(events, .buttonPressed(.share)))
+    #expect(containsEvent(events, .buttonPressed(.options)))
+    #expect(containsEvent(events, .buttonPressed(.ps)))
+    #expect(containsEvent(events, .buttonPressed(.touchpad)))
   }
+  @Test
   func testBluetoothPayloadWithoutReportIDParsesDpad() throws {
     let parser = DS4Parser()
     _ = try parser.parse(data: makeDS4BluetoothReport(includesReportID: false))
@@ -122,8 +127,9 @@ final class DS4ParserTests: XCTestCase {
       data: makeDS4BluetoothReport(includesReportID: false, buttons0: 0x02)
     )
 
-    XCTAssertTrue(containsEvent(events, .dpadChanged(.east)))
+    #expect(containsEvent(events, .dpadChanged(.east)))
   }
+  @Test
   func testBluetoothShortReportWithHIDTransactionParsesFaceButtons() throws {
     let parser = DS4Parser(prefersBluetooth: true)
     _ = try parser.parse(data: Data([0xA1] + Array(makeDS4Report(includesReportID: true))))
@@ -132,8 +138,9 @@ final class DS4ParserTests: XCTestCase {
       data: Data([0xA1] + Array(makeDS4Report(includesReportID: true, buttons0: 0x28)))
     )
 
-    XCTAssertTrue(containsEvent(events, .buttonPressed(.cross)))
+    #expect(containsEvent(events, .buttonPressed(.cross)))
   }
+  @Test
   func testObservedMacOSBluetoothReport11ParsesStickState() throws {
     let parser = DS4Parser(prefersBluetooth: true)
     let observedPrefix: [UInt8] = [
@@ -144,14 +151,15 @@ final class DS4ParserTests: XCTestCase {
 
     let events = try parser.parse(data: observedReport)
 
-    XCTAssertTrue(containsEvent(events, .leftStickChanged(x: 0, y: 0)))
-    XCTAssertTrue(containsEvent(events, .rightStickChanged(x: 0, y: 0)))
-    XCTAssertTrue(containsEvent(events, .dpadChanged(.neutral)))
-    XCTAssertTrue(!events.contains { event in
+    #expect(containsEvent(events, .leftStickChanged(x: 0, y: 0)))
+    #expect(containsEvent(events, .rightStickChanged(x: 0, y: 0)))
+    #expect(containsEvent(events, .dpadChanged(.neutral)))
+    #expect(!events.contains { event in
       if case .buttonPressed = event { return true }
       return false
     })
   }
+  @Test
   func testWiredIOHIDReportParsesSticksTriggersAndSystemButtons() throws {
     let parser = DS4Parser()
     _ = try parser.parse(data: makeDS4Report())
@@ -174,15 +182,16 @@ final class DS4ParserTests: XCTestCase {
     let expectedLeftTrigger = ControllerEvent.leftTriggerChanged(1.0)
     let expectedRightTrigger = ControllerEvent.rightTriggerChanged(128.0 / 255.0)
 
-    XCTAssertTrue(containsEvent(events, expectedLeftStick))
-    XCTAssertTrue(containsEvent(events, expectedRightStick))
-    XCTAssertTrue(containsEvent(events, expectedLeftTrigger))
-    XCTAssertTrue(containsEvent(events, expectedRightTrigger))
-    XCTAssertTrue(containsEvent(events, .buttonPressed(.share)))
-    XCTAssertTrue(containsEvent(events, .buttonPressed(.options)))
-    XCTAssertTrue(containsEvent(events, .buttonPressed(.ps)))
-    XCTAssertTrue(containsEvent(events, .buttonPressed(.touchpad)))
+    #expect(containsEvent(events, expectedLeftStick))
+    #expect(containsEvent(events, expectedRightStick))
+    #expect(containsEvent(events, expectedLeftTrigger))
+    #expect(containsEvent(events, expectedRightTrigger))
+    #expect(containsEvent(events, .buttonPressed(.share)))
+    #expect(containsEvent(events, .buttonPressed(.options)))
+    #expect(containsEvent(events, .buttonPressed(.ps)))
+    #expect(containsEvent(events, .buttonPressed(.touchpad)))
   }
+  @Test
   func testWiredIOHIDReportParsesDpadDirections() throws {
     let parser = DS4Parser()
     _ = try parser.parse(data: makeDS4Report())
@@ -192,11 +201,12 @@ final class DS4ParserTests: XCTestCase {
     let downEvents = try parser.parse(data: makeDS4Report(buttons0: 0x04))
     let leftEvents = try parser.parse(data: makeDS4Report(buttons0: 0x06))
 
-    XCTAssertTrue(containsEvent(upEvents, .dpadChanged(.north)))
-    XCTAssertTrue(containsEvent(rightEvents, .dpadChanged(.east)))
-    XCTAssertTrue(containsEvent(downEvents, .dpadChanged(.south)))
-    XCTAssertTrue(containsEvent(leftEvents, .dpadChanged(.west)))
+    #expect(containsEvent(upEvents, .dpadChanged(.north)))
+    #expect(containsEvent(rightEvents, .dpadChanged(.east)))
+    #expect(containsEvent(downEvents, .dpadChanged(.south)))
+    #expect(containsEvent(leftEvents, .dpadChanged(.west)))
   }
+  @Test
   func testSmallDS4StickJitterIsNormalizedToIdle() throws {
     let parser = DS4Parser()
     _ = try parser.parse(data: makeDS4Report())
@@ -205,17 +215,19 @@ final class DS4ParserTests: XCTestCase {
       data: makeDS4Report(leftStickX: 123, leftStickY: 126, rightStickX: 126, rightStickY: 130)
     )
 
-    XCTAssertTrue(containsEvent(events, .leftStickChanged(x: 0, y: 0)))
-    XCTAssertTrue(containsEvent(events, .rightStickChanged(x: 0, y: 0)))
+    #expect(containsEvent(events, .leftStickChanged(x: 0, y: 0)))
+    #expect(containsEvent(events, .rightStickChanged(x: 0, y: 0)))
   }
+  @Test
   func testObservedDS4LeftStickXDriftIsNormalizedToIdle() throws {
     let parser = DS4Parser()
     _ = try parser.parse(data: makeDS4Report())
 
     let events = try parser.parse(data: makeDS4Report(leftStickX: 120))
 
-    XCTAssertTrue(containsEvent(events, .leftStickChanged(x: 0, y: 0)))
+    #expect(containsEvent(events, .leftStickChanged(x: 0, y: 0)))
   }
+  @Test
   func testDs4StickReportsRawHIDNormalizedRange() throws {
     let parser = DS4Parser()
     _ = try parser.parse(data: makeDS4Report())
@@ -227,9 +239,10 @@ final class DS4ParserTests: XCTestCase {
     let expectedLeftStick = ControllerEvent.leftStickChanged(x: 126.0 / 128.0, y: 126.0 / 128.0)
     let expectedRightStick = ControllerEvent.rightStickChanged(x: -126.0 / 128.0, y: -126.0 / 128.0)
 
-    XCTAssertTrue(containsEvent(events, expectedLeftStick))
-    XCTAssertTrue(containsEvent(events, expectedRightStick))
+    #expect(containsEvent(events, expectedLeftStick))
+    #expect(containsEvent(events, expectedRightStick))
   }
+  @Test
   func testObservedDS4RightStickYShortfallRemainsVisible() throws {
     let parser = DS4Parser()
     _ = try parser.parse(data: makeDS4Report())
@@ -237,8 +250,9 @@ final class DS4ParserTests: XCTestCase {
     let events = try parser.parse(data: makeDS4Report(rightStickY: 8))
     let expectedRightStick = ControllerEvent.rightStickChanged(x: 0, y: 120.0 / 128.0)
 
-    XCTAssertTrue(containsEvent(events, expectedRightStick))
+    #expect(containsEvent(events, expectedRightStick))
   }
+  @Test
   func testDeviceInputStateExposesDS4DpadAsHeldButtons() async throws {
     let dispatcher = CapturingOutputDispatcher()
     let pipeline = DevicePipeline(
@@ -252,24 +266,25 @@ final class DS4ParserTests: XCTestCase {
     await pipeline.feedHIDData(makeDS4Report())
 
     await pipeline.feedHIDData(makeDS4Report(buttons0: 0x00))
-    XCTAssertTrue(pipeline.inputState().pressedButtons == [Button.dpadUp.rawValue])
+    #expect(pipeline.inputState().pressedButtons == [Button.dpadUp.rawValue])
 
     await pipeline.feedHIDData(makeDS4Report(buttons0: 0x03))
-    XCTAssertTrue(Set(pipeline.inputState().pressedButtons) == Set([
+    #expect(Set(pipeline.inputState().pressedButtons) == Set([
       Button.dpadRight.rawValue,
       Button.dpadDown.rawValue,
     ]))
 
     await pipeline.feedHIDData(makeDS4Report())
-    XCTAssertTrue(pipeline.inputState().pressedButtons.isEmpty)
+    #expect(pipeline.inputState().pressedButtons.isEmpty)
   }
+  @Test
   func testRegistryMapsDS4V2IdentityToDS4Parser() {
     let registry = ParserRegistry()
     let identifier = DeviceIdentifier(vendorID: 1356, productID: 2508)
     let profile = registry.runtimeProfile(for: identifier)
 
-    XCTAssertTrue(registry.parserName(for: identifier) == "DS4")
-    XCTAssertTrue(profile.protocolVariant == .dualShock4)
+    #expect(registry.parserName(for: identifier) == "DS4")
+    #expect(profile.protocolVariant == .dualShock4)
   }
 }
 

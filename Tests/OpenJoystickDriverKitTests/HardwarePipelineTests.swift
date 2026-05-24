@@ -1,6 +1,6 @@
 import Foundation
 import SwiftUSB
-import XCTest
+import Testing
 
 @testable import OpenJoystickDriverKit
 
@@ -11,19 +11,21 @@ private let hardwareTestsEnabled =
 private let hardwareSkipMessage =
   "[HardwareTest] Skipping USB hardware test; set OJD_HARDWARE_TESTS=1 to require it."
 
-final class HardwarePipelineTests: XCTestCase {
+struct HardwarePipelineTests {
   /// Shared USBContext for enabled hardware tests.
   ///
   /// Kept lazy so the default skipped hardware path does not touch libusb at
   /// module load time.
   private static let sharedContext: USBContext? = try? USBContext()
 
+  @Test
+
   func testDeviceEnumeration() async throws {
     guard hardwareTestsEnabled else {
-      throw XCTSkip(hardwareSkipMessage)
+      try Test.cancel(Comment(rawValue: hardwareSkipMessage))
     }
     guard let context = Self.sharedContext else {
-      XCTFail("Failed to create USBContext")
+      Issue.record("Failed to create USBContext")
       return
     }
     var found = false
@@ -37,29 +39,35 @@ final class HardwarePipelineTests: XCTestCase {
       )
       break
     }
-    XCTAssertTrue(found, "Gamesir G7 SE should be enumerable via SwiftUSB")
+    #expect(found)
   }
+  @Test
   func testGipHandshakeAndInput() async throws {
     guard hardwareTestsEnabled else {
-      throw XCTSkip(hardwareSkipMessage)
+      try Test.cancel(Comment(rawValue: hardwareSkipMessage))
     }
     guard let context = Self.sharedContext else {
-      XCTFail("Failed to create USBContext")
+      Issue.record("Failed to create USBContext")
       return
     }
     guard let device = await context.findDevice(vendorId: gamesirVID, productId: gamesirPID) else {
-      XCTFail("Gamesir G7 SE not found - is it connected?")
+      Issue.record("Gamesir G7 SE not found - is it connected?")
       return
     }
 
     let handle: USBDeviceHandle
     do { handle = try device.open() } catch let error as USBError where error.isAccessDenied {
-      throw XCTSkip(
-        "[HardwareTest] USB access denied - skipping handshake test (needs root or entitlements)"
+      try Test.cancel(
+        Comment(
+          rawValue:
+            "[HardwareTest] USB access denied - skipping handshake test (needs root or entitlements)"
+        )
       )
     }
     do { try handle.claimInterface(0) } catch let error as USBError where error.isAccessDenied {
-      throw XCTSkip("[HardwareTest] Cannot claim interface - skipping (access denied)")
+      try Test.cancel(
+        Comment(rawValue: "[HardwareTest] Cannot claim interface - skipping (access denied)")
+      )
     }
 
     let parser = GIPParser()
@@ -86,21 +94,23 @@ final class HardwarePipelineTests: XCTestCase {
 
     try? handle.releaseInterface(0)
 
-    if let parseError { XCTFail("Parse/USB error: \(parseError)") }
-    XCTAssertTrue(gotReport, "Should receive at least 1 input report after handshake")
+    if let parseError { Issue.record("Parse/USB error: \(parseError)") }
+    #expect(gotReport)
   }
+  @Test
   func testParserRegistryDispatch() {
     let registry = ParserRegistry()
     let identifier = DeviceIdentifier(vendorID: gamesirVID, productID: gamesirPID)
     let parser = registry.parser(for: identifier)
-    XCTAssertTrue(parser is GIPParser, "G7 SE should get GIPParser, got \(type(of: parser))")
+    #expect(parser is GIPParser)
   }
+  @Test
   func testDeviceIdentifierMatching() {
     let id1 = DeviceIdentifier(vendorID: gamesirVID, productID: gamesirPID, serialNumber: "ABC123")
     let id2 = DeviceIdentifier(vendorID: gamesirVID, productID: gamesirPID, serialNumber: "XYZ789")
     let id3 = DeviceIdentifier(vendorID: 0x045E, productID: 0x02EA)
-    XCTAssertTrue(id1.modelMatches(id2))
-    XCTAssertTrue(!id1.modelMatches(id3))
-    XCTAssertTrue(!id1.exactlyMatches(id2))
+    #expect(id1.modelMatches(id2))
+    #expect(!id1.modelMatches(id3))
+    #expect(!id1.exactlyMatches(id2))
   }
 }

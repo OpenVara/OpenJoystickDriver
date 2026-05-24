@@ -27,6 +27,7 @@ public actor DeviceManager {
   private var pipelines: [DeviceIdentifier: DevicePipeline] = [:]
   private var deviceInfos: [DeviceIdentifier: DeviceInfo] = [:]
   private var detectionTasks: [Task<Void, Never>] = []
+  private var externalOutputAllowed = true
 
   /// Creates a manager that sends all output to `dispatcher`.
   ///
@@ -172,6 +173,14 @@ public actor DeviceManager {
     print("[DeviceManager] Stopped")
   }
 
+  public func setExternalOutputAllowed(_ allowed: Bool) async {
+    guard externalOutputAllowed != allowed else { return }
+    externalOutputAllowed = allowed
+    for pipeline in pipelines.values {
+      await pipeline.setExternalOutputAllowed(allowed)
+    }
+  }
+
   // MARK: - USB detection (class 0xFF)
 
   private func runUSBDetection() async {
@@ -287,7 +296,8 @@ public actor DeviceManager {
       parser: parser,
       dispatcher: dispatcher,
       usbContext: usbContext,
-      transportProfile: transportProfile
+      transportProfile: transportProfile,
+      externalOutputAllowed: externalOutputAllowed
     )
     pipelines[identifier] = pipeline
     Task { await pipeline.start() }
@@ -354,7 +364,8 @@ public actor DeviceManager {
       transport: .hid(locationID: locationID),
       parser: parser,
       dispatcher: dispatcher,
-      usbContext: nil
+      usbContext: nil,
+      externalOutputAllowed: externalOutputAllowed
     )
     pipelines[identifier] = pipeline
     Task { await pipeline.start() }

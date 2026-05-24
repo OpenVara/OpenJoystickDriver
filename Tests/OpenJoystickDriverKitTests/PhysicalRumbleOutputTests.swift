@@ -1,15 +1,17 @@
 import Foundation
 import IOKit.hid
-import XCTest
+import Testing
 
 @testable import OpenJoystickDriverKit
 
-final class PhysicalRumbleOutputTests: XCTestCase {
+struct PhysicalRumbleOutputTests {
+  @Test
   func testSourceBackedParsersExposeRumble() {
-    XCTAssertTrue(hasPhysicalRumble(GIPParser()))
-    XCTAssertTrue(hasPhysicalRumble(Xbox360Parser()))
-    XCTAssertTrue(hasPhysicalRumble(DS4Parser()))
+    #expect(hasPhysicalRumble(GIPParser()))
+    #expect(hasPhysicalRumble(Xbox360Parser()))
+    #expect(hasPhysicalRumble(DS4Parser()))
   }
+  @Test
   func testXpcDescriptionDefaultsRumbleSupportToFalse() {
     let description = XPCDeviceDescription(
       name: "Test",
@@ -20,8 +22,9 @@ final class PhysicalRumbleOutputTests: XCTestCase {
       serialNumber: nil
     )
 
-    XCTAssertTrue(description.supportsPhysicalRumble == false)
+    #expect(description.supportsPhysicalRumble == false)
   }
+  @Test
   func testXpcDescriptionDecodesMissingRumbleSupportAsFalse() throws {
     let json = """
       {
@@ -35,8 +38,9 @@ final class PhysicalRumbleOutputTests: XCTestCase {
       """
     let description = try JSONDecoder().decode(XPCDeviceDescription.self, from: Data(json.utf8))
 
-    XCTAssertTrue(description.supportsPhysicalRumble == false)
+    #expect(description.supportsPhysicalRumble == false)
   }
+  @Test
   func testVirtualParserAcceptsXboxOneRumbleReports() {
     let command = VirtualRumbleOutputReportParser.parse(
       type: kIOHIDReportTypeOutput,
@@ -51,8 +55,9 @@ final class PhysicalRumbleOutputTests: XCTestCase {
       rightTrigger: 20,
       durationMs: 50
     )
-    XCTAssertTrue(command == expected)
+    #expect(command == expected)
   }
+  @Test
   func testVirtualParserAcceptsXboxGIPRumbleReports() {
     let reportIDZeroCommand = VirtualRumbleOutputReportParser.parse(
       type: kIOHIDReportTypeOutput,
@@ -72,9 +77,10 @@ final class PhysicalRumbleOutputTests: XCTestCase {
       rightTrigger: 20,
       durationMs: 50
     )
-    XCTAssertTrue(reportIDZeroCommand == expected)
-    XCTAssertTrue(reportIDNineCommand == expected)
+    #expect(reportIDZeroCommand == expected)
+    #expect(reportIDNineCommand == expected)
   }
+  @Test
   func testVirtualParserAcceptsXbox360RumbleReports() {
     let command = VirtualRumbleOutputReportParser.parse(
       type: kIOHIDReportTypeOutput,
@@ -82,8 +88,9 @@ final class PhysicalRumbleOutputTests: XCTestCase {
       bytes: [0x00, 0x08, 0x00, 128, 64, 0, 0, 0]
     )
 
-    XCTAssertTrue(command == VirtualRumbleCommand(left: 128, right: 64))
+    #expect(command == VirtualRumbleCommand(left: 128, right: 64))
   }
+  @Test
   func testVirtualParserAcceptsOJDCompactRumbleReports() {
     let command = VirtualRumbleOutputReportParser.parse(
       type: kIOHIDReportTypeOutput,
@@ -98,8 +105,9 @@ final class PhysicalRumbleOutputTests: XCTestCase {
       rightTrigger: 4,
       durationMs: 300
     )
-    XCTAssertTrue(command == expected)
+    #expect(command == expected)
   }
+  @Test
   func testVirtualParserRejectsUnmarkedRelayInputReports() {
     let command = VirtualRumbleOutputReportParser.parse(
       type: kIOHIDReportTypeOutput,
@@ -107,19 +115,21 @@ final class PhysicalRumbleOutputTests: XCTestCase {
       bytes: [1, 2, 3, 4, 5, 6]
     )
 
-    XCTAssertTrue(command == nil)
+    #expect(command == nil)
   }
+  @Test
   func testDs4PhysicalRumbleReportUsesUSBHIDOutputReport() {
     let report = DS4Parser().physicalRumbleReport(left: 180, right: 90, lt: 255, rt: 64)
 
-    XCTAssertTrue(report.reportID == 0x05)
-    XCTAssertTrue(report.bytes.count == 32)
-    XCTAssertTrue(report.bytes[0] == 0x05)
-    XCTAssertTrue(report.bytes[1] == 0x01)
-    XCTAssertTrue(report.bytes[4] == 90)
-    XCTAssertTrue(report.bytes[5] == 180)
-    XCTAssertTrue(report.bytes.dropFirst(6).allSatisfy { $0 == 0 })
+    #expect(report.reportID == 0x05)
+    #expect(report.bytes.count == 32)
+    #expect(report.bytes[0] == 0x05)
+    #expect(report.bytes[1] == 0x01)
+    #expect(report.bytes[4] == 90)
+    #expect(report.bytes[5] == 180)
+    #expect(report.bytes.dropFirst(6).allSatisfy { $0 == 0 })
   }
+  @Test
   func testDs4PhysicalRumbleReportUsesBluetoothReportAfterBluetoothInput() throws {
     let parser = DS4Parser()
     _ = try parser.parse(
@@ -129,15 +139,16 @@ final class PhysicalRumbleOutputTests: XCTestCase {
 
     let report = parser.physicalRumbleReport(left: 180, right: 90, lt: 255, rt: 64)
 
-    XCTAssertTrue(report.reportID == 0x11)
-    XCTAssertTrue(report.bytes.count == 78)
-    XCTAssertTrue(report.bytes[0] == 0x11)
-    XCTAssertTrue(report.bytes[1] == 0xC0)
-    XCTAssertTrue(report.bytes[3] == 0x0F)
-    XCTAssertTrue(report.bytes[6] == 90)
-    XCTAssertTrue(report.bytes[7] == 180)
-    XCTAssertTrue(report.bytes[74...77].contains { $0 != 0 })
+    #expect(report.reportID == 0x11)
+    #expect(report.bytes.count == 78)
+    #expect(report.bytes[0] == 0x11)
+    #expect(report.bytes[1] == 0xC0)
+    #expect(report.bytes[3] == 0x0F)
+    #expect(report.bytes[6] == 90)
+    #expect(report.bytes[7] == 180)
+    #expect(report.bytes[74...77].contains { $0 != 0 })
   }
+  @Test
   func testDs4PreferredBluetoothParserUsesBluetoothPhysicalRumbleBeforeInput() {
     let report = DS4Parser(prefersBluetooth: true).physicalRumbleReport(
       left: 180,
@@ -146,10 +157,10 @@ final class PhysicalRumbleOutputTests: XCTestCase {
       rt: 64
     )
 
-    XCTAssertTrue(report.reportID == 0x11)
-    XCTAssertTrue(report.bytes.count == 78)
-    XCTAssertTrue(report.bytes[6] == 90)
-    XCTAssertTrue(report.bytes[7] == 180)
+    #expect(report.reportID == 0x11)
+    #expect(report.bytes.count == 78)
+    #expect(report.bytes[6] == 90)
+    #expect(report.bytes[7] == 180)
   }
 
   private func hasPhysicalRumble(_ parser: any InputParser) -> Bool {

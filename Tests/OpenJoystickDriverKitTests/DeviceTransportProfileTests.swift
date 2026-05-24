@@ -1,41 +1,45 @@
-import XCTest
+import Testing
 
 @testable import OpenJoystickDriverKit
 
-final class DeviceTransportProfileTests: XCTestCase {
+struct DeviceTransportProfileTests {
+  @Test
   func testGamesirG7SETransportProfile() {
     let registry = ParserRegistry()
     let identifier = DeviceIdentifier(vendorID: 13623, productID: 4112)
 
     let profile = registry.transportProfile(for: identifier)
 
-    XCTAssertTrue(profile.inputEndpoint == 0x82)
-    XCTAssertTrue(profile.outputEndpoint == 0x02)
-    XCTAssertTrue(!profile.needsSetConfiguration)
-    XCTAssertTrue(profile.postHandshakeSettleNanoseconds == 0)
+    #expect(profile.inputEndpoint == 0x82)
+    #expect(profile.outputEndpoint == 0x02)
+    #expect(!profile.needsSetConfiguration)
+    #expect(profile.postHandshakeSettleNanoseconds == 0)
   }
+  @Test
   func testGamesirG7SERuntimeProfile() {
     let registry = ParserRegistry()
     let identifier = DeviceIdentifier(vendorID: 13623, productID: 4112)
 
     let profile = registry.runtimeProfile(for: identifier)
 
-    XCTAssertTrue(profile.parserName == "GIP")
-    XCTAssertTrue(profile.protocolVariant == .xboxOne)
-    XCTAssertTrue(profile.mappingFlags == ["shareButton"])
-    XCTAssertTrue(profile.mappingOptions.contains(.shareButton))
+    #expect(profile.parserName == "GIP")
+    #expect(profile.protocolVariant == .xboxOne)
+    #expect(profile.mappingFlags == ["shareButton"])
+    #expect(profile.mappingOptions.contains(.shareButton))
   }
+  @Test
   func testVader5STransportProfile() {
     let registry = ParserRegistry()
     let identifier = DeviceIdentifier(vendorID: 14295, productID: 10241)
 
     let profile = registry.transportProfile(for: identifier)
 
-    XCTAssertTrue(profile.inputEndpoint == 0x81)
-    XCTAssertTrue(profile.outputEndpoint == 0x01)
-    XCTAssertTrue(profile.needsSetConfiguration)
-    XCTAssertTrue(profile.postHandshakeSettleNanoseconds == 200_000_000)
+    #expect(profile.inputEndpoint == 0x81)
+    #expect(profile.outputEndpoint == 0x01)
+    #expect(profile.needsSetConfiguration)
+    #expect(profile.postHandshakeSettleNanoseconds == 200_000_000)
   }
+  @Test
   func testXpadXbox360ProfileBatch() {
     let registry = ParserRegistry()
     let identifiers = [
@@ -51,12 +55,13 @@ final class DeviceTransportProfileTests: XCTestCase {
     ]
 
     for identifier in identifiers {
-      XCTAssertTrue(registry.parserName(for: identifier) == "Xbox360")
-      XCTAssertTrue(registry.runtimeProfile(for: identifier).protocolVariant == .xbox360)
-      XCTAssertTrue(registry.transportProfile(for: identifier).inputEndpoint == 0x81)
-      XCTAssertTrue(registry.transportProfile(for: identifier).outputEndpoint == 0x01)
+      #expect(registry.parserName(for: identifier) == "Xbox360")
+      #expect(registry.runtimeProfile(for: identifier).protocolVariant == .xbox360)
+      #expect(registry.transportProfile(for: identifier).inputEndpoint == 0x81)
+      #expect(registry.transportProfile(for: identifier).outputEndpoint == 0x01)
     }
   }
+  @Test
   func testXpadXboxOneProfileBatch() {
     let registry = ParserRegistry()
     let defaultSequence = GIPStartupPacket.defaultSequence
@@ -98,12 +103,12 @@ final class DeviceTransportProfileTests: XCTestCase {
 
     for (identifier, startupPackets, mappingFlags) in cases {
       let profile = registry.runtimeProfile(for: identifier)
-      XCTAssertTrue(registry.parserName(for: identifier) == "GIP")
-      XCTAssertTrue(profile.protocolVariant == .xboxOne)
-      XCTAssertTrue(profile.gipStartupPackets == startupPackets)
-      XCTAssertTrue(profile.mappingFlags == mappingFlags)
-      XCTAssertTrue(registry.transportProfile(for: identifier).inputEndpoint == 0x82)
-      XCTAssertTrue(registry.transportProfile(for: identifier).outputEndpoint == 0x02)
+      #expect(registry.parserName(for: identifier) == "GIP")
+      #expect(profile.protocolVariant == .xboxOne)
+      #expect(profile.gipStartupPackets == startupPackets)
+      #expect(profile.mappingFlags == mappingFlags)
+      #expect(registry.transportProfile(for: identifier).inputEndpoint == 0x82)
+      #expect(registry.transportProfile(for: identifier).outputEndpoint == 0x02)
     }
   }
 }

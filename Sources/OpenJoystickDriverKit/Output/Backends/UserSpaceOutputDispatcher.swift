@@ -2,7 +2,6 @@ import Darwin
 import Foundation
 import IOKit
 import IOKit.hid
-import IOKit.hidsystem
 import Security
 
 /// Sends HID input reports via a user-space IOHIDUserDevice.
@@ -12,7 +11,9 @@ import Security
 ///
 /// The user-space device uses Transport="USB" and a non-zero LocationID so it
 /// looks like a normal controller to consumers.
-public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Sendable {
+public final class UserSpaceOutputDispatcher: CompatibilityUserSpaceOutputDispatching,
+  @unchecked Sendable
+{
   public typealias RumbleCommandHandler =
     @Sendable (DeviceIdentifier, VirtualRumbleCommand) -> Void
 
@@ -38,6 +39,8 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
   private let format: any VirtualGamepadReportFormat
   private let primaryUsage: Int
   private let emitsXboxGuideReport: Bool
+  private let routeToken: String?
+  private let productNameOverride: String?
   private let registryLock = NSLock()
 
   private final class Entry {
@@ -70,12 +73,16 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     format: any VirtualGamepadReportFormat = OJDGenericGamepadFormat(),
     primaryUsage: Int? = nil,
     emitsXboxGuideReport: Bool = false,
+    routeToken: String? = nil,
+    productNameOverride: String? = nil,
     onRumbleCommand: RumbleCommandHandler? = nil
   ) throws {
     self.profile = profile
     self.format = format
     self.primaryUsage = primaryUsage ?? Self.defaultPrimaryUsage(for: format)
     self.emitsXboxGuideReport = emitsXboxGuideReport
+    self.routeToken = routeToken
+    self.productNameOverride = productNameOverride
     self.onRumbleCommand = onRumbleCommand
     // Device(s) are created lazily on first dispatch for each physical controller.
   }
@@ -118,7 +125,9 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     let baseProperties = Self.deviceProperties(
       profile: profile,
       format: format,
-      identifier: identifier
+      identifier: identifier,
+      routeToken: routeToken,
+      productNameOverride: productNameOverride
     )
 
     let usageProps: [String: Any] = [
@@ -179,7 +188,10 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       throw CreationError.createFailed
     }
     let queue = DispatchQueue(
-      label: "com.openjoystickdriver.userspace-hid.\(identifier.vendorID).\(identifier.productID)"
+      label:
+        "com.openjoystickdriver.userspace-hid."
+        + "\(routeToken ?? UserSpaceVirtualDeviceConstants.sharedRouteToken)."
+        + "\(identifier.vendorID).\(identifier.productID)"
     )
     IOHIDUserDeviceRegisterGetReportBlock(dev) { type, reportID, report, reportLength in
       guard type == kIOHIDReportTypeInput else {
@@ -246,17 +258,19 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
   static func deviceProperties(
     profile: VirtualDeviceProfile,
     format: any VirtualGamepadReportFormat,
-    identifier: DeviceIdentifier
+    identifier: DeviceIdentifier,
+    routeToken: String? = nil,
+    productNameOverride: String? = nil
   ) -> [String: Any] {
     var properties: [String: Any] = [
       kIOHIDReportDescriptorKey as String: Data(format.descriptor),
       kIOHIDVendorIDKey as String: profile.vendorID,
       kIOHIDProductIDKey as String: profile.productID,
       kIOHIDVersionNumberKey as String: profile.versionNumber,
-      kIOHIDProductKey as String: profile.productName,
+      kIOHIDProductKey as String: productNameOverride ?? profile.productName,
       kIOHIDManufacturerKey as String: profile.manufacturer,
       kIOHIDSerialNumberKey as String:
-        UserSpaceVirtualDeviceConstants.serialNumber(for: identifier),
+        UserSpaceVirtualDeviceConstants.serialNumber(for: identifier, routeToken: routeToken),
       kIOHIDTransportKey as String: "USB",
       kIOHIDMaxInputReportSizeKey as String: reportBufferSize(
         payloadSize: format.inputReportPayloadSize,
@@ -270,6 +284,9 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
         reportID: format.outputReportID
       )
     }
+    properties[kIOHIDLocationIDKey as String] = NSNumber(
+      value: Int64(UserSpaceVirtualDeviceConstants.locationID(for: identifier, routeToken: routeToken))
+    )
     return properties
   }
 
@@ -324,7 +341,11 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
     if lastResult != kIOReturnSuccess {
       status = "error: \(String(lastResult, radix: 16))"
     } else if status.hasPrefix("error:") {
-      status = "on"
+      registryLock.withLock {
+        if status.hasPrefix("error:") {
+          recomputeStatusLocked()
+        }
+      }
     }
   }
 

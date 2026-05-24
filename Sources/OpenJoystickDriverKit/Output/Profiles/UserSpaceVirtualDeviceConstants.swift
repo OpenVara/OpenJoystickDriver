@@ -16,6 +16,12 @@ public enum UserSpaceVirtualDeviceConstants {
   /// Manufacturer string used for the user-space virtual gamepad (IOHIDUserDevice).
   public static let manufacturer = "OpenJoystickDriver"
 
+  /// Logical route token used by the bootstrap/shared Compatibility device.
+  ///
+  /// Dedicated per-consumer devices encode a different token in their serial
+  /// number so the foreground monitor can distinguish them in IORegistry.
+  public static let sharedRouteToken = "shared"
+
   /// Returns true when a SerialNumber belongs to an OpenJoystickDriver user-space device.
   public static func isOJDUserSpaceSerial(_ serial: String?) -> Bool {
     guard let serial else { return false }
@@ -25,17 +31,47 @@ public enum UserSpaceVirtualDeviceConstants {
   /// Builds a stable, non-sensitive serial number for a virtual device.
   ///
   /// We hash the physical identifier so we don't leak hardware serial numbers.
-  public static func serialNumber(for identifier: DeviceIdentifier) -> String {
-    serialPrefix + hex64(fnv1a64(stableKey(for: identifier)))
+  public static func serialNumber(
+    for identifier: DeviceIdentifier,
+    routeToken: String? = nil
+  ) -> String {
+    let physicalHash = hex64(fnv1a64(stableKey(for: identifier)))
+    guard let routeToken, routeToken != sharedRouteToken else {
+      return serialPrefix + physicalHash
+    }
+    return serialPrefix + routeToken + ":" + physicalHash
   }
 
   /// Computes a stable LocationID in the OJD namespace for this physical identifier.
-  public static func locationID(for identifier: DeviceIdentifier) -> UInt32 {
-    let h = fnv1a64(stableKey(for: identifier))
+  public static func locationID(
+    for identifier: DeviceIdentifier,
+    routeToken: String? = nil
+  ) -> UInt32 {
+    let routeKey =
+      (routeToken == nil || routeToken == sharedRouteToken) ? "" : "\(routeToken ?? ""):"
+    let h = fnv1a64(routeKey + stableKey(for: identifier))
     let low16 = UInt32(truncatingIfNeeded: h & 0xFFFF)
     // Avoid 0/1 because some consumers treat these as special/invalid.
     let safeLow16 = (low16 <= 1) ? (low16 &+ 2) : low16
     return VirtualDeviceIdentityConstants.userSpaceLocationIDNamespace | safeLow16
+  }
+
+  /// Returns the encoded route token carried by an OJD user-space serial.
+  ///
+  /// Legacy single-device serials map to ``sharedRouteToken``.
+  public static func routeToken(from serial: String?) -> String? {
+    guard let serial, serial.hasPrefix(serialPrefix) else { return nil }
+    let suffix = String(serial.dropFirst(serialPrefix.count))
+    let parts = suffix.split(separator: ":", omittingEmptySubsequences: false)
+    if parts.count >= 2, !parts[0].isEmpty {
+      return String(parts[0])
+    }
+    return sharedRouteToken
+  }
+
+  /// Returns the stable dedicated route token for one consumer bundle root.
+  public static func dedicatedRouteToken(forConsumerBundleRootPath bundleRootPath: String) -> String {
+    "consumer-" + hex64(fnv1a64(bundleRootPath))
   }
 
   // MARK: - Private helpers
