@@ -295,7 +295,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   func requestDaemonInputMonitoringAccess() async {
     inputMonitoringAssist = nil
     guard daemonConnected else {
-      daemonError = "Start the helper first, then click Grant Helper."
+      inputMonitoringAssist = "Start OpenJoystickDriver Helper first so it can ask macOS for access."
       return
     }
     do {
@@ -313,7 +313,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   func openInputMonitoringSettings(for appNames: [String] = ["OpenJoystickDriver", "OpenJoystickDriver Helper"]) {
     let names = appNames.joined(separator: " and ")
     inputMonitoringAssist =
-      "In System Settings, turn on Input Monitoring for \(names). If macOS asks to quit and reopen, allow it."
+      "OpenJoystickDriver asked macOS for access. In Input Monitoring, turn on \(names). If macOS asks to quit and reopen, allow it."
     let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
     if let url, NSWorkspace.shared.open(url) { return }
     NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))

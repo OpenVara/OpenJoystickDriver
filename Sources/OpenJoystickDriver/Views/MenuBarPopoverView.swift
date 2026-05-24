@@ -158,13 +158,13 @@ struct MenuBarPopoverView: View {
       .controlSize(.small)
       .padding(.top, 2)
     } else if model.appInputMonitoring != "granted" {
-      SwiftUI.Button("Open Settings") {
+      SwiftUI.Button("Ask macOS") {
         Task { await model.requestAppInputMonitoringAccess() }
       }
       .controlSize(.small)
       .padding(.top, 2)
     } else if model.inputMonitoring != "granted" {
-      SwiftUI.Button("Open Settings") {
+      SwiftUI.Button("Ask macOS") {
         Task { await model.requestDaemonInputMonitoringAccess() }
       }
       .controlSize(.small)
@@ -286,7 +286,7 @@ struct MenuBarPopoverView: View {
           ),
           state: model.inputMonitoring,
           actionTitle: permissionActionTitle(for: model.inputMonitoring),
-          disabled: !model.daemonConnected && model.inputMonitoring != "denied"
+          disabled: !model.daemonConnected
         ) {
           Task { await model.requestDaemonInputMonitoringAccess() }
         }
@@ -298,7 +298,7 @@ struct MenuBarPopoverView: View {
   }
 
   private func permissionActionTitle(for state: String) -> String {
-    state == "granted" ? "Allowed" : "Open Settings"
+    state == "granted" ? "Allowed" : "Ask macOS"
   }
 
   private func permissionSubtitle(
@@ -313,7 +313,7 @@ struct MenuBarPopoverView: View {
       let name = settingsName ?? owner
       return "Open System Settings and turn on Input Monitoring for \(name)."
     default:
-      return "Click to ask macOS for access. If needed, Settings opens automatically."
+      return "Ask macOS to add this item to Input Monitoring."
     }
   }
 
