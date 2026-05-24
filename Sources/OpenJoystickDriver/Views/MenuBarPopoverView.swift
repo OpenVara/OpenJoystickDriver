@@ -124,6 +124,10 @@ struct MenuBarPopoverView: View {
       }
       .padding(.top, 4)
 
+      if !ready {
+        readinessAction
+      }
+
       if let err = model.daemonError {
         Text(err)
           .font(.caption)
@@ -131,6 +135,41 @@ struct MenuBarPopoverView: View {
           .fixedSize(horizontal: false, vertical: true)
           .padding(.top, 2)
       }
+    }
+  }
+
+  @ViewBuilder
+  private var readinessAction: some View {
+    if model.daemonRestarting {
+      EmptyView()
+    } else if !model.daemonInstalled {
+      SwiftUI.Button("Install Helper") {
+        Task {
+          await model.installDaemon()
+          await model.syncFromDaemonNow()
+        }
+      }
+      .controlSize(.small)
+      .padding(.top, 2)
+    } else if !model.daemonConnected {
+      SwiftUI.Button("Start Helper") {
+        Task {
+          await model.startDaemon()
+          await model.syncFromDaemonNow()
+        }
+      }
+      .controlSize(.small)
+      .padding(.top, 2)
+    } else if model.inputMonitoring != "granted" {
+      SwiftUI.Button(model.inputMonitoring == "denied" ? "Open Settings" : "Grant Access") {
+        if model.inputMonitoring == "denied" {
+          model.openInputMonitoringSettings()
+        } else {
+          Task { await model.requestDaemonInputMonitoringAccess() }
+        }
+      }
+      .controlSize(.small)
+      .padding(.top, 2)
     }
   }
 
