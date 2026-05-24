@@ -10,6 +10,8 @@ private let hardwareTestsEnabled =
   ProcessInfo.processInfo.environment["OJD_HARDWARE_TESTS"] == "1"
 private let hardwareSkipMessage =
   "[HardwareTest] Skipping USB hardware test; set OJD_HARDWARE_TESTS=1 to require it."
+private let hardwareAccessSkipMessage =
+  "[HardwareTest] Skipping USB handshake test; requires OJD_HARDWARE_TESTS=1 and USB access."
 
 struct HardwarePipelineTests {
   /// Shared USBContext for enabled hardware tests.
@@ -18,12 +20,37 @@ struct HardwarePipelineTests {
   /// module load time.
   private static let sharedContext: USBContext? = try? USBContext()
 
-  @Test
-
-  func testDeviceEnumeration() async throws {
-    guard hardwareTestsEnabled else {
-      try Test.cancel(Comment(rawValue: hardwareSkipMessage))
+  private static func canAccessHandshakeDevice() async -> Bool {
+    guard hardwareTestsEnabled else { return false }
+    guard let context = sharedContext else { return true }
+    guard let device = await context.findDevice(vendorId: gamesirVID, productId: gamesirPID) else {
+      return true
     }
+
+    do {
+      let handle = try device.open()
+      var claimedInterface = false
+      defer {
+        if claimedInterface { try? handle.releaseInterface(0) }
+      }
+      do {
+        try handle.claimInterface(0)
+        claimedInterface = true
+        return true
+      } catch let error as USBError where error.isAccessDenied {
+        return false
+      } catch {
+        return true
+      }
+    } catch let error as USBError where error.isAccessDenied {
+      return false
+    } catch {
+      return true
+    }
+  }
+
+  @Test(.enabled(if: hardwareTestsEnabled, Comment(rawValue: hardwareSkipMessage)))
+  func testDeviceEnumeration() async throws {
     guard let context = Self.sharedContext else {
       Issue.record("Failed to create USBContext")
       return
@@ -42,11 +69,12 @@ struct HardwarePipelineTests {
     }
     #expect(found)
   }
-  @Test
-  func testGipHandshakeAndInput() async throws {
-    guard hardwareTestsEnabled else {
-      try Test.cancel(Comment(rawValue: hardwareSkipMessage))
+  @Test(
+    .enabled(Comment(rawValue: hardwareAccessSkipMessage)) {
+      await Self.canAccessHandshakeDevice()
     }
+  )
+  func testGipHandshakeAndInput() async throws {
     guard let context = Self.sharedContext else {
       Issue.record("Failed to create USBContext")
       return
@@ -58,18 +86,20 @@ struct HardwarePipelineTests {
 
     let handle: USBDeviceHandle
     do { handle = try device.open() } catch let error as USBError where error.isAccessDenied {
-      try Test.cancel(
-        Comment(
-          rawValue:
-            "[HardwareTest] USB access denied - skipping handshake test "
-              + "(needs root or entitlements)"
-        )
-      )
+      let message = """
+        [HardwareTest] USB access became unavailable after enablement check \
+        (open denied: \(error))
+        """
+      Issue.record(Comment(rawValue: message))
+      return
     }
     do { try handle.claimInterface(0) } catch let error as USBError where error.isAccessDenied {
-      try Test.cancel(
-        Comment(rawValue: "[HardwareTest] Cannot claim interface - skipping (access denied)")
-      )
+      let message = """
+        [HardwareTest] USB access became unavailable after enablement check \
+        (claim denied: \(error))
+        """
+      Issue.record(Comment(rawValue: message))
+      return
     }
 
     let parser = GIPParser()
