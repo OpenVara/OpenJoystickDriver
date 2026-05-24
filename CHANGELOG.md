@@ -2,6 +2,13 @@
 
 All notable changes to OpenJoystickDriver are documented in this file.
 
+## 0.3.1
+
+### Fixed
+
+- Fixed Xbox 360 HID compatibility reports so SDL HIDAPI receives the expected
+  state packet header, preventing intermittent LB/RB latch/stuck-active states.
+
 ## 0.3.0
 
 ### Added

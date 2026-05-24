@@ -175,6 +175,8 @@ public struct Xbox360MacHIDReportFormat: VirtualGamepadReportFormat {
 
   public func buildInputReport(from state: VirtualGamepadState) -> [UInt8] {
     var r = [UInt8](repeating: 0, count: inputReportPayloadSize)
+    r[0] = 0x00
+    r[1] = 0x14
     let mask = xinputButtonMask(from: state.buttons)
     r[2] = UInt8(mask & 0xFF)
     r[3] = UInt8((mask >> 8) & 0xFF)
