@@ -86,13 +86,16 @@ struct MenuBarPopoverView: View {
       model.daemonRestarting
       ? "restarting..."
       : (model.daemonConnected ? "running" : (model.daemonInstalled ? "installed" : "missing"))
-    let ready = model.daemonConnected && model.inputMonitoring == "granted"
+    let permissionsReady =
+      model.appInputMonitoring == "granted" && model.inputMonitoring == "granted"
+    let ready = model.daemonConnected && permissionsReady
     let title = ready ? "Ready for games" : "Setup needs attention"
     let summary: String = {
       if model.daemonRestarting { return "The helper is restarting." }
       if !model.daemonInstalled { return "Install the helper to read controller input." }
       if !model.daemonConnected { return "Start the helper to connect controllers." }
-      if model.inputMonitoring != "granted" { return "Grant Input Monitoring for the helper." }
+      if model.appInputMonitoring != "granted" { return "Grant Input Monitoring for OpenJoystickDriver." }
+      if model.inputMonitoring != "granted" { return "Grant Input Monitoring for OpenJoystickDriver Helper." }
       if model.devices.isEmpty { return "Connect a controller to start playing." }
       return "\(model.devices.count) controller\(model.devices.count == 1 ? "" : "s") connected."
     }()
@@ -120,7 +123,7 @@ struct MenuBarPopoverView: View {
       HStack(spacing: 10) {
         MetricChip(title: "Controllers", value: "\(model.devices.count)")
         MetricChip(title: "Profile", value: compatibilityIdentityLabel)
-        MetricChip(title: "Input", value: model.inputMonitoring == "granted" ? "Allowed" : "Needs access")
+        MetricChip(title: "Access", value: permissionsReady ? "Allowed" : "Needs access")
       }
       .padding(.top, 4)
 
@@ -156,6 +159,16 @@ struct MenuBarPopoverView: View {
         Task {
           await model.startDaemon()
           await model.syncFromDaemonNow()
+        }
+      }
+      .controlSize(.small)
+      .padding(.top, 2)
+    } else if model.appInputMonitoring != "granted" {
+      SwiftUI.Button(model.appInputMonitoring == "denied" ? "Open Settings" : "Grant Access") {
+        if model.appInputMonitoring == "denied" {
+          model.openInputMonitoringSettings()
+        } else {
+          Task { await model.requestAppInputMonitoringAccess() }
         }
       }
       .controlSize(.small)
