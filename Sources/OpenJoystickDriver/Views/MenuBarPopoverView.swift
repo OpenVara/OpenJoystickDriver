@@ -30,10 +30,11 @@ struct MenuBarPopoverView: View {
         headerRow
         readinessCard
         permissionsCard
-        outputCard
+        gameProfileCard
         inputTestRow
         advancedToggle
         if showAdvanced {
+          outputDetailsCard
           helperCard
           selfTestRow
           updateRow
@@ -118,8 +119,8 @@ struct MenuBarPopoverView: View {
 
       HStack(spacing: 10) {
         MetricChip(title: "Controllers", value: "\(model.devices.count)")
-        MetricChip(title: "Mode", value: activeOutputLabel)
-        MetricChip(title: "Identity", value: compatibilityIdentityLabel)
+        MetricChip(title: "Profile", value: compatibilityIdentityLabel)
+        MetricChip(title: "Input", value: model.inputMonitoring == "granted" ? "Allowed" : "Needs access")
       }
       .padding(.top, 4)
 
@@ -251,8 +252,61 @@ struct MenuBarPopoverView: View {
     }
   }
 
-  private var outputCard: some View {
-    OJDCard(title: "Output") {
+  private var gameProfileCard: some View {
+    OJDCard(title: "Games") {
+      VStack(alignment: .leading, spacing: 10) {
+        HStack(alignment: .top, spacing: 10) {
+          VStack(alignment: .leading, spacing: 3) {
+            Text("Choose the game profile.")
+              .font(.caption.weight(.semibold))
+            Text("Compatibility works best for Steam, emulators, and most games.")
+              .font(.caption)
+              .foregroundColor(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+          Spacer()
+          if model.virtualDeviceMode != VirtualDeviceMode.compatUserSpace.rawValue {
+            SwiftUI.Button("Use for Games") {
+              Task { await model.setVirtualDeviceMode(VirtualDeviceMode.compatUserSpace.rawValue) }
+            }
+            .controlSize(.small)
+            .disabled(!model.daemonConnected)
+          }
+        }
+
+        let compatSelected = model.virtualDeviceMode == VirtualDeviceMode.compatUserSpace.rawValue
+        HStack(spacing: 10) {
+          Text("Profile")
+            .font(.caption)
+            .foregroundColor(.secondary)
+          Picker(
+            "Game profile",
+            selection: Binding(
+              get: { model.compatibilityIdentity },
+              set: { v in Task { await model.setCompatibilityIdentity(v) } }
+            )
+          ) {
+            Text("SDL 2/3").tag(CompatibilityIdentity.sdl2_3.rawValue)
+            Text("Apple GameController").tag(CompatibilityIdentity.appleGameController.rawValue)
+            Text("Generic HID").tag(CompatibilityIdentity.genericHID.rawValue)
+            Text("Xbox 360 HID").tag(CompatibilityIdentity.x360HID.rawValue)
+            Text("Xbox One HID").tag(CompatibilityIdentity.xoneHID.rawValue)
+          }
+          .frame(maxWidth: .infinity)
+          .disabled(!model.daemonConnected || !compatSelected)
+        }
+
+        if !compatSelected {
+          Text("Switch to game mode before changing profiles.")
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+      }
+    }
+  }
+
+  private var outputDetailsCard: some View {
+    OJDCard(title: "Output details") {
       VStack(alignment: .leading, spacing: 10) {
         Picker(
           "Mode",
@@ -271,41 +325,8 @@ struct MenuBarPopoverView: View {
         .pickerStyle(.segmented)
         .disabled(!model.daemonConnected)
 
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-          Text("Active")
-            .font(.caption)
-            .foregroundColor(.secondary)
-          Text(activeOutputLabel)
-            .font(.caption.weight(.semibold))
-          Spacer()
-          Text("Compatibility is best for games.")
-            .font(.caption)
-            .foregroundColor(.secondary)
-        }
-
-        let compatSelected = model.virtualDeviceMode == VirtualDeviceMode.compatUserSpace.rawValue
-        HStack(spacing: 10) {
-          Text("Identity")
-            .font(.caption)
-            .foregroundColor(.secondary)
-          Picker(
-            "Compatibility identity",
-            selection: Binding(
-              get: { model.compatibilityIdentity },
-              set: { v in Task { await model.setCompatibilityIdentity(v) } }
-            )
-          ) {
-            Text("SDL 2/3").tag(CompatibilityIdentity.sdl2_3.rawValue)
-            Text("Apple GameController").tag(CompatibilityIdentity.appleGameController.rawValue)
-            Text("Generic HID").tag(CompatibilityIdentity.genericHID.rawValue)
-            Text("Xbox 360 HID").tag(CompatibilityIdentity.x360HID.rawValue)
-            Text("Xbox One HID").tag(CompatibilityIdentity.xoneHID.rawValue)
-          }
-          .frame(maxWidth: .infinity)
-          .disabled(!model.daemonConnected || !compatSelected)
-        }
-
         VStack(alignment: .leading, spacing: 3) {
+          statusLine("Active", activeOutputLabel)
           statusLine("Backend", model.userSpaceVirtualDeviceStatus, warning: model.userSpaceVirtualDeviceStatus.hasPrefix("error:"))
           statusLine("GameController", gameControllerSupportLabel, success: gameControllerSupportLabel == "yes")
           if let s = model.virtualDeviceDiagnostics?.driverKitOutputStats {
