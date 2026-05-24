@@ -691,22 +691,40 @@ private struct PermissionRow: View {
   let action: () -> Void
 
   private var isGranted: Bool { state == "granted" }
+  private var isDenied: Bool { state == "denied" }
+  private var symbol: String {
+    if isGranted { return "✓" }
+    if isDenied { return "!" }
+    return "…"
+  }
+  private var statusLabel: String {
+    switch state {
+    case "granted": return "Allowed"
+    case "denied": return "Needs approval"
+    default: return "Not set up"
+    }
+  }
+  private var statusColor: Color {
+    if isGranted { return .green }
+    if isDenied { return .orange }
+    return .secondary
+  }
 
   var body: some View {
     HStack(alignment: .center, spacing: 10) {
-      Text(isGranted ? "✓" : "!")
+      Text(symbol)
         .font(.caption.weight(.bold))
-        .foregroundColor(isGranted ? .green : .orange)
+        .foregroundColor(statusColor)
         .frame(width: 22, height: 22)
-        .background(Circle().fill((isGranted ? Color.green : Color.orange).opacity(0.12)))
+        .background(Circle().fill(statusColor.opacity(0.12)))
 
       VStack(alignment: .leading, spacing: 2) {
         HStack(spacing: 6) {
           Text(title)
             .font(.caption.weight(.semibold))
-          Text(state)
+          Text(statusLabel)
             .font(.system(size: 10, weight: .semibold))
-            .foregroundColor(isGranted ? .green : .orange)
+            .foregroundColor(statusColor)
         }
         Text(subtitle)
           .font(.caption)
