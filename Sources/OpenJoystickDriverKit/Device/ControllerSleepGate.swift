@@ -142,7 +142,8 @@ extension DeviceInputState {
     if needsDpadNeutral {
       events.append(.dpadChanged(.neutral))
     }
-    if abs(leftStickX) > controllerSleepStickDeadzone || abs(leftStickY) > controllerSleepStickDeadzone
+    if abs(leftStickX) > controllerSleepStickDeadzone
+      || abs(leftStickY) > controllerSleepStickDeadzone
     {
       events.append(.leftStickChanged(x: 0, y: 0))
     }
@@ -175,13 +176,15 @@ extension DeviceInputState {
       }
     }
 
-    if dpadButtons.contains(Button.dpadUp.rawValue) || dpadButtons.contains(Button.dpadDown.rawValue)
+    if dpadButtons.contains(Button.dpadUp.rawValue)
+      || dpadButtons.contains(Button.dpadDown.rawValue)
       || dpadButtons.contains(Button.dpadLeft.rawValue)
       || dpadButtons.contains(Button.dpadRight.rawValue)
     {
       events.append(.dpadChanged(currentDpadDirection()))
     }
-    if abs(leftStickX) > controllerSleepStickDeadzone || abs(leftStickY) > controllerSleepStickDeadzone
+    if abs(leftStickX) > controllerSleepStickDeadzone
+      || abs(leftStickY) > controllerSleepStickDeadzone
     {
       events.append(.leftStickChanged(x: leftStickX, y: leftStickY))
     }

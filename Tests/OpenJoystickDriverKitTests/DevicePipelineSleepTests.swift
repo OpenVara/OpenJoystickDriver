@@ -57,7 +57,10 @@ struct DevicePipelineSleepTests {
     #expect(dispatcher.flattenedEvents == [.buttonPressed(.a), .buttonReleased(.a)])
 
     await pipeline.feedHIDData(Data([4]))
-    #expect(dispatcher.flattenedEvents == [.buttonPressed(.a), .buttonReleased(.a), .buttonPressed(.b)])
+    #expect(
+      dispatcher.flattenedEvents
+        == [.buttonPressed(.a), .buttonReleased(.a), .buttonPressed(.b)]
+    )
   }
 
   @Test
@@ -78,7 +81,10 @@ struct DevicePipelineSleepTests {
     #expect(dispatcher.flattenedEvents == [.leftStickChanged(x: 0.8, y: 0)])
 
     await pipeline.setExternalOutputAllowed(false)
-    #expect(dispatcher.flattenedEvents == [.leftStickChanged(x: 0.8, y: 0), .leftStickChanged(x: 0, y: 0)])
+    #expect(
+      dispatcher.flattenedEvents
+        == [.leftStickChanged(x: 0.8, y: 0), .leftStickChanged(x: 0, y: 0)]
+    )
 
     await pipeline.setExternalOutputAllowed(true)
     await pipeline.feedHIDData(Data([5]))
@@ -94,6 +100,7 @@ struct DevicePipelineSleepTests {
     )
   }
 
+  @Test
   func testRepeatedAllowedSignalDoesNotRearmForegroundGate() async {
     let dispatcher = RecordingOutputDispatcher()
     let pipeline = DevicePipeline(
@@ -115,6 +122,7 @@ struct DevicePipelineSleepTests {
 }
 
 private final class ScriptedInputParser: InputParser, @unchecked Sendable {
+  // swiftlint:disable:next async_without_await
   func performHandshake(handle: USBDeviceHandle?) async throws {}
 
   func parse(data: Data) throws -> [ControllerEvent] {
@@ -149,6 +157,7 @@ private final class RecordingOutputDispatcher: OutputDispatcher, @unchecked Send
     lock.withLock { batches.flatMap { $0 } }
   }
 
+  // swiftlint:disable:next async_without_await
   func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) async {
     lock.withLock {
       batches.append(events)

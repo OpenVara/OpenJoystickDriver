@@ -30,7 +30,8 @@ struct HardwarePipelineTests {
     }
     var found = false
     let stream = context.findDevices(vendorId: gamesirVID, productId: gamesirPID, findAll: false)
-    for await device in stream where device.idVendor == gamesirVID && device.idProduct == gamesirPID
+    for await device in stream
+      where device.idVendor == gamesirVID && device.idProduct == gamesirPID
     {
       found = true
       print(
@@ -60,7 +61,8 @@ struct HardwarePipelineTests {
       try Test.cancel(
         Comment(
           rawValue:
-            "[HardwareTest] USB access denied - skipping handshake test (needs root or entitlements)"
+            "[HardwareTest] USB access denied - skipping handshake test "
+              + "(needs root or entitlements)"
         )
       )
     }

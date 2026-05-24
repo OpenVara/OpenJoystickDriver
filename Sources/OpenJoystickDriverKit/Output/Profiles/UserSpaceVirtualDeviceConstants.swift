@@ -70,7 +70,9 @@ public enum UserSpaceVirtualDeviceConstants {
   }
 
   /// Returns the stable dedicated route token for one consumer bundle root.
-  public static func dedicatedRouteToken(forConsumerBundleRootPath bundleRootPath: String) -> String {
+  public static func dedicatedRouteToken(
+    forConsumerBundleRootPath bundleRootPath: String
+  ) -> String {
     "consumer-" + hex64(fnv1a64(bundleRootPath))
   }
 

@@ -537,7 +537,8 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       primaryUsage = nil
     }
 
-    let rumbleHandler: UserSpaceOutputDispatcher.RumbleCommandHandler = { [weak self] identifier, command in
+    let rumbleHandler: UserSpaceOutputDispatcher.RumbleCommandHandler = {
+      [weak self] identifier, command in
       guard let self else { return }
       Task {
         _ = await self.deviceManager.sendRumble(

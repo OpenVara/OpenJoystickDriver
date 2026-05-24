@@ -143,8 +143,10 @@ struct VirtualControllerBackendTests {
   }
   @Test
   func testXbox360FormatDefaultsToJoystickPrimaryUsage() {
-    #expect(UserSpaceOutputDispatcher.defaultPrimaryUsage(for: Xbox360MacHIDReportFormat())
-        == kHIDUsage_GD_Joystick)
+    #expect(
+      UserSpaceOutputDispatcher.defaultPrimaryUsage(for: Xbox360MacHIDReportFormat())
+        == kHIDUsage_GD_Joystick
+    )
   }
   @Test
   func testXbox360GamePadFormatDefaultsToGamePadPrimaryUsage() {
@@ -162,7 +164,9 @@ struct VirtualControllerBackendTests {
 
     #expect(format.inputReportID == 1)
     #expect(format.outputReportID == VirtualRumbleOutputReportParser.xboxOneReportID)
-    #expect(format.outputReportPayloadSize == VirtualRumbleOutputReportParser.xboxOneReportPayloadSize)
+    #expect(
+      format.outputReportPayloadSize == VirtualRumbleOutputReportParser.xboxOneReportPayloadSize
+    )
   }
   @Test
   func testXboxGIPCompatibilityFormatAdvertisesFullOutputSize() throws {

@@ -163,7 +163,7 @@ public final class UserSpaceOutputDispatcher: CompatibilityUserSpaceOutputDispat
       var properties = variant.props
 
       for loc in candidateLocationIDs {
-        properties[kIOHIDLocationIDKey as String] = NSNumber(value: Int64(loc))
+        properties[kIOHIDLocationIDKey as String] = Int64(loc)
         dev = tryCreate(properties)
         if dev != nil {
           break attemptLoop
@@ -284,9 +284,11 @@ public final class UserSpaceOutputDispatcher: CompatibilityUserSpaceOutputDispat
         reportID: format.outputReportID
       )
     }
-    properties[kIOHIDLocationIDKey as String] = NSNumber(
-      value: Int64(UserSpaceVirtualDeviceConstants.locationID(for: identifier, routeToken: routeToken))
+    let locationID = UserSpaceVirtualDeviceConstants.locationID(
+      for: identifier,
+      routeToken: routeToken
     )
+    properties[kIOHIDLocationIDKey as String] = Int64(locationID)
     return properties
   }
 

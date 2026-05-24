@@ -15,12 +15,16 @@ struct ForegroundConsumerRouteSelectionTests {
         .sample(id: 1, route: UserSpaceVirtualDeviceConstants.sharedRouteToken, bundle: pcsx2),
         .sample(
           id: 2,
-          route: UserSpaceVirtualDeviceConstants.dedicatedRouteToken(forConsumerBundleRootPath: duckStation),
+          route: UserSpaceVirtualDeviceConstants.dedicatedRouteToken(
+            forConsumerBundleRootPath: duckStation
+          ),
           bundle: pcsx2
         ),
         .sample(
           id: 3,
-          route: UserSpaceVirtualDeviceConstants.dedicatedRouteToken(forConsumerBundleRootPath: duckStation),
+          route: UserSpaceVirtualDeviceConstants.dedicatedRouteToken(
+            forConsumerBundleRootPath: duckStation
+          ),
           bundle: duckStation
         ),
       ]

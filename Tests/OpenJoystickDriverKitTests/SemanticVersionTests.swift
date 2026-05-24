@@ -18,7 +18,7 @@ struct SemanticVersionTests {
     #expect(version.major == 0)
     #expect(version.minor == 2)
     #expect(version.patch == 0)
-    #expect(version.prerelease == [])
+    #expect(version.prerelease.isEmpty)
   }
 
   @Test

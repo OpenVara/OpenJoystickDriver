@@ -186,10 +186,13 @@ actor DevicePipeline {
 
     if shouldWaitForNeutral {
       print(
-        "[DevicePipeline] Foreground gate lifted; suppressing hidden non-neutral state: \(identifier)"
+        "[DevicePipeline] Foreground gate lifted; suppressing hidden "
+          + "non-neutral state: \(identifier)"
       )
     } else {
-      print("[DevicePipeline] Output ungated by foreground consumer: \(identifier)")
+      print(
+        "[DevicePipeline] Output ungated by foreground consumer: \(identifier)"
+      )
     }
   }
 
@@ -224,7 +227,13 @@ actor DevicePipeline {
       return false
     }
     do {
-      try rumbleOutput.sendPhysicalRumble(handle: handle, left: left, right: right, lt: lt, rt: rt)
+      try rumbleOutput.sendPhysicalRumble(
+        handle: handle,
+        left: left,
+        right: right,
+        lt: lt,
+        rt: rt
+      )
       return true
     } catch {
       print("[DevicePipeline] Rumble send failed for \(identifier): \(error)")
@@ -366,7 +375,9 @@ actor DevicePipeline {
 
     while isActive {
       let loopStartNs = DispatchTime.now().uptimeNanoseconds
-      if !sleepGate.isSleeping && shouldSendKeepAlive(lastKeepAliveNs: lastKeepAliveNs, now: loopStartNs) {
+      if !sleepGate.isSleeping,
+        shouldSendKeepAlive(lastKeepAliveNs: lastKeepAliveNs, now: loopStartNs)
+      {
         lastKeepAliveNs = loopStartNs
         runKeepAlive(handle: handle)
       }
@@ -496,9 +507,12 @@ actor DevicePipeline {
           waitingForExternalNeutral = false
           print("[DevicePipeline] Foreground gate re-armed after neutral: \(identifier)")
           return
-        } else if !events.isEmpty {
+        }
+        if !events.isEmpty {
           waitingForExternalNeutral = false
-          print("[DevicePipeline] Foreground gate re-armed after first post-focus change: \(identifier)")
+          print(
+            "[DevicePipeline] Foreground gate re-armed after first post-focus change: \(identifier)"
+          )
           return
         }
         return
@@ -511,7 +525,6 @@ actor DevicePipeline {
       break
     case .consumeWake:
       print("[DevicePipeline] Controller woke from sleep: \(identifier)")
-      break
     }
   }
 }

@@ -158,7 +158,10 @@ final class ForegroundConsumerOutputMonitor: @unchecked Sendable {
 
     if allowOutput {
       if consumerBundleRoots.isEmpty {
-        print("[ForegroundConsumerOutputMonitor] Output active (no consumer apps holding OJD virtual device)")
+        print(
+          "[ForegroundConsumerOutputMonitor] Output active "
+            + "(no consumer apps holding OJD virtual device)"
+        )
       } else if let frontmostBundleRoot {
         let observedLabel = Self.bundleLabelList(observedBundleRoots)
         let effectiveLabel = Self.bundleLabelList(consumerBundleRoots)
@@ -175,7 +178,8 @@ final class ForegroundConsumerOutputMonitor: @unchecked Sendable {
         print("[ForegroundConsumerOutputMonitor] Output active")
       }
     } else {
-      let frontmostLabel = frontmostBundleRoot.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "none"
+      let frontmostLabel =
+        frontmostBundleRoot.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "none"
       let consumersLabel = Self.bundleLabelList(consumerBundleRoots)
       let observedLabel = Self.bundleLabelList(observedBundleRoots)
       let routeLabel = activeRouteToken ?? "none"
@@ -245,8 +249,16 @@ final class ForegroundConsumerOutputMonitor: @unchecked Sendable {
         key as CFString,
         kCFAllocatorDefault,
         0
-      )?.takeRetainedValue() as? NSNumber {
-        return value.intValue
+      )?.takeRetainedValue() as? Int {
+        return value
+      }
+      if let value = IORegistryEntryCreateCFProperty(
+        service,
+        key as CFString,
+        kCFAllocatorDefault,
+        0
+      )?.takeRetainedValue() as? Int64 {
+        return Int(value)
       }
       if let value = IORegistryEntryCreateCFProperty(
         service,
@@ -275,7 +287,9 @@ final class ForegroundConsumerOutputMonitor: @unchecked Sendable {
     return false
   }
 
-  private static func consumerClientSamples(under service: io_service_t) -> [ForegroundConsumerClientSample] {
+  private static func consumerClientSamples(
+    under service: io_service_t
+  ) -> [ForegroundConsumerClientSample] {
     let routeToken = userSpaceRouteToken(for: service)
     var iterator: io_iterator_t = 0
     let kr = IORegistryEntryCreateIterator(
@@ -300,7 +314,10 @@ final class ForegroundConsumerOutputMonitor: @unchecked Sendable {
     entry: io_registry_entry_t,
     routeToken: String
   ) -> ForegroundConsumerClientSample? {
-    guard let ioUserClass = IOObjectCopyClass(entry)?.takeRetainedValue() as String?, ioUserClass == "IOHIDLibUserClient" else {
+    guard
+      let ioUserClass = IOObjectCopyClass(entry)?.takeRetainedValue() as String?,
+      ioUserClass == "IOHIDLibUserClient"
+    else {
       return nil
     }
 
@@ -345,8 +362,16 @@ final class ForegroundConsumerOutputMonitor: @unchecked Sendable {
       key as CFString,
       kCFAllocatorDefault,
       0
-    )?.takeRetainedValue() as? NSNumber {
-      return value.intValue
+    )?.takeRetainedValue() as? Int {
+      return value
+    }
+    if let value = IORegistryEntryCreateCFProperty(
+      entry,
+      key as CFString,
+      kCFAllocatorDefault,
+      0
+    )?.takeRetainedValue() as? Int64 {
+      return Int(value)
     }
     return IORegistryEntryCreateCFProperty(
       entry,
@@ -394,13 +419,16 @@ final class ForegroundConsumerOutputMonitor: @unchecked Sendable {
   }
 
   private static func intValue(_ value: Any?) -> Int? {
-    if let number = value as? NSNumber { return number.intValue }
+    if let number = value as? Int { return number }
+    if let number = value as? Int64 { return Int(number) }
     return value as? Int
   }
 
   private static func boolProperty(_ key: String, dictionary: [String: Any]) -> Bool? {
     guard let value = dictionary[key] else { return nil }
-    if let number = value as? NSNumber { return number.boolValue }
+    if let number = value as? Bool { return number }
+    if let number = value as? Int { return number != 0 }
+    if let number = value as? Int64 { return number != 0 }
     return value as? Bool
   }
 
@@ -418,7 +446,8 @@ final class ForegroundConsumerOutputMonitor: @unchecked Sendable {
     guard copied > 0 else { return nil }
 
     let pathBytes = buffer.prefix { $0 != 0 }.map(UInt8.init(bitPattern:))
-    var url = URL(fileURLWithPath: String(decoding: pathBytes, as: UTF8.self))
+    guard let path = String(bytes: pathBytes, encoding: .utf8) else { return nil }
+    var url = URL(fileURLWithPath: path)
     while url.path != "/" && !url.path.isEmpty {
       if url.pathExtension == "app" { return url.path }
       url.deleteLastPathComponent()

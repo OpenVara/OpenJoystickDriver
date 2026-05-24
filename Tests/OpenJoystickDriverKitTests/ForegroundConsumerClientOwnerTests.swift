@@ -19,8 +19,10 @@ struct ForegroundConsumerClientOwnerTests {
   @Test
 
   func testParsesPIDFromNSNumberAndInt() {
-    #expect(ForegroundConsumerClientOwner.pid(from: NSNumber(value: 1234)) == 1234)
+    let bridgedInt: Any = 1234
+    let bridgedZero: Any = 0
+    #expect(ForegroundConsumerClientOwner.pid(from: bridgedInt) == 1234)
     #expect(ForegroundConsumerClientOwner.pid(from: 5678) == 5678)
-    #expect(ForegroundConsumerClientOwner.pid(from: NSNumber(value: 0)) == nil)
+    #expect(ForegroundConsumerClientOwner.pid(from: bridgedZero) == nil)
   }
 }

@@ -12,7 +12,9 @@ struct ForegroundConsumerCompatibilityDispatcherPoolTests {
       forConsumerBundleRootPath: bundleRoot
     )
 
-    let shared = RecordingCompatibilityDispatcher(routeToken: UserSpaceVirtualDeviceConstants.sharedRouteToken)
+    let shared = RecordingCompatibilityDispatcher(
+      routeToken: UserSpaceVirtualDeviceConstants.sharedRouteToken
+    )
     let dedicatedByRoute = LockedRouteDispatchers()
 
     let pool = try ForegroundConsumerCompatibilityDispatcherPool { requestedRouteToken in
@@ -70,6 +72,7 @@ private final class RecordingCompatibilityDispatcher:
 
   func close() {}
 
+  // swiftlint:disable:next async_without_await
   func dispatch(events: [ControllerEvent], from identifier: DeviceIdentifier) async {
     recordedDispatches.append(.init(identifier: identifier, events: events))
   }

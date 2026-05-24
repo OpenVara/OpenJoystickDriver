@@ -24,7 +24,11 @@ let xpcService = XPCService(
 )
 let foregroundConsumerOutputMonitor = ForegroundConsumerOutputMonitor(
   deviceManager: manager
-) { frontmostBundleRootPath, effectiveConsumerBundleRoots, observedConsumerBundleRoots, activeRouteToken in
+) {
+  frontmostBundleRootPath,
+  effectiveConsumerBundleRoots,
+  observedConsumerBundleRoots,
+  activeRouteToken in
   await xpcService.applyForegroundCompatibilityRoutingUpdate(
     frontmostBundleRootPath: frontmostBundleRootPath,
     effectiveConsumerBundleRoots: effectiveConsumerBundleRoots,

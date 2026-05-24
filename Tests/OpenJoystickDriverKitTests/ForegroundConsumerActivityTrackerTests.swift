@@ -14,8 +14,8 @@ struct ForegroundConsumerActivityTrackerTests {
           id: 1,
           bundle: "/Applications/PCSX2.app",
           queueHead: 0,
-          queueTail: 0
-        )
+          queueTail: 0,
+        ),
       ],
       now: 10
     )

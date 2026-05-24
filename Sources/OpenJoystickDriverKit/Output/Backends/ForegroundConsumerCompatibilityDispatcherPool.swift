@@ -30,7 +30,7 @@ public final class ForegroundConsumerCompatibilityDispatcherPool:
     set {
       let children = lock.withLock { () -> [any CompatibilityUserSpaceOutputDispatching] in
         _suppressOutput = newValue
-        return [sharedDispatcher] + dedicatedDispatchers.values.map { $0 }
+        return [sharedDispatcher] + Array(dedicatedDispatchers.values)
       }
       for child in children {
         child.suppressOutput = newValue
@@ -60,14 +60,14 @@ public final class ForegroundConsumerCompatibilityDispatcherPool:
       {
         return active.lastRumbleStatus
       }
-      let all = [sharedDispatcher] + dedicatedDispatchers.values.map { $0 }
-      return all.first(where: { $0.lastRumbleStatus != "none" })?.lastRumbleStatus ?? "none"
+      let all = [sharedDispatcher] + Array(dedicatedDispatchers.values)
+      return all.first { $0.lastRumbleStatus != "none" }?.lastRumbleStatus ?? "none"
     }
   }
 
   public func close() {
     let children = lock.withLock { () -> [any CompatibilityUserSpaceOutputDispatching] in
-      let all = [sharedDispatcher] + dedicatedDispatchers.values.map { $0 }
+      let all = [sharedDispatcher] + Array(dedicatedDispatchers.values)
       dedicatedDispatchers.removeAll()
       activeRouteToken = nil
       knownIdentifiers.removeAll()
@@ -108,7 +108,7 @@ public final class ForegroundConsumerCompatibilityDispatcherPool:
     let created: (any CompatibilityUserSpaceOutputDispatching)?
     let identifiers: [DeviceIdentifier]
 
-    if let existing = lock.withLock({ dedicatedDispatchers[routeToken] }) {
+    if let existing = lock.withLock { dedicatedDispatchers[routeToken] } {
       existing.suppressOutput = suppressOutput
       return
     }
@@ -166,7 +166,9 @@ public final class ForegroundConsumerCompatibilityDispatcherPool:
     }
   }
 
-  private func dispatcher(for routeToken: String?) -> (any CompatibilityUserSpaceOutputDispatching)? {
+  private func dispatcher(
+    for routeToken: String?
+  ) -> (any CompatibilityUserSpaceOutputDispatching)? {
     if routeToken == nil { return nil }
     if routeToken == UserSpaceVirtualDeviceConstants.sharedRouteToken {
       return sharedDispatcher
