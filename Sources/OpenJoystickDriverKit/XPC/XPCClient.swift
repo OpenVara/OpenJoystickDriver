@@ -86,6 +86,11 @@ public final class XPCClient: @unchecked Sendable {
     return payload
   }
 
+  /// Requests Input Monitoring permission from the daemon process.
+  public func requestInputMonitoringAccess() async throws -> String {
+    try await xpcCall { service, reply in service.requestInputMonitoringAccess(reply: reply) }
+  }
+
   /// Gets the latest input snapshot (buttons, sticks, triggers) for a device.
   ///
   /// Returns nil if no input has been received from the controller yet.

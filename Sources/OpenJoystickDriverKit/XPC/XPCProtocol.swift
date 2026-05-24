@@ -118,6 +118,10 @@ public enum VirtualDeviceMode: String, Codable, CaseIterable, Sendable {
   /// and connected device descriptions.
   func getStatus(reply: @escaping (Data) -> Void)
 
+  /// Requests Input Monitoring permission from the daemon process.
+  /// Replies with the daemon's updated permission state.
+  func requestInputMonitoringAccess(reply: @escaping (String) -> Void)
+
   /// Gets the latest input state (buttons, sticks, triggers) for a device.
   /// Replies with JSON-encoded ``DeviceInputState``, or nil if no input has been received yet.
   @objc func getDeviceInputState(vendorID: Int, productID: Int, reply: @escaping (Data?) -> Void)

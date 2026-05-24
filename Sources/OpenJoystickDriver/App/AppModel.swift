@@ -39,6 +39,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   @Published var daemonError: String?
   @Published var daemonHealth: DaemonManager.DaemonHealth?
   @Published var devices: [DeviceViewModel] = []
+  @Published var appInputMonitoring = "unknown"
   @Published var inputMonitoring = "unknown"
   @Published var extensionManager = SystemExtensionManager()
 
@@ -280,6 +281,23 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     }
   }
 
+  func requestAppInputMonitoringAccess() async {
+    appInputMonitoring = "\(await permissionManager.requestAccess())"
+  }
+
+  func requestDaemonInputMonitoringAccess() async {
+    guard daemonConnected else {
+      daemonError = "Start the helper first, then click Grant Helper."
+      return
+    }
+    do {
+      inputMonitoring = try await client.requestInputMonitoringAccess()
+      await syncFromDaemonNow()
+    } catch {
+      daemonError = formatDaemonError(error)
+    }
+  }
+
   // MARK: - Private
 
   private func formatDaemonError(_ error: Error) -> String {
@@ -309,10 +327,12 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       userSpaceVirtualDeviceEnabled = false
       userSpaceVirtualDeviceStatus = "off"
       virtualDeviceDiagnostics = nil
-      inputMonitoring = "\(await permissionManager.checkAccess())"
+      appInputMonitoring = "\(await permissionManager.checkAccess())"
+      inputMonitoring = "unknown"
       return
     }
 
+    appInputMonitoring = "\(await permissionManager.checkAccess())"
     if !client.isConnected { client.connect() }
     do {
       let status = try await client.getStatus()
@@ -329,7 +349,8 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       daemonConnected = false
       devices = []
       client.disconnect()
-      inputMonitoring = "\(await permissionManager.checkAccess())"
+      appInputMonitoring = "\(await permissionManager.checkAccess())"
+      inputMonitoring = "unknown"
 
       // If launchd says the job is loaded/running but XPC isn't responding, call that out.
       if let h = daemonHealth, h.pid != nil {

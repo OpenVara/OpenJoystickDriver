@@ -37,6 +37,23 @@ _require_codesign_identity() {
     echo "Fix: run: ./scripts/ojd signing configure"
     exit 1
   fi
+  if ! _codesign_identity_available "$GUI_IDENTITY"; then
+    echo "ERROR: GUI signing identity is not available/trusted in Keychain: $GUI_IDENTITY"
+    echo "Fix: install the matching signing certificate/private key, then run:"
+    echo "  ./scripts/ojd signing configure"
+    exit 1
+  fi
+  if ! _codesign_identity_available "$DAEMON_IDENTITY"; then
+    echo "ERROR: daemon signing identity is not available/trusted in Keychain: $DAEMON_IDENTITY"
+    echo "Fix: install the matching signing certificate/private key, then run:"
+    echo "  ./scripts/ojd signing configure"
+    exit 1
+  fi
+}
+
+_codesign_identity_available() {
+  local identity="$1"
+  security find-identity -v -p codesigning 2>/dev/null | grep -F "$identity" >/dev/null
 }
 
 # ---------------------------------------------------------------------------

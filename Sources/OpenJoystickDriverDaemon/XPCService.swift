@@ -263,6 +263,15 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
     }
   }
 
+  public func requestInputMonitoringAccess(reply: @escaping (String) -> Void) {
+    let callback = SendableReply(call: reply)
+    let pm = permissionManager
+    Task {
+      let state = await pm.requestAccess()
+      callback.call("\(state)")
+    }
+  }
+
   /// Returns the current input state for the specified device as encoded JSON data.
   public func getDeviceInputState(vendorID: Int, productID: Int, reply: @escaping (Data?) -> Void) {
     let callback = SendableReply(call: reply)

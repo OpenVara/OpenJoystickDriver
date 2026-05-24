@@ -25,22 +25,20 @@ struct MenuBarPopoverView: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 10) {
+      VStack(alignment: .leading, spacing: 14) {
         headerRow
-        Divider()
-        daemonRow
-        driverKitRow
-        modeRow
+        readinessCard
+        permissionsCard
+        outputCard
+        helperCard
         inputTestRow
         selfTestRow
-        Divider()
         updateRow
-        Divider()
         footerRow
       }
-      .padding(12)
+      .padding(14)
     }
-    .frame(width: 420)
+    .frame(width: 440)
     .onAppear {
       Task {
         await model.syncFromDaemonNow()
@@ -63,234 +61,297 @@ struct MenuBarPopoverView: View {
   }
 
   private var headerRow: some View {
-    HStack {
-      Text("OpenJoystickDriver").font(.headline)
+    HStack(alignment: .center, spacing: 12) {
+      VStack(alignment: .leading, spacing: 2) {
+        Text("OpenJoystickDriver")
+          .font(.system(size: 17, weight: .semibold))
+        Text("Gamepad bridge for macOS")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
       Spacer()
-      SwiftUI.Button("Quit") { NSApplication.shared.terminate(nil) }.buttonStyle(.borderless)
+      SwiftUI.Button("Quit") { NSApplication.shared.terminate(nil) }
+        .buttonStyle(.borderless)
+        .foregroundColor(.secondary)
     }
   }
 
-  private var daemonRow: some View {
+  private var readinessCard: some View {
     let daemonStatusLabel =
       model.daemonRestarting
       ? "restarting..."
       : (model.daemonConnected ? "running" : (model.daemonInstalled ? "installed" : "missing"))
-    let daemonStatusColor: Color =
-      model.daemonRestarting ? .orange : (model.daemonConnected ? .green : .secondary)
+    let ready = model.daemonConnected && model.inputMonitoring == "granted"
+    let title = ready ? "Ready for games" : "Setup needs attention"
+    let summary: String = {
+      if model.daemonRestarting { return "The helper is restarting." }
+      if !model.daemonInstalled { return "Install the helper to read controller input." }
+      if !model.daemonConnected { return "Start the helper to connect controllers." }
+      if model.inputMonitoring != "granted" { return "Grant Input Monitoring for the helper." }
+      if model.devices.isEmpty { return "Connect a controller to start playing." }
+      return "\(model.devices.count) controller\(model.devices.count == 1 ? "" : "s") connected."
+    }()
 
-    return VStack(alignment: .leading, spacing: 6) {
-      HStack(spacing: 8) {
-        Text("Driver").font(.subheadline)
+    return OJDCard {
+      HStack(alignment: .top, spacing: 12) {
+        StatusOrb(isReady: ready, isBusy: model.daemonRestarting)
+        VStack(alignment: .leading, spacing: 4) {
+          Text(title)
+            .font(.system(size: 16, weight: .semibold))
+          Text(summary)
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
         Spacer()
         Text(daemonStatusLabel)
-          .font(.caption)
-          .foregroundColor(daemonStatusColor)
+          .font(.caption.weight(.semibold))
+          .padding(.horizontal, 8)
+          .padding(.vertical, 4)
+          .foregroundColor(ready ? .green : .secondary)
+          .background(Capsule().fill(Color.secondary.opacity(0.12)))
       }
 
-      Text("Controllers: \(model.devices.count)").font(.caption).foregroundColor(.secondary)
-      Text("Input Monitoring: \(model.inputMonitoring)").font(.caption).foregroundColor(.secondary)
-
-      if let h = model.daemonHealth, h.installed {
-        let state = h.state ?? "unknown"
-        let pid = h.pid.map { "\($0)" } ?? "?"
-        let active = h.activeCount.map { "\($0)" } ?? "?"
-        let runs = h.runs.map { "\($0)" } ?? "?"
-        let reason = h.isInefficientKillLoop ? (h.immediateReason ?? h.blame) : nil
-        HStack(spacing: 8) {
-          Text(
-            "launchd: state=\(state), pid=\(pid), active=\(active), runs=\(runs)\(reason.map { ", \($0)" } ?? "")"
-          )
-            .font(.caption)
-            .foregroundColor(h.isInefficientKillLoop ? .orange : .secondary)
-            .lineLimit(2)
-          Spacer()
-          SwiftUI.Button("↻") {
-            Task { await model.refreshDaemonHealth() }
-          }
-          .buttonStyle(.borderless)
-        }
+      HStack(spacing: 10) {
+        MetricChip(title: "Controllers", value: "\(model.devices.count)")
+        MetricChip(title: "Mode", value: activeOutputLabel)
+        MetricChip(title: "Identity", value: compatibilityIdentityLabel)
       }
-
-      HStack(spacing: 8) {
-        if !model.daemonInstalled {
-          SwiftUI.Button("Install") {
-            Task {
-              await model.installDaemon()
-              await model.syncFromDaemonNow()
-            }
-          }
-          .buttonStyle(.borderless)
-          .controlSize(.small)
-        } else {
-          SwiftUI.Button("Start") {
-            Task {
-              await model.startDaemon()
-              await model.syncFromDaemonNow()
-            }
-          }
-          .buttonStyle(.borderless)
-          .controlSize(.small)
-          .disabled(model.daemonConnected)
-          SwiftUI.Button("Restart") {
-            Task {
-              await model.restartDaemon()
-              await model.syncFromDaemonNow()
-            }
-          }
-          .buttonStyle(.borderless)
-          .controlSize(.small)
-          .disabled(model.daemonRestarting)
-
-          SwiftUI.Button("Uninstall") { showUninstallConfirm = true }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
-            .disabled(model.daemonRestarting)
-        }
-        Spacer()
-      }
+      .padding(.top, 4)
 
       if let err = model.daemonError {
-        Text(err).font(.caption).foregroundColor(.red)
-      }
-    }
-  }
-
-  private var driverKitRow: some View {
-    let state = model.extensionManager.installState
-    return VStack(alignment: .leading, spacing: 6) {
-      HStack(spacing: 8) {
-        Text("DriverKit").font(.subheadline)
-        Spacer()
-        Text(state.label).font(.caption).foregroundColor(state.isInstalled ? .green : .secondary)
-        SwiftUI.Button("Install") { model.extensionManager.installExtension() }
-          .buttonStyle(.borderless)
-          .controlSize(.small)
-          .disabled(state.isInstalled || state.isPending)
-      }
-      if case .failed(let msg) = state {
-        Text(msg)
+        Text(err)
           .font(.caption)
           .foregroundColor(.red)
           .fixedSize(horizontal: false, vertical: true)
-
-        if !model.extensionManager.lastInstallDetails.isEmpty {
-          VStack(alignment: .leading, spacing: 2) {
-            Text("Details").font(.caption)
-            ForEach(model.extensionManager.lastInstallDetails, id: \.self) { line in
-              Text(line).font(.caption).foregroundColor(.secondary)
-            }
-          }
-          .padding(.top, 4)
-        }
-      }
-      if let w = model.extensionManager.installWarning, state.isInstalled {
-        Text(w)
-          .font(.caption)
-          .foregroundColor(.orange)
-          .fixedSize(horizontal: false, vertical: true)
-      }
-      if let s = model.virtualDeviceDiagnostics?.driverKitOutputStats {
-        let last = s.lastErrorHex ?? "none"
-        Text("setReport: ok \(s.successes) / fail \(s.failures) (last \(last))")
-          .font(.caption)
-          .foregroundColor(.secondary)
+          .padding(.top, 2)
       }
     }
   }
 
-  private var modeRow: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Text("Mode").font(.caption).foregroundColor(.secondary)
-      Picker(
-        "Mode",
-        selection: Binding(
-          get: { model.virtualDeviceMode },
-          set: { newValue in Task { await model.setVirtualDeviceMode(newValue) } }
-        )
-      ) {
-        Text("Auto").tag(VirtualDeviceMode.auto.rawValue)
-        Text("DriverKit").tag(VirtualDeviceMode.driverKit.rawValue)
-        Text("Compatibility").tag(VirtualDeviceMode.compatUserSpace.rawValue)
-        if model.developerMode {
-          Text("Both").tag(VirtualDeviceMode.both.rawValue)
+  private var helperCard: some View {
+    OJDCard(title: "Helper") {
+      VStack(alignment: .leading, spacing: 10) {
+        if let h = model.daemonHealth, h.installed {
+          let state = h.state ?? "unknown"
+          let pid = h.pid.map { "\($0)" } ?? "?"
+          let runs = h.runs.map { "\($0)" } ?? "?"
+          let reason = h.isInefficientKillLoop ? (h.immediateReason ?? h.blame) : nil
+          HStack(spacing: 8) {
+            Text("launchd \(state), pid \(pid), runs \(runs)\(reason.map { ", \($0)" } ?? "")")
+              .font(.caption)
+              .foregroundColor(h.isInefficientKillLoop ? .orange : .secondary)
+              .lineLimit(2)
+            Spacer()
+            SwiftUI.Button("Refresh") {
+              Task { await model.refreshDaemonHealth() }
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+          }
+        } else {
+          Text("The helper starts automatically after install.")
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+
+        Divider()
+
+        HStack(spacing: 8) {
+          Text("System extension")
+            .font(.caption)
+            .foregroundColor(.secondary)
+          Spacer()
+          Text(model.extensionManager.installState.label)
+            .font(.caption.weight(.semibold))
+            .foregroundColor(model.extensionManager.installState.isInstalled ? .green : .secondary)
+          SwiftUI.Button("Install") { model.extensionManager.installExtension() }
+            .controlSize(.small)
+            .disabled(
+              model.extensionManager.installState.isInstalled ||
+                model.extensionManager.installState.isPending
+            )
+        }
+        if case .failed(let msg) = model.extensionManager.installState {
+          Text(msg)
+            .font(.caption)
+            .foregroundColor(.red)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        if let warning = model.extensionManager.installWarning, model.extensionManager.installState.isInstalled {
+          Text(warning)
+            .font(.caption)
+            .foregroundColor(.orange)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+
+        HStack(spacing: 8) {
+          if !model.daemonInstalled {
+            SwiftUI.Button("Install Helper") {
+              Task {
+                await model.installDaemon()
+                await model.syncFromDaemonNow()
+              }
+            }
+            .controlSize(.small)
+          } else {
+            SwiftUI.Button("Start") {
+              Task {
+                await model.startDaemon()
+                await model.syncFromDaemonNow()
+              }
+            }
+            .controlSize(.small)
+            .disabled(model.daemonConnected)
+            SwiftUI.Button("Restart") {
+              Task {
+                await model.restartDaemon()
+                await model.syncFromDaemonNow()
+              }
+            }
+            .controlSize(.small)
+            .disabled(model.daemonRestarting)
+            SwiftUI.Button("Uninstall") { showUninstallConfirm = true }
+              .buttonStyle(.borderless)
+              .controlSize(.small)
+              .foregroundColor(.secondary)
+              .disabled(model.daemonRestarting)
+          }
         }
       }
-      .pickerStyle(.segmented)
-      .disabled(!model.daemonConnected)
+    }
+  }
 
-      let requestedLabel: String = {
-        switch model.virtualDeviceMode {
-        case VirtualDeviceMode.auto.rawValue: return "Auto"
-        case VirtualDeviceMode.driverKit.rawValue: return "DriverKit"
-        case VirtualDeviceMode.compatUserSpace.rawValue: return "Compatibility"
-        case VirtualDeviceMode.both.rawValue: return "Both"
-        default: return model.virtualDeviceMode
+  private var permissionsCard: some View {
+    OJDCard(title: "Permissions") {
+      VStack(alignment: .leading, spacing: 8) {
+        PermissionRow(
+          title: "OpenJoystickDriver",
+          subtitle: "Lets the app ask macOS for Input Monitoring.",
+          state: model.appInputMonitoring,
+          actionTitle: "Grant App"
+        ) {
+          Task { await model.requestAppInputMonitoringAccess() }
         }
-      }()
-      Text("Requested mode: \(requestedLabel)")
-        .font(.caption)
-        .foregroundColor(.secondary)
-
-      Text(
-        "ⓘ Compatibility is the normal app/game mode. " +
-          "DriverKit is for the system extension path; " +
-          "Both is only for debugging duplicate-output issues."
-      )
-        .font(.caption)
-        .foregroundColor(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
-
-      let activeLabel: String = {
-        switch model.outputMode {
-        case CompositeOutputDispatcher.Mode.primaryOnly.rawValue: return "DriverKit"
-        case CompositeOutputDispatcher.Mode.secondaryOnly.rawValue: return "Compatibility (user-space)"
-        case CompositeOutputDispatcher.Mode.both.rawValue: return "Both"
-        default: return "unknown"
+        Divider()
+        PermissionRow(
+          title: "Helper",
+          subtitle: "Lets the background driver read controller input.",
+          state: model.inputMonitoring,
+          actionTitle: "Grant Helper",
+          disabled: !model.daemonConnected
+        ) {
+          Task { await model.requestDaemonInputMonitoringAccess() }
         }
-      }()
-      Text("Active output: \(activeLabel)").font(.caption).foregroundColor(.secondary)
-
-      let compatSelected = model.virtualDeviceMode == VirtualDeviceMode.compatUserSpace.rawValue
-      Picker(
-        "Compatibility identity",
-        selection: Binding(
-          get: { model.compatibilityIdentity },
-          set: { v in Task { await model.setCompatibilityIdentity(v) } }
-        )
-      ) {
-        Text("SDL 2/3").tag(CompatibilityIdentity.sdl2_3.rawValue)
-        Text("Apple GameController").tag(CompatibilityIdentity.appleGameController.rawValue)
-        Text("Generic HID").tag(CompatibilityIdentity.genericHID.rawValue)
-        Text("Xbox 360 HID").tag(CompatibilityIdentity.x360HID.rawValue)
-        Text("Xbox One HID").tag(CompatibilityIdentity.xoneHID.rawValue)
       }
-      .disabled(!model.daemonConnected || !compatSelected)
+    }
+  }
 
-      Text(
-        "ⓘ Pick SDL 2/3 for Steam, PCSX2, DuckStation, or Moonlight/SDL. " +
-          "Pick Apple GameController for native macOS GCController apps. " +
-          "Pick Generic HID for descriptor-driven apps."
-      )
+  private var outputCard: some View {
+    OJDCard(title: "Output") {
+      VStack(alignment: .leading, spacing: 10) {
+        Picker(
+          "Mode",
+          selection: Binding(
+            get: { model.virtualDeviceMode },
+            set: { newValue in Task { await model.setVirtualDeviceMode(newValue) } }
+          )
+        ) {
+          Text("Auto").tag(VirtualDeviceMode.auto.rawValue)
+          Text("DriverKit").tag(VirtualDeviceMode.driverKit.rawValue)
+          Text("Compatibility").tag(VirtualDeviceMode.compatUserSpace.rawValue)
+          if model.developerMode {
+            Text("Both").tag(VirtualDeviceMode.both.rawValue)
+          }
+        }
+        .pickerStyle(.segmented)
+        .disabled(!model.daemonConnected)
+
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+          Text("Active")
+            .font(.caption)
+            .foregroundColor(.secondary)
+          Text(activeOutputLabel)
+            .font(.caption.weight(.semibold))
+          Spacer()
+          Text("Compatibility is best for games.")
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+
+        let compatSelected = model.virtualDeviceMode == VirtualDeviceMode.compatUserSpace.rawValue
+        HStack(spacing: 10) {
+          Text("Identity")
+            .font(.caption)
+            .foregroundColor(.secondary)
+          Picker(
+            "Compatibility identity",
+            selection: Binding(
+              get: { model.compatibilityIdentity },
+              set: { v in Task { await model.setCompatibilityIdentity(v) } }
+            )
+          ) {
+            Text("SDL 2/3").tag(CompatibilityIdentity.sdl2_3.rawValue)
+            Text("Apple GameController").tag(CompatibilityIdentity.appleGameController.rawValue)
+            Text("Generic HID").tag(CompatibilityIdentity.genericHID.rawValue)
+            Text("Xbox 360 HID").tag(CompatibilityIdentity.x360HID.rawValue)
+            Text("Xbox One HID").tag(CompatibilityIdentity.xoneHID.rawValue)
+          }
+          .frame(maxWidth: .infinity)
+          .disabled(!model.daemonConnected || !compatSelected)
+        }
+
+        VStack(alignment: .leading, spacing: 3) {
+          statusLine("Backend", model.userSpaceVirtualDeviceStatus, warning: model.userSpaceVirtualDeviceStatus.hasPrefix("error:"))
+          statusLine("GameController", gameControllerSupportLabel, success: gameControllerSupportLabel == "yes")
+          if let s = model.virtualDeviceDiagnostics?.driverKitOutputStats {
+            statusLine("DriverKit reports", "ok \(s.successes), fail \(s.failures), last \(s.lastErrorHex ?? "none")")
+          }
+        }
+      }
+    }
+  }
+
+  private func statusLine(_ label: String, _ value: String, success: Bool = false, warning: Bool = false) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 8) {
+      Text(label)
         .font(.caption)
         .foregroundColor(.secondary)
+        .frame(width: 96, alignment: .leading)
+      Text(value)
+        .font(.caption)
+        .foregroundColor(success ? .green : (warning ? .orange : .secondary))
         .fixedSize(horizontal: false, vertical: true)
+    }
+  }
 
-      Text("Compatibility backend: \(model.userSpaceVirtualDeviceStatus)")
-        .font(.caption)
-        .foregroundColor(
-          model.userSpaceVirtualDeviceStatus.hasPrefix("error:") ? .orange : .secondary
-        )
+  private var activeOutputLabel: String {
+    switch model.outputMode {
+    case CompositeOutputDispatcher.Mode.primaryOnly.rawValue: return "DriverKit"
+    case CompositeOutputDispatcher.Mode.secondaryOnly.rawValue: return "Compatibility"
+    case CompositeOutputDispatcher.Mode.both.rawValue: return "Both"
+    default: return "Unknown"
+    }
+  }
 
-      Text("Apple GameController.framework support: \(gameControllerSupportLabel)")
-        .font(.caption)
-        .foregroundColor(gameControllerSupportLabel == "yes" ? .green : .secondary)
+  private var compatibilityIdentityLabel: String {
+    switch model.compatibilityIdentity {
+    case CompatibilityIdentity.sdl2_3.rawValue: return "SDL"
+    case CompatibilityIdentity.appleGameController.rawValue: return "GameController"
+    case CompatibilityIdentity.genericHID.rawValue: return "Generic HID"
+    case CompatibilityIdentity.x360HID.rawValue: return "Xbox 360"
+    case CompatibilityIdentity.xoneHID.rawValue: return "Xbox One"
+    default: return model.compatibilityIdentity
     }
   }
 
   private var selfTestRow: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    OJDCard(title: "Self-test") {
+      VStack(alignment: .leading, spacing: 8) {
       HStack {
-        Text("Self-test").font(.subheadline)
+        Text("Verify virtual output for five seconds.")
+          .font(.caption)
+          .foregroundColor(.secondary)
         Spacer()
         SwiftUI.Button(runningSelfTest ? "Running…" : "Run 5s") {
           runningSelfTest = true
@@ -311,43 +372,38 @@ struct MenuBarPopoverView: View {
         .disabled(!model.daemonConnected || runningSelfTest)
       }
       if let t = model.virtualDeviceSelfTest {
-        Text("DriverKit: value \(t.driverKitValueEvents), report \(t.driverKitReportEvents)")
-          .font(.caption)
-          .foregroundColor(.secondary)
-        if let delta = t.driverKitInputReportDelta {
-          Text("DriverKit (ioreg): input report Δ \(delta)")
-            .font(.caption)
-            .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 3) {
+          statusLine("DriverKit", "value \(t.driverKitValueEvents), report \(t.driverKitReportEvents)")
+          if let delta = t.driverKitInputReportDelta {
+            statusLine("ioreg input", "Δ \(delta)")
+          }
+          if let delta = t.driverKitSetReportSuccessDelta {
+            statusLine("daemon setReport", "ok Δ \(delta)")
+          }
+          statusLine("User-space", "value \(t.userSpaceValueEvents), report \(t.userSpaceReportEvents)")
         }
-        if let delta = t.driverKitSetReportSuccessDelta {
-          Text("DriverKit (daemon): setReport ok Δ \(delta)")
-            .font(.caption)
-            .foregroundColor(.secondary)
-        }
-        Text("User-space: value \(t.userSpaceValueEvents), report \(t.userSpaceReportEvents)")
-          .font(.caption)
-          .foregroundColor(.secondary)
       } else {
         Text("Press buttons while it runs.").font(.caption).foregroundColor(.secondary)
+      }
       }
     }
   }
 
   private var inputTestRow: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    OJDCard(title: "Input test") {
+      VStack(alignment: .leading, spacing: 8) {
       HStack {
-        Text("Input test").font(.subheadline)
+        Text("Live buttons, sticks, packet log, and rumble.")
+          .font(.caption)
+          .foregroundColor(.secondary)
         Spacer()
-        SwiftUI.Button("Open") {
+        SwiftUI.Button("Open Input Test") {
           inputTester.show(model: model)
         }
-        .buttonStyle(.borderless)
         .controlSize(.small)
         .disabled(!model.daemonConnected)
       }
-      Text("Live physical input, packet log, and physical rumble test.")
-        .font(.caption)
-        .foregroundColor(.secondary)
+      }
     }
   }
 
@@ -371,9 +427,13 @@ struct MenuBarPopoverView: View {
   }
 
   private var updateRow: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    OJDCard(title: "Updates") {
+      VStack(alignment: .leading, spacing: 8) {
       HStack(spacing: 8) {
-        Text("Updates").font(.subheadline)
+        Text(updateStatusLine)
+          .font(.caption)
+          .foregroundColor(updateStatusColor)
+          .fixedSize(horizontal: false, vertical: true)
         Spacer()
         SwiftUI.Button(updateButtonTitle) {
           Task { await model.checkForUpdates() }
@@ -383,14 +443,7 @@ struct MenuBarPopoverView: View {
         .disabled(model.updateCheckState == .checking)
       }
 
-      switch model.updateCheckState {
-      case .idle:
-        Text("Current version: \(model.appVersion)").font(.caption).foregroundColor(.secondary)
-      case .checking:
-        Text("Checking GitHub releases…").font(.caption).foregroundColor(.secondary)
-      case .upToDate(let version):
-        Text("OpenJoystickDriver \(version) is current.").font(.caption).foregroundColor(.green)
-      case .available(let info):
+      if case .available(let info) = model.updateCheckState {
         HStack(spacing: 8) {
           Text("OpenJoystickDriver \(info.tagName) is available.")
             .font(.caption)
@@ -400,11 +453,7 @@ struct MenuBarPopoverView: View {
             .buttonStyle(.borderless)
             .controlSize(.small)
         }
-      case .failed(let message):
-        Text("Update check failed: \(message)")
-          .font(.caption)
-          .foregroundColor(.orange)
-          .fixedSize(horizontal: false, vertical: true)
+      }
       }
     }
   }
@@ -412,10 +461,156 @@ struct MenuBarPopoverView: View {
   private var updateButtonTitle: String {
     model.updateCheckState == .checking ? "Checking…" : "Check"
   }
+
+  private var updateStatusLine: String {
+    switch model.updateCheckState {
+    case .idle: return "Current version \(model.appVersion)."
+    case .checking: return "Checking GitHub releases…"
+    case .upToDate(let version): return "OpenJoystickDriver \(version) is current."
+    case .available: return "A newer release is ready."
+    case .failed(let message): return "Update check failed: \(message)"
+    }
+  }
+
+  private var updateStatusColor: Color {
+    switch model.updateCheckState {
+    case .upToDate: return .green
+    case .available, .failed: return .orange
+    default: return .secondary
+    }
+  }
+}
+
+private struct OJDCard<Content: View>: View {
+  private let title: String?
+  private let content: Content
+
+  init(title: String? = nil, @ViewBuilder content: () -> Content) {
+    self.title = title
+    self.content = content()
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      if let title {
+        Text(title)
+          .font(.system(size: 13, weight: .semibold))
+          .foregroundColor(.secondary)
+      }
+      content
+    }
+    .padding(12)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(
+      RoundedRectangle(cornerRadius: 14, style: .continuous)
+        .fill(Color(NSColor.controlBackgroundColor))
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: 14, style: .continuous)
+        .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
+    )
+  }
+}
+
+private struct StatusOrb: View {
+  let isReady: Bool
+  let isBusy: Bool
+
+  var body: some View {
+    ZStack {
+      Circle()
+        .fill((isReady ? Color.green : (isBusy ? Color.orange : Color.secondary)).opacity(0.14))
+      Circle()
+        .fill(isReady ? Color.green : (isBusy ? Color.orange : Color.secondary))
+        .frame(width: 10, height: 10)
+    }
+    .frame(width: 28, height: 28)
+  }
+}
+
+private struct MetricChip: View {
+  let title: String
+  let value: String
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(title)
+        .font(.system(size: 10, weight: .medium))
+        .foregroundColor(.secondary)
+      Text(value)
+        .font(.caption.weight(.semibold))
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+    }
+    .padding(.horizontal, 9)
+    .padding(.vertical, 7)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(
+      RoundedRectangle(cornerRadius: 10, style: .continuous)
+        .fill(Color.secondary.opacity(0.08))
+    )
+  }
+}
+
+private struct PermissionRow: View {
+  let title: String
+  let subtitle: String
+  let state: String
+  let actionTitle: String
+  var disabled = false
+  let action: () -> Void
+
+  private var isGranted: Bool { state == "granted" }
+
+  var body: some View {
+    HStack(alignment: .center, spacing: 10) {
+      Text(isGranted ? "✓" : "!")
+        .font(.caption.weight(.bold))
+        .foregroundColor(isGranted ? .green : .orange)
+        .frame(width: 22, height: 22)
+        .background(Circle().fill((isGranted ? Color.green : Color.orange).opacity(0.12)))
+
+      VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 6) {
+          Text(title)
+            .font(.caption.weight(.semibold))
+          Text(state)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(isGranted ? .green : .orange)
+        }
+        Text(subtitle)
+          .font(.caption)
+          .foregroundColor(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      Spacer()
+      SwiftUI.Button(actionTitle, action: action)
+        .controlSize(.small)
+        .disabled(disabled || isGranted)
+    }
+  }
+}
+
+private struct MiniBadge: View {
+  let title: String
+
+  init(_ title: String) {
+    self.title = title
+  }
+
+  var body: some View {
+    Text(title)
+      .font(.system(size: 10, weight: .semibold))
+      .foregroundColor(.secondary)
+      .lineLimit(1)
+      .padding(.horizontal, 7)
+      .padding(.vertical, 4)
+      .background(Capsule().fill(Color.secondary.opacity(0.10)))
+  }
 }
 
 @MainActor private final class InputTestWindowController {
-  private let compactSize = NSSize(width: 720, height: 500)
+  private let compactSize = NSSize(width: 780, height: 560)
   private var window: NSWindow?
 
   func show(model: AppModel) {
@@ -457,17 +652,19 @@ private struct InputTestWindowView: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 10) {
+      VStack(alignment: .leading, spacing: 14) {
         header
-        Divider()
         if let device = selectedDevice {
-          HStack(alignment: .top, spacing: 18) {
+          HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 10) {
-              compactDeviceSummary(device)
-              axesGrid
-              buttonGrid
+              deviceSummaryCard(device)
+              OJDCard(title: "Live input") {
+                axesGrid
+                Divider()
+                buttonGrid
+              }
             }
-            .frame(width: 300, alignment: .topLeading)
+            .frame(width: 330, alignment: .topLeading)
 
             VStack(alignment: .leading, spacing: 10) {
               outputTestRow(device)
@@ -476,18 +673,21 @@ private struct InputTestWindowView: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
           }
         } else {
-          VStack(spacing: 10) {
-            Text("No controller selected").font(.headline)
-            Text("Connect a controller or restart the daemon, then refresh.")
-              .font(.caption)
-              .foregroundColor(.secondary)
+          OJDCard {
+            VStack(spacing: 10) {
+              StatusOrb(isReady: false, isBusy: false)
+              Text("No controller selected").font(.headline)
+              Text("Connect a controller or restart the helper, then refresh.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 420)
           }
-          .frame(maxWidth: .infinity, minHeight: 420)
         }
       }
       .padding(16)
     }
-    .frame(minWidth: 720, minHeight: 500)
+    .frame(minWidth: 780, minHeight: 560)
     .onAppear {
       selectedDeviceID = selectedDeviceID ?? model.devices.first?.id
       startRefreshTasks()
@@ -508,9 +708,14 @@ private struct InputTestWindowView: View {
   }
 
   private var header: some View {
-    HStack(spacing: 10) {
-      Text("Input Test")
-        .font(.headline)
+    HStack(spacing: 12) {
+      VStack(alignment: .leading, spacing: 2) {
+        Text("Input Test")
+          .font(.system(size: 20, weight: .semibold))
+        Text("Move a stick, press a button, or test physical rumble.")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
       Spacer()
       Picker("Controller", selection: Binding(get: {
         selectedDevice?.id ?? ""
@@ -530,27 +735,40 @@ private struct InputTestWindowView: View {
           await refreshPacketLog()
         }
       }
+      .controlSize(.small)
     }
   }
 
-  private func compactDeviceSummary(_ device: DeviceViewModel) -> some View {
-    VStack(alignment: .leading, spacing: 4) {
-      Text(device.name)
-        .font(.headline)
-        .lineLimit(1)
-      HStack(spacing: 8) {
-        Text(device.parser)
-        Text(device.connection)
-        Text(String(format: "%04X:%04X", device.vendorID, device.productID))
+  private func deviceSummaryCard(_ device: DeviceViewModel) -> some View {
+    OJDCard {
+      VStack(alignment: .leading, spacing: 8) {
+        Text(device.name)
+          .font(.system(size: 15, weight: .semibold))
+          .lineLimit(2)
+        HStack(spacing: 8) {
+          MiniBadge(device.parser)
+          MiniBadge(device.connection)
+          MiniBadge(String(format: "%04X:%04X", device.vendorID, device.productID))
+        }
+        if let serial = device.serialNumber, !serial.isEmpty {
+          Text("Serial \(serial)")
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .lineLimit(1)
+        }
       }
-      .font(.caption)
-      .foregroundColor(.secondary)
     }
   }
 
   private var axesGrid: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Text("Axes").font(.headline)
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Text("Sticks and triggers").font(.caption.weight(.semibold))
+        Spacer()
+        Text(state == nil ? "waiting" : "live")
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundColor(state == nil ? .secondary : .green)
+      }
       HStack(spacing: 10) {
         AxisMeter(label: "LX", value: state?.leftStickX ?? 0, range: -1...1)
         AxisMeter(label: "LY", value: state?.leftStickY ?? 0, range: -1...1)
@@ -572,7 +790,7 @@ private struct InputTestWindowView: View {
     let columnCount = 6
     let rowCount = (buttons.count + columnCount - 1) / columnCount
     return VStack(alignment: .leading, spacing: 6) {
-      Text("Buttons").font(.headline)
+      Text("Buttons").font(.caption.weight(.semibold))
       VStack(alignment: .leading, spacing: 6) {
         ForEach(0..<rowCount, id: \.self) { row in
           HStack(spacing: 6) {
@@ -647,8 +865,17 @@ private struct InputTestWindowView: View {
 
   private func outputTestRow(_ device: DeviceViewModel) -> some View {
     let canRumble = device.supportsPhysicalRumble
-    return VStack(alignment: .leading, spacing: 6) {
-      Text("Physical output").font(.headline)
+    return OJDCard(title: "Physical output") {
+      VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Text(canRumble ? "Rumble is available for this controller." : "This controller does not expose physical rumble.")
+          .font(.caption)
+          .foregroundColor(.secondary)
+        Spacer()
+        Text(canRumble ? "supported" : "unavailable")
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundColor(canRumble ? .green : .secondary)
+      }
       HStack(alignment: .top, spacing: 18) {
         VStack(alignment: .leading, spacing: 4) {
           RumbleSlider(label: "L", value: $rumbleLeft)
@@ -705,16 +932,14 @@ private struct InputTestWindowView: View {
           }
         }
         HStack(spacing: 8) {
-          Text("Rumble: \(canRumble ? "supported" : "not supported")")
-            .font(.caption)
-            .foregroundColor(.secondary)
-          Text("LED: not exposed")
+          Text("LED is not exposed.")
             .font(.caption)
             .foregroundColor(.secondary)
           if let rumbleResult {
             Text("Rumble: \(rumbleResult)").font(.caption).foregroundColor(.secondary)
           }
         }
+      }
       }
     }
   }
@@ -796,8 +1021,8 @@ private struct InputTestWindowView: View {
   }
 
   private var packetLogView: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Text("Recent packets").font(.headline)
+    OJDCard(title: "Recent packets") {
+      VStack(alignment: .leading, spacing: 8) {
       if packetLog.isEmpty {
         Text("No packets captured yet.").font(.caption).foregroundColor(.secondary)
       } else {
@@ -805,7 +1030,9 @@ private struct InputTestWindowView: View {
           Text("\(entry.direction) \(entry.length)b \(entry.hex)")
             .font(.system(.caption, design: .monospaced))
             .lineLimit(1)
+            .padding(.vertical, 1)
         }
+      }
       }
     }
   }
