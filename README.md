@@ -6,7 +6,8 @@ physical controllers into app-friendly virtual controllers.
 Use it when a controller works in OJD but not in a game, emulator, browser, SDL
 app, or native macOS app.
 
-<img width="492" height="532" alt="OpenJoystickDriver menu bar app" src="https://github.com/user-attachments/assets/532f809a-d6ef-49fc-9f99-3dbb5af7fc28" />
+<img width="512" height="632" alt="image" src="https://github.com/user-attachments/assets/b2ad4741-8082-445f-8721-d66edb3f79df" />
+
 
 ## What Works Today
 
