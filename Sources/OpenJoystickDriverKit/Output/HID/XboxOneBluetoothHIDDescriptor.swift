@@ -2,7 +2,7 @@ import Foundation
 
 /// HID report descriptor bytes for an Xbox One S / Xbox Wireless Controller over Bluetooth.
 ///
-/// Used for Compatibility mode so SDL/PCSX2/Steam can auto-map the virtual device.
+/// Used for Compatibility mode so SDL/Steam can auto-map the virtual device.
 ///
 /// Note:
 /// - This descriptor uses Report IDs. The primary gamepad input report is Report ID 1.

@@ -5,34 +5,34 @@ import Testing
 struct ForegroundConsumerRouteSelectionTests {
   @Test
   func testFrontmostConsumerUsesOwnDedicatedRouteEvenWhenClientsAttachToOtherRoutes() {
-    let pcsx2 = "/Applications/PCSX2.app"
-    let duckStation = "/Applications/DuckStation.app"
+    let consumerA = "/Applications/ConsumerA.app"
+    let consumerB = "/Applications/ConsumerB.app"
 
     let activeRoute = ForegroundConsumerRouteSelection.activeRouteToken(
-      frontmostBundleRootPath: pcsx2,
-      effectiveConsumerBundleRoots: [pcsx2],
+      frontmostBundleRootPath: consumerA,
+      effectiveConsumerBundleRoots: [consumerA],
       clients: [
-        .sample(id: 1, route: UserSpaceVirtualDeviceConstants.sharedRouteToken, bundle: pcsx2),
+        .sample(id: 1, route: UserSpaceVirtualDeviceConstants.sharedRouteToken, bundle: consumerA),
         .sample(
           id: 2,
           route: UserSpaceVirtualDeviceConstants.dedicatedRouteToken(
-            forConsumerBundleRootPath: duckStation
+            forConsumerBundleRootPath: consumerB
           ),
-          bundle: pcsx2
+          bundle: consumerA
         ),
         .sample(
           id: 3,
           route: UserSpaceVirtualDeviceConstants.dedicatedRouteToken(
-            forConsumerBundleRootPath: duckStation
+            forConsumerBundleRootPath: consumerB
           ),
-          bundle: duckStation
+          bundle: consumerB
         ),
       ]
     )
 
     #expect(
       activeRoute
-        == UserSpaceVirtualDeviceConstants.dedicatedRouteToken(forConsumerBundleRootPath: pcsx2)
+        == UserSpaceVirtualDeviceConstants.dedicatedRouteToken(forConsumerBundleRootPath: consumerA)
     )
   }
 }

@@ -103,7 +103,7 @@ public struct OJDGenericGamepadFormat: VirtualGamepadReportFormat {
 }
 
 
-/// SDL/PCSX2-focused HID GamePad format.
+/// SDL-focused HID GamePad format.
 ///
 /// This keeps the stable OJD button/axis order but deliberately omits the hat
 /// switch so SDL does not expose D-pad as an extra axis. D-pad directions are

@@ -41,7 +41,7 @@ public enum CompatibilityOutputProfileCatalog {
         identity: identity,
         deviceProfile: .openJoystickDriverSDL2_3,
         displayName: "SDL 2/3",
-        notes: "OJD-owned SDL/Steam/PCSX2 identity backed by an explicit SDL mapping.",
+        notes: "OJD-owned SDL identity backed by an explicit SDL mapping.",
         isHardwareSpoof: false,
         emitsXboxGuideReport: false
       )

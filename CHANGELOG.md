@@ -34,7 +34,7 @@ All notable changes to OpenJoystickDriver are documented in this file.
 ### Added
 
 - Added focused Compatibility routing with dedicated per-consumer user-space
-  routes for simultaneous SDL apps such as PCSX2 and DuckStation.
+  routes for simultaneous SDL apps.
 - Added per-controller idle sleep gating that neutralizes forwarded state and
   stops keep-alive traffic while a controller is idle.
 - Added focused foreground-routing and sleep-gate regression coverage while
@@ -51,7 +51,7 @@ All notable changes to OpenJoystickDriver are documented in this file.
 
 ### Added
 
-- Added stock SDL HIDAPI-compatible Xbox 360 rumble path for PCSX2 and SDL apps.
+- Added stock SDL HIDAPI-compatible Xbox 360 rumble path for SDL apps.
 - Added release automation for app bundle versions and drag-and-drop DMG packaging.
 
 ### Changed

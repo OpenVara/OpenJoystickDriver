@@ -75,8 +75,7 @@ for stable local testing.
 
 Start with **Compatibility** mode and the **SDL 2/3** identity.
 
-- Use `SDL 2/3` for Steam, PCSX2, DuckStation, Moonlight/SDL, and most emulator
-  or game-launcher paths.
+- Use `SDL 2/3` for Steam, DuckStation, Moonlight/SDL, and most SDL-based apps.
 - Use `Apple GameController` for native macOS apps that read `GCController`.
 - Use `Generic HID` for apps that inspect HID descriptors directly.
 - Use `Xbox 360 HID` or `Xbox One HID` only when testing a picky app that expects
@@ -99,22 +98,6 @@ flowchart LR
   rumble --> daemon
   daemon --> physical
 ```
-
-## PCSX2
-
-For PCSX2, use SDL 2/3 Compatibility with user-space-only output:
-
-```bash
-./scripts/ojd install pcsx2-sdl-db
-./scripts/ojd install pcsx2-profile
-./scripts/ojd launch pcsx2
-```
-
-The launcher sets the known-good routing before starting PCSX2. The input
-profile is a starting template for Pad 1. Focus-routed builds can expose
-multiple OJD SDL instances, so in PCSX2 bind the OJD controller that only
-responds while the PCSX2 window is focused instead of assuming it will always
-be `SDL-0`.
 
 ## Useful Commands
 

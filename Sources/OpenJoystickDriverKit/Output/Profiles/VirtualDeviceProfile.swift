@@ -8,7 +8,7 @@ public struct VirtualDeviceProfile: Equatable, Sendable {
   /// Value used for `kIOHIDVersionNumberKey` / SDL "product version".
   ///
   /// SDL includes this 16-bit value in the GUID it uses to look up controller mappings.
-  /// For some apps (PCSX2/SDL on macOS), having the expected version is required for
+  /// For some SDL-based consumers on macOS, having the expected version is required for
   /// automatic mapping to be applied.
   public let versionNumber: Int
   public let productName: String
@@ -69,7 +69,7 @@ public struct VirtualDeviceProfile: Equatable, Sendable {
   /// Stock SDL on macOS routes ordinary Xbox 360 identities away from HIDAPI,
   /// and hides the Steam virtual 045E:028E identity unless callers opt in. SDL
   /// explicitly accepts the ASTRO C40 Xbox 360 mode through HIDAPI, which gives
-  /// PCSX2 a no-launch-wrapper output-report rumble path.
+  /// some SDL consumers a no-launch-wrapper output-report rumble path.
   public static let sdlHIDAPIXbox360 = Self(
     vendorID: 0x9886,
     productID: 0x0024,
@@ -83,7 +83,7 @@ public struct VirtualDeviceProfile: Equatable, Sendable {
   /// This profile is intentionally not exposed in the Compatibility UI. macOS GameController
   /// claims SDL-known third-party controller identities before SDL's IOKit backend can use
   /// them, so the generic OpenJoystickDriver user-space identity is the consumer-facing
-  /// SDL/PCSX2 path.
+  /// SDL consumer path.
   public static let sdlGamepad = Self(
     vendorID: 0x1BAD,
     productID: 0xF901,

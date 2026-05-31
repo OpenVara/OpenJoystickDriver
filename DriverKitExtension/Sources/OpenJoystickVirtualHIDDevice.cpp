@@ -5,8 +5,8 @@
 // Consumer-facing gamepads are published by the user-space IOHIDUserDevice backend.
 //
 // DriverKit uses OpenJoystickDriver's generic HID identity. Xbox compatibility is
-// provided by the user-space IOHIDUserDevice backend; SDL/PCSX2 compatibility is
-// provided by an SDL mapping for the OJD GUID.
+// provided by the user-space IOHIDUserDevice backend; SDL compatibility is provided
+// by an SDL mapping for the OJD GUID.
 
 #include "OpenJoystickVirtualHIDDevice.h"
 
@@ -166,7 +166,8 @@ auto OpenJoystickVirtualHIDDevice::newDeviceDescription() -> OSDictionary* {
     //
     // NOTE:
     // We intentionally present the DriverKit device as a "real" controller to SDL-based apps
-    // (PCSX2/Steam). This means Transport must NOT be "Virtual" (SDL may filter/penalize it).
+    // that rely on stable HID transport semantics. This means Transport must NOT be "Virtual"
+    // (SDL may filter/penalize it).
     if (auto* transport = OSString::withCString("USB")) {
         OSDictionarySetValue(dict, kIOHIDTransportKey, transport);
         transport->release();

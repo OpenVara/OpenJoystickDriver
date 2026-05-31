@@ -104,15 +104,14 @@ belongs in consumer profiles and launch/diagnostic tooling, not in parser code.
 
 2. OJD must keep app compatibility separate from controller support.
    A controller profile proves how to read hardware. A consumer profile proves
-   how an app stack should see OJD output. PCSX2, Steam, browser Gamepad API,
-   SDL3 probes, and GameController.framework must remain separate validation
+   how an app stack should see OJD output. SDL apps, browser Gamepad API, SDL3
+   probes, and GameController.framework must remain separate validation
    surfaces.
 
 3. OJD must treat Apple GameController and Xbox hardware spoofing as explicit paths.
    `apple-gamecontroller` is for native GameController.framework consumers.
    `x360-hid` and `xone-hid` remain useful probes and may be useful for specific
-   consumers. The current PCSX2/Rosetta wedging means `sdl2-3` stays the
-   recommended route there.
+   consumers. For SDL-based consumers, `sdl2-3` stays the recommended route.
 
 4. OJD must treat DS4 output as a future protocol implementation, not a mapping rename.
    A DS4 backend needs report descriptors, special buttons, d-pad hat semantics,
@@ -134,17 +133,13 @@ belongs in consumer profiles and launch/diagnostic tooling, not in parser code.
 These are future-work gates, not current support claims. Track concrete work in
 issues/PRs instead of treating this list as a roadmap.
 
-- Add a consumer-profile schema for app stacks such as PCSX2 and Steam. It
+- Add a consumer-profile schema for SDL-based app stacks. It
   must describe preferred output identity, required SDL mappings, forbidden
   identities, launch environment, and diagnostics.
-- Add a PCSX2 stuck-state preflight before launching PCSX2 or Rosetta SDL
-  probes. The script must refuse to run when `PCSX2` or `ojd-sdl3-probe`
-  processes are stuck in `U` or `?E` state.
 - Keep tests that assert `sdl2-3` and `generic-hid` expose D-pad through button
   bits and keep Share on the expected `misc1`/button path.
 - Add a DS4-output design document before implementation. It must list feature
   reports, input report layout, output report layout, and what local hardware
   can verify.
-- Keep `x360-hid` and `xone-hid` out of default PCSX2 launch flow until a clean
-  rebooted host can run native SDL3, PCSX2/Rosetta SDL3, and PCSX2 UI mapping
-  without stuck enumeration.
+- Keep `x360-hid` and `xone-hid` out of default launch flows until a clean
+  rebooted host can run SDL3 probes and UI mapping without stuck enumeration.

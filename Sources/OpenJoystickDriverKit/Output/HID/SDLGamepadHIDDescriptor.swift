@@ -1,6 +1,6 @@
 import Foundation
 
-/// SDL/PCSX2 user-space HID descriptor for the OJD-owned compatibility identity.
+/// SDL user-space HID descriptor for the OJD-owned compatibility identity.
 ///
 /// Report layout (14 bytes total):
 ///   Bytes 0-1  : Button bitmask, buttons 1-16

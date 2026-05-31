@@ -288,13 +288,6 @@ int main(int argc, char **argv) {
     SDL_SetGamepadEventsEnabled(true);
     SDL_SetJoystickEventsEnabled(true);
 
-    if (!mappings_file) {
-        const char *default_db =
-            "/Applications/PCSX2.app/Contents/Resources/game_controller_db.txt";
-        if (file_exists(default_db))
-            mappings_file = default_db;
-    }
-
     if (mappings_file) {
         int added = SDL_AddGamepadMappingsFromFile(mappings_file);
         if (added < 0) {
@@ -433,10 +426,8 @@ int main(int argc, char **argv) {
             "sources).\n");
         printf("\nNext steps:\n");
         printf("  - Grant Input Monitoring to the terminal app and relaunch it.\n");
-        printf(
-            "  - If PCSX2 sees devices but this probe doesn't, PCSX2 may be running under a "
-            "different\n");
-        printf("    architecture (Rosetta) / different SDL build.\n");
+        printf("  - If another SDL consumer sees devices but this probe doesn't, it may be running\n");
+        printf("    under a different architecture (Rosetta) / different SDL build.\n");
     }
 
     printf("\nListening for %ds (press buttons now) ...\n", seconds);

@@ -14,7 +14,7 @@ DriverKit HID or IOHIDUserDevice compatibility mode.
 - `Sources/OpenJoystickDriverDaemon/`: LaunchAgent daemon executable.
 - `DriverKitExtension/`: DriverKit virtual HID system extension.
 - `Resources/SDL/openjoystickdriver.gamecontrollerdb.txt`: SDL gamepad mapping
-  for the generic user-space OJD device; use `platform:macOS` for SDL3/PCSX2.
+  for the generic user-space OJD device; use `platform:macOS` for SDL3.
 - `Sources/OpenJoystickDriverKit/Resources/Controllers/`: runtime controller
   profiles.
 - `Resources/Schemas/`: JSON schemas and per-device schema documents.
@@ -26,7 +26,7 @@ DriverKit HID or IOHIDUserDevice compatibility mode.
 - User-facing device/mode matrix: `docs/COMPATIBILITY_LAYERS.md`.
 - Hardware verification notes and user setup: `README.md`.
 - Repo change rules and validation commands: `AGENTS.md`.
-- Deeper implementation notes (PCSX2 quirks, xpad-derived profiles): `llms-full.txt`.
+- Deeper implementation notes (SDL mappings, xpad-derived profiles): `llms-full.txt`.
 
 You must keep controller support status out of `llms*.txt`. Update `README.md`
 and `docs/COMPATIBILITY_LAYERS.md` instead.

@@ -14,12 +14,12 @@ struct ForegroundConsumerAccessPolicyTests {
   @Test
 
   func testAllowsOutputWhenFrontmostAppMatchesConsumerBundle() {
-    let parsec = "/Applications/Parsec.app"
-    let pcsx2 = "/Applications/PCSX2.app"
+    let consumerA = "/Applications/ConsumerA.app"
+    let consumerB = "/Applications/ConsumerB.app"
 
     #expect(ForegroundConsumerAccessPolicy.allowsOutput(
-        frontmostBundleRootPath: parsec,
-        consumerBundleRootPaths: [parsec, pcsx2]
+        frontmostBundleRootPath: consumerA,
+        consumerBundleRootPaths: [consumerA, consumerB]
       ))
   }
 
@@ -28,7 +28,7 @@ struct ForegroundConsumerAccessPolicyTests {
   func testSuppressesOutputWhenFrontmostAppDoesNotMatchAnyConsumerBundle() {
     #expect(!(ForegroundConsumerAccessPolicy.allowsOutput(
         frontmostBundleRootPath: "/Applications/Safari.app",
-        consumerBundleRootPaths: ["/Applications/Parsec.app", "/Applications/PCSX2.app"]
+        consumerBundleRootPaths: ["/Applications/ConsumerA.app", "/Applications/ConsumerB.app"]
       )))
   }
 
@@ -37,7 +37,7 @@ struct ForegroundConsumerAccessPolicyTests {
   func testSuppressesOutputWhenConsumerExistsButFrontmostAppIsUnknown() {
     #expect(!(ForegroundConsumerAccessPolicy.allowsOutput(
         frontmostBundleRootPath: nil,
-        consumerBundleRootPaths: ["/Applications/Parsec.app"]
+        consumerBundleRootPaths: ["/Applications/ConsumerA.app"]
       )))
   }
 }

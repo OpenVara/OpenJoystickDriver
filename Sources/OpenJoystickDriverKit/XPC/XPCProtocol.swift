@@ -8,7 +8,7 @@ public let xpcServiceName = "com.openjoystickdriver.xpc"
 /// Which identity/protocol the user-space Compatibility virtual device should publish.
 ///
 /// IMPORTANT:
-/// - `sdl2-3` is the mature SDL/Steam/PCSX2 path: OJD-owned identity plus
+/// - `sdl2-3` is the mature SDL path: OJD-owned identity plus
 ///   an explicit SDL mapping.
 /// - `generic-hid` is a plain OJD HID GamePad for consumers that inspect descriptors directly.
 /// - `apple-gamecontroller` publishes the HID surface accepted by Apple's GameController.framework.

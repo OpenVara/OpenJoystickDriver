@@ -49,7 +49,7 @@ XPC status/control APIs.
 - `Sources/OpenJoystickDriverHIDTool/`: HID diagnostic tool.
 - `DriverKitExtension/`: DriverKit virtual HID device.
 - `Resources/SDL/openjoystickdriver.gamecontrollerdb.txt`: SDL gamepad mapping
-  for the generic user-space OJD device. SDL3/PCSX2 needs `platform:macOS`;
+  for the generic user-space OJD device. SDL3 needs `platform:macOS`;
   `platform:Mac OS X` is SDL2-era and can be ignored by SDL 3.2.x.
 - `Tests/OpenJoystickDriverKitTests/`: package tests for core behavior.
 - Hardware-facing checks live in package tests or `./scripts/ojd diagnose ...`
@@ -130,11 +130,10 @@ Implementation notes:
 
 - Compatibility profile IDs are `sdl2-3`, `apple-gamecontroller`, `generic-hid`,
   `x360-hid`, and `xone-hid`.
-- PCSX2 must use SDL 2/3 Compatibility with user-space-only output. The
-  user-space PID must differ from DriverKit so stale dext copies stay unmapped.
-  You must not replace this with an SDL-known third-party VID/PID: macOS
-  GameController.framework can claim those identities before SDL's IOKit backend
-  enumerates them.
+- The user-space PID must differ from DriverKit so stale dext copies stay
+  unmapped. You must not replace this with an SDL-known third-party VID/PID:
+  macOS GameController.framework can claim those identities before SDL's IOKit
+  backend enumerates them.
 - If a stale DriverKit process remains after a system-extension upgrade, run
   `./scripts/ojd repair stale-dext`. It kills only OJD dext processes whose
   executable path does not match the newest installed system-extension copy.
@@ -183,7 +182,6 @@ Backend probes:
 ./scripts/ojd diagnose backends --seconds 5
 ./scripts/ojd diagnose gamecontroller --seconds 5
 ./scripts/ojd diagnose sdl3 --seconds 10
-./scripts/ojd diagnose pcsx2-latency
 ```
 
 Shell syntax check for script changes:

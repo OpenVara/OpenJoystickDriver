@@ -27,7 +27,7 @@ here, and keep README short.
 | Xbox 360 USB parser              | ✅      | `sdl2-3` or `x360-hid`             | Parser and profiles exist. Hardware coverage varies by model.                                          |
 | xpad-derived Xbox batches        | 🚧      | Varies                             | Added from source data, not all locally hardware verified.                                             |
 | Generic USB HID fallback         | ⚠️      | `generic-hid`                      | Basic fallback for descriptor-driven apps.                                                             |
-| SDL 2/3 apps                     | ✅      | `sdl2-3`                           | Use for Steam, PCSX2, DuckStation, Moonlight/SDL, and similar apps.                                    |
+| SDL 2/3 apps                     | ✅      | `sdl2-3`                           | Use for Steam, DuckStation, Moonlight/SDL, and similar apps.                                           |
 | Apple GameController apps        | ✅      | `apple-gamecontroller`             | Use for native macOS apps that read `GCController`.                                                    |
 | Browser Gamepad API              | ⚠️      | active compatibility identity      | Browser mappings can vary by identity and stale devices.                                               |
 | App rumble                       | ✅      | Compatibility modes                | Parses Xbox One, Xbox 360, and compact OJD rumble reports.                                             |
@@ -128,46 +128,11 @@ LT and RT idle at zero. D-pad is button-backed only.
 | `rightx` / `righty`                      | `a3` / `a4`                   |
 | `righttrigger`                           | `a5`                          |
 
-## PCSX2
-
-Use `sdl2-3` with user-space-only output:
-
-```bash
-./scripts/ojd install pcsx2-sdl-db
-./scripts/ojd install pcsx2-profile
-./scripts/ojd launch pcsx2
-```
-
-PCSX2 reads this user data file before its bundled database:
-
-```text
-~/Library/Application Support/PCSX2/game_controller_db.txt
-```
-
-The included input profile is a starting template. Focus-routed builds can
-expose multiple OJD SDL instances, so in PCSX2 bind the OJD controller that
-only responds while the PCSX2 window is focused instead of assuming it will
-always be `SDL-0`.
-
-For SDL apps that need rumble through macOS GameController haptics, use:
-
-```bash
-./scripts/ojd diagnose sdl3-hidapi-x360 --seconds 5
-./scripts/ojd launch pcsx2 --hidapi-rumble
-```
-
-That route selects `x360-hid`, enables user-space output, and launches SDL with
-Xbox 360 HIDAPI enabled for the Steam Virtual Gamepad-style identity. SDL's
-GameController/MFI route remains available for diagnostics, but current SDL3
-builds have not enumerated OJD through that path in local testing.
-
 ## Manual Checks
 
 Before marking a mapping verified, you must check the exact app and mode:
 
 1. Browser Gamepad API: buttons and axes match the active identity table.
 2. SDL 2/3: `A2` and `A5` idle at zero, D-pad releases cleanly.
-3. PCSX2 or DuckStation: face buttons, View/Menu, L3/R3, D-pad, and triggers
-   bind once on the OJD SDL instance that responds only while that window is focused.
-4. Parsec macOS to Windows: D-pad and A/B/X/Y stay stable on the Windows host.
-5. Rumble: app output report reaches the physical controller if the controller supports rumble.
+3. Parsec macOS to Windows: D-pad and A/B/X/Y stay stable on the Windows host.
+4. Rumble: app output report reaches the physical controller if the controller supports rumble.

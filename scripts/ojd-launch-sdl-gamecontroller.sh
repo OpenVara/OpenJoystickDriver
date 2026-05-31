@@ -12,8 +12,8 @@ Usage:
   ./scripts/ojd launch sdl-gamecontroller <app-path> [-- app args...]
 
 Examples:
-  ./scripts/ojd launch sdl-gamecontroller /Applications/PCSX2.app
   ./scripts/ojd launch sdl-gamecontroller /Applications/DuckStation.app -- -fullscreen
+  ./scripts/ojd launch sdl-gamecontroller /Applications/SomeSDLApp.app
 
 This experimental route selects OJD's apple-gamecontroller compatibility
 identity and launches the SDL app with SDL's GameController/MFI backend enabled.

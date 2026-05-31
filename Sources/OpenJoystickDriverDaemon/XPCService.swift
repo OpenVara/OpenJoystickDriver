@@ -510,7 +510,7 @@ public final class XPCService: NSObject, NSXPCListenerDelegate, OpenJoystickDriv
       primaryUsage = Int(kHIDUsage_GD_GamePad)
     case .xoneHID:
       primaryUsage = nil
-      // Xbox One identity for SDL/Steam/PCSX2:
+      // Xbox One identity for SDL consumers:
       // - Prefer the physical HID report descriptor exposed by macOS for 045E:02EA (USB).
       //   This makes SDL treat the virtual device as a real Xbox controller.
       // - Fall back to a built-in descriptor if the physical device is not present.

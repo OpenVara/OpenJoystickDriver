@@ -79,7 +79,7 @@ IOHIDUserDevice backend  -> consumer-facing user-space profiles
 User-space compatibility profiles are first-class profiles, not hidden parser
 quirks:
 
-- `sdl2-3`: OJD-owned SDL/Steam/PCSX2 identity with explicit SDL mapping
+- `sdl2-3`: OJD-owned SDL identity backed by an explicit SDL mapping
 - `generic-hid`: OJD-owned descriptor-driven HID gamepad
 - `x360-hid`: experimental Xbox 360 HID hardware-spoof profile
 - `xone-hid`: experimental Xbox One HID hardware-spoof profile

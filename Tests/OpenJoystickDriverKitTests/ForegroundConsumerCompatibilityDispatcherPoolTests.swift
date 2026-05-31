@@ -7,7 +7,7 @@ struct ForegroundConsumerCompatibilityDispatcherPoolTests {
   @Test
   func testActivatingNeutralDedicatedRouteEmitsNeutralReport() async throws {
     let identifier = DeviceIdentifier(vendorID: 0x1234, productID: 0x5678)
-    let bundleRoot = "/Applications/DuckStation.app"
+    let bundleRoot = "/Applications/ConsumerA.app"
     let routeToken = UserSpaceVirtualDeviceConstants.dedicatedRouteToken(
       forConsumerBundleRootPath: bundleRoot
     )
@@ -36,8 +36,8 @@ struct ForegroundConsumerCompatibilityDispatcherPoolTests {
   @Test
   func testRouteHandoffNeutralizesPreviousActiveButtonState() async throws {
     let identifier = DeviceIdentifier(vendorID: 0x1234, productID: 0x5678)
-    let firstBundleRoot = "/Applications/PCSX2.app"
-    let secondBundleRoot = "/Applications/DuckStation.app"
+    let firstBundleRoot = "/Applications/ConsumerA.app"
+    let secondBundleRoot = "/Applications/ConsumerB.app"
     let firstRoute = UserSpaceVirtualDeviceConstants.dedicatedRouteToken(
       forConsumerBundleRootPath: firstBundleRoot
     )
@@ -71,8 +71,8 @@ struct ForegroundConsumerCompatibilityDispatcherPoolTests {
   @Test
   func testRouteHandoffNeutralizesPreviousActiveDpadState() async throws {
     let identifier = DeviceIdentifier(vendorID: 0x1234, productID: 0x5678)
-    let firstBundleRoot = "/Applications/PCSX2.app"
-    let secondBundleRoot = "/Applications/DuckStation.app"
+    let firstBundleRoot = "/Applications/ConsumerA.app"
+    let secondBundleRoot = "/Applications/ConsumerB.app"
     let firstRoute = UserSpaceVirtualDeviceConstants.dedicatedRouteToken(
       forConsumerBundleRootPath: firstBundleRoot
     )

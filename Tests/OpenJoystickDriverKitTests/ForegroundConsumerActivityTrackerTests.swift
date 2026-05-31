@@ -8,11 +8,11 @@ struct ForegroundConsumerActivityTrackerTests {
     var tracker = ForegroundConsumerActivityTracker(activeRetentionNanoseconds: 2_000_000_000)
 
     let roots = tracker.consumerBundleRootPaths(
-      frontmostBundleRootPath: "/Applications/PCSX2.app",
+      frontmostBundleRootPath: "/Applications/ConsumerA.app",
       clients: [
         .sample(
           id: 1,
-          bundle: "/Applications/PCSX2.app",
+          bundle: "/Applications/ConsumerA.app",
           queueHead: 0,
           queueTail: 0,
         ),
@@ -20,7 +20,7 @@ struct ForegroundConsumerActivityTrackerTests {
       now: 10
     )
 
-    #expect(roots == ["/Applications/PCSX2.app"])
+    #expect(roots == ["/Applications/ConsumerA.app"])
   }
 
   @Test
@@ -29,15 +29,15 @@ struct ForegroundConsumerActivityTrackerTests {
     var tracker = ForegroundConsumerActivityTracker(activeRetentionNanoseconds: 2_000_000_000)
 
     let roots = tracker.consumerBundleRootPaths(
-      frontmostBundleRootPath: "/Applications/DuckStation.app",
+      frontmostBundleRootPath: "/Applications/ConsumerB.app",
       clients: [
-        .sample(id: 1, bundle: "/Applications/PCSX2.app", queueHead: 0, queueTail: 0),
-        .sample(id: 2, bundle: "/Applications/DuckStation.app", queueHead: 0, queueTail: 0),
+        .sample(id: 1, bundle: "/Applications/ConsumerA.app", queueHead: 0, queueTail: 0),
+        .sample(id: 2, bundle: "/Applications/ConsumerB.app", queueHead: 0, queueTail: 0),
       ],
       now: 10
     )
 
-    #expect(roots == ["/Applications/DuckStation.app"])
+    #expect(roots == ["/Applications/ConsumerB.app"])
   }
 
   @Test
@@ -48,13 +48,13 @@ struct ForegroundConsumerActivityTrackerTests {
     let roots = tracker.consumerBundleRootPaths(
       frontmostBundleRootPath: "/System/Library/CoreServices/Finder.app",
       clients: [
-        .sample(id: 1, bundle: "/Applications/PCSX2.app", queueHead: 0, queueTail: 0),
-        .sample(id: 2, bundle: "/Applications/DuckStation.app", queueHead: 0, queueTail: 0),
+        .sample(id: 1, bundle: "/Applications/ConsumerA.app", queueHead: 0, queueTail: 0),
+        .sample(id: 2, bundle: "/Applications/ConsumerB.app", queueHead: 0, queueTail: 0),
       ],
       now: 10
     )
 
-    #expect(roots == ["/Applications/PCSX2.app", "/Applications/DuckStation.app"])
+    #expect(roots == ["/Applications/ConsumerA.app", "/Applications/ConsumerB.app"])
   }
 
   @Test
@@ -63,24 +63,24 @@ struct ForegroundConsumerActivityTrackerTests {
     var tracker = ForegroundConsumerActivityTracker(activeRetentionNanoseconds: 2_000_000_000)
 
     _ = tracker.consumerBundleRootPaths(
-      frontmostBundleRootPath: "/Applications/PCSX2.app",
+      frontmostBundleRootPath: "/Applications/ConsumerA.app",
       clients: [
-        .sample(id: 1, bundle: "/Applications/PCSX2.app", queueHead: 0, queueTail: 0),
-        .sample(id: 2, bundle: "/Applications/DuckStation.app", queueHead: 0, queueTail: 0),
+        .sample(id: 1, bundle: "/Applications/ConsumerA.app", queueHead: 0, queueTail: 0),
+        .sample(id: 2, bundle: "/Applications/ConsumerB.app", queueHead: 0, queueTail: 0),
       ],
       now: 10
     )
 
     let roots = tracker.consumerBundleRootPaths(
-      frontmostBundleRootPath: "/Applications/PCSX2.app",
+      frontmostBundleRootPath: "/Applications/ConsumerA.app",
       clients: [
-        .sample(id: 1, bundle: "/Applications/PCSX2.app", queueHead: 0, queueTail: 0),
-        .sample(id: 2, bundle: "/Applications/DuckStation.app", queueHead: 4, queueTail: 4),
+        .sample(id: 1, bundle: "/Applications/ConsumerA.app", queueHead: 0, queueTail: 0),
+        .sample(id: 2, bundle: "/Applications/ConsumerB.app", queueHead: 4, queueTail: 4),
       ],
       now: 20
     )
 
-    #expect(roots == ["/Applications/PCSX2.app"])
+    #expect(roots == ["/Applications/ConsumerA.app"])
   }
 
   @Test
@@ -89,15 +89,15 @@ struct ForegroundConsumerActivityTrackerTests {
     var tracker = ForegroundConsumerActivityTracker(activeRetentionNanoseconds: 2_000_000_000)
 
     let roots = tracker.consumerBundleRootPaths(
-      frontmostBundleRootPath: "/Applications/PCSX2.app",
+      frontmostBundleRootPath: "/Applications/ConsumerA.app",
       clients: [
-        .sample(id: 1, bundle: "/Applications/PCSX2.app", queueHead: 480, queueTail: 480),
-        .sample(id: 2, bundle: "/Applications/DuckStation.app", queueHead: 480, queueTail: 480),
+        .sample(id: 1, bundle: "/Applications/ConsumerA.app", queueHead: 480, queueTail: 480),
+        .sample(id: 2, bundle: "/Applications/ConsumerB.app", queueHead: 480, queueTail: 480),
       ],
       now: 10
     )
 
-    #expect(roots == ["/Applications/PCSX2.app"])
+    #expect(roots == ["/Applications/ConsumerA.app"])
   }
 
   @Test
@@ -106,24 +106,24 @@ struct ForegroundConsumerActivityTrackerTests {
     var tracker = ForegroundConsumerActivityTracker(activeRetentionNanoseconds: 2_000_000_000)
 
     _ = tracker.consumerBundleRootPaths(
-      frontmostBundleRootPath: "/Applications/PCSX2.app",
+      frontmostBundleRootPath: "/Applications/ConsumerA.app",
       clients: [
-        .sample(id: 1, bundle: "/Applications/PCSX2.app", queueHead: 0, queueTail: 0),
-        .sample(id: 2, bundle: "/Applications/DuckStation.app", queueHead: 0, queueTail: 0),
+        .sample(id: 1, bundle: "/Applications/ConsumerA.app", queueHead: 0, queueTail: 0),
+        .sample(id: 2, bundle: "/Applications/ConsumerB.app", queueHead: 0, queueTail: 0),
       ],
       now: 10
     )
 
     let roots = tracker.consumerBundleRootPaths(
-      frontmostBundleRootPath: "/Applications/PCSX2.app",
+      frontmostBundleRootPath: "/Applications/ConsumerA.app",
       clients: [
-        .sample(id: 1, bundle: "/Applications/PCSX2.app", queueHead: 4, queueTail: 4),
-        .sample(id: 2, bundle: "/Applications/DuckStation.app", queueHead: 4, queueTail: 4),
+        .sample(id: 1, bundle: "/Applications/ConsumerA.app", queueHead: 4, queueTail: 4),
+        .sample(id: 2, bundle: "/Applications/ConsumerB.app", queueHead: 4, queueTail: 4),
       ],
       now: 20
     )
 
-    #expect(roots == ["/Applications/PCSX2.app"])
+    #expect(roots == ["/Applications/ConsumerA.app"])
   }
 
   @Test
@@ -132,24 +132,24 @@ struct ForegroundConsumerActivityTrackerTests {
     var tracker = ForegroundConsumerActivityTracker(activeRetentionNanoseconds: 5)
 
     _ = tracker.consumerBundleRootPaths(
-      frontmostBundleRootPath: "/Applications/PCSX2.app",
+      frontmostBundleRootPath: "/Applications/ConsumerA.app",
       clients: [
-        .sample(id: 1, bundle: "/Applications/PCSX2.app", queueHead: 10, queueTail: 10),
-        .sample(id: 2, bundle: "/Applications/DuckStation.app", queueHead: 0, queueTail: 0),
+        .sample(id: 1, bundle: "/Applications/ConsumerA.app", queueHead: 10, queueTail: 10),
+        .sample(id: 2, bundle: "/Applications/ConsumerB.app", queueHead: 0, queueTail: 0),
       ],
       now: 10
     )
 
     let roots = tracker.consumerBundleRootPaths(
-      frontmostBundleRootPath: "/Applications/PCSX2.app",
+      frontmostBundleRootPath: "/Applications/ConsumerA.app",
       clients: [
-        .sample(id: 1, bundle: "/Applications/PCSX2.app", queueHead: 10, queueTail: 10),
-        .sample(id: 2, bundle: "/Applications/DuckStation.app", queueHead: 0, queueTail: 0),
+        .sample(id: 1, bundle: "/Applications/ConsumerA.app", queueHead: 10, queueTail: 10),
+        .sample(id: 2, bundle: "/Applications/ConsumerB.app", queueHead: 0, queueTail: 0),
       ],
       now: 20
     )
 
-    #expect(roots == ["/Applications/PCSX2.app"])
+    #expect(roots == ["/Applications/ConsumerA.app"])
   }
 }
 
