@@ -65,3 +65,15 @@ public final class CompositeOutputDispatcher: OutputDispatcher, @unchecked Senda
     }
   }
 }
+
+extension CompositeOutputDispatcher: ControllerLifecycleListener {
+  public func controllerDidStop(_ identifier: DeviceIdentifier) async {
+    let (p, s) = lock.withLock { (primary, secondary) }
+    if let p = p as? any ControllerLifecycleListener {
+      await p.controllerDidStop(identifier)
+    }
+    if let s, let s = s as? any ControllerLifecycleListener {
+      await s.controllerDidStop(identifier)
+    }
+  }
+}

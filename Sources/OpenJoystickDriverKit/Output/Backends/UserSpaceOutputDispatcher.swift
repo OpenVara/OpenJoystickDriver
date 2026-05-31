@@ -48,6 +48,12 @@ public final class UserSpaceOutputDispatcher: CompatibilityUserSpaceOutputDispat
     let queue: DispatchQueue
     let lock = NSLock()
     var state = VirtualGamepadState()
+    var lastFailure: IOReturn?
+    // Counts failures since last successful report delivery.
+    // Some macOS builds flip-flop error codes for a dead/invalid IOHIDUserDevice,
+    // so this intentionally ignores whether the error matches the previous one.
+    var consecutiveFailures: Int = 0
+    var nextRecreateAttemptNs: UInt64 = 0
 
     init(device: IOHIDUserDevice, queue: DispatchQueue) {
       self.device = device
@@ -342,12 +348,62 @@ public final class UserSpaceOutputDispatcher: CompatibilityUserSpaceOutputDispat
 
     if lastResult != kIOReturnSuccess {
       status = "error: \(String(lastResult, radix: 16))"
+      noteFailureAndMaybeRecreate(entry: entry, identifier: identifier, error: lastResult)
     } else if status.hasPrefix("error:") {
+      // Clear any previous failure streak once we successfully deliver again.
+      entry.lock.withLock {
+        entry.lastFailure = nil
+        entry.consecutiveFailures = 0
+      }
       registryLock.withLock {
         if status.hasPrefix("error:") {
           recomputeStatusLocked()
         }
       }
+    }
+  }
+
+  private func noteFailureAndMaybeRecreate(entry: Entry, identifier: DeviceIdentifier, error: IOReturn) {
+    let now = DispatchTime.now().uptimeNanoseconds
+    let shouldRecreate = entry.lock.withLock { () -> Bool in
+      if entry.nextRecreateAttemptNs > now { return false }
+      entry.lastFailure = error
+      entry.consecutiveFailures += 1
+
+      // Typical "dead device" errors: recreate quickly to avoid requiring a daemon restart.
+      if error == kIOReturnNotOpen || error == kIOReturnNotAttached || error == kIOReturnNoDevice
+        || error == kIOReturnNotResponding
+      {
+        entry.nextRecreateAttemptNs = now &+ 1_000_000_000  // 1s cooldown
+        entry.consecutiveFailures = 0
+        return true
+      }
+
+      // For other errors, only recreate after a few consecutive failures.
+      if entry.consecutiveFailures >= 3 {
+        entry.nextRecreateAttemptNs = now &+ 2_000_000_000  // 2s cooldown
+        entry.consecutiveFailures = 0
+        return true
+      }
+      return false
+    }
+
+    guard shouldRecreate else { return }
+
+    let old: Entry? = registryLock.withLock {
+      // Only recreate if this entry is still the registered one for the identifier.
+      guard let current = entries[identifier], current === entry else { return nil }
+      return entries.removeValue(forKey: identifier)
+    }
+    guard let old else { return }
+    IOHIDUserDeviceCancel(old.device)
+
+    do {
+      _ = try getEntry(for: identifier)
+      registryLock.withLock { recomputeStatusLocked() }
+      print("[UserSpaceOutputDispatcher] Recreated IOHIDUserDevice after error for \(identifier)")
+    } catch {
+      status = "error: \(error)"
     }
   }
 
@@ -451,5 +507,15 @@ public final class UserSpaceOutputDispatcher: CompatibilityUserSpaceOutputDispat
     case .west: return .west
     case .northWest: return .northWest
     }
+  }
+}
+
+extension UserSpaceOutputDispatcher: ControllerLifecycleListener {
+  public func controllerDidStop(_ identifier: DeviceIdentifier) async {
+    let old = registryLock.withLock { entries.removeValue(forKey: identifier) }
+    if let old {
+      IOHIDUserDeviceCancel(old.device)
+    }
+    registryLock.withLock { recomputeStatusLocked() }
   }
 }
