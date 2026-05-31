@@ -8,9 +8,13 @@ OpenJoystickDriver has two common workflows:
 - App/daemon + DriverKit extension work: requires signing/provisioning; use
   `./scripts/ojd`.
 
-For app/daemon + DriverKit extension development, follow `README.md` "Install
-For Local Development". You must use the `./scripts/ojd` signing flow; you must
-not try to hand-run Xcode signing steps.
+For app/daemon + DriverKit extension development, you must use the `./scripts/ojd`
+signing flow; you must not try to hand-run Xcode signing steps.
+
+Start here:
+
+- `scripts/README.md` for signing/provisioning and release packaging
+- `./scripts/ojd rebuild dev` to install a signed dev build into `/Applications`
 
 Swift package (no signing required):
 

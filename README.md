@@ -9,106 +9,59 @@ app, or native macOS app.
 <img width="512" height="632" alt="image" src="https://github.com/user-attachments/assets/b2ad4741-8082-445f-8721-d66edb3f79df" />
 
 
-## What Works Today
+## Status
 
-- ✅ GameSir G7 SE: hardware verified through GIP and Xbox One HID compatibility.
-- ✅ Flydigi Vader 5S: supported through GIP with its required USB setup quirk.
-- ✅ Sony DualShock 4 USB/Bluetooth: input and physical rumble are implemented.
-- ✅ Xbox 360 USB profiles: supported through Xbox 360 HID-style parsing.
-- ✅ App-facing compatibility modes: SDL 2/3, Apple GameController, Generic HID,
-  Xbox 360 HID, and Xbox One HID.
-- 🚧 More xpad-derived Xbox profiles exist but still need local hardware checks.
-- ❌ Sony DualShock 3, Sony DualSense, non-DS4 Bluetooth, and Switch Pro are not
-  implemented.
+| Item | Status | Notes |
+| --- | --- | --- |
+| GameSir G7 SE | ✅ | Hardware verified through GIP and Xbox One HID compatibility. |
+| Flydigi Vader 5S | ✅ | Uses GIP and needs `setConfiguration(1)` before claim. |
+| Sony DualShock 4 (USB/Bluetooth) | ✅ | Input and physical rumble are implemented. |
+| Xbox 360 wired (USB) | ✅ | Parser and profiles exist; hardware coverage varies by model. |
+| More xpad-derived Xbox batches | 🚧 | Profiles exist but need local hardware checks. |
+| DualShock 3 / DualSense / Switch Pro | ❌ | Not implemented. |
 
 For the full feature matrix, mapping notes, and per-mode caveats, see
 [docs/COMPATIBILITY_LAYERS.md](docs/COMPATIBILITY_LAYERS.md).
 
-## Install For Local Development
+## Quickstart (Using The App)
 
-Requirements:
+1. Install `OpenJoystickDriver.app` into `/Applications`.
+2. Open the menu-bar item.
+3. Follow the UI prompts to grant **Input Monitoring** for the app and helper.
+4. Connect a supported controller.
+5. Use **Input Test** to confirm buttons/sticks and physical rumble.
 
-- macOS 10.15 or later
-- Xcode Command Line Tools or Xcode
-- `libusb`
+## Choose An Output Mode
 
-```bash
-brew install libusb
-xcode-select --install
-git clone https://github.com/xsyetopz/OpenJoystickDriver.git
-cd OpenJoystickDriver
-./scripts/ojd signing install-profiles
-./scripts/ojd signing configure
-./scripts/ojd rebuild dev
-```
+| What you are trying to run | Recommended | Why |
+| --- | --- | --- |
+| Most games, Steam, emulators, SDL apps | Compatibility + `SDL 2/3` | Stable app-facing identity and mapping. |
+| Native macOS apps using `GCController` | Compatibility + `Apple GameController` | Targets GameController.framework consumers. |
+| Apps that inspect HID descriptors | Compatibility + `Generic HID` | Descriptor-driven HID surface. |
+| A picky app expecting Microsoft HID | Compatibility + `Xbox 360 HID` or `Xbox One HID` | Experimental spoof identities for targeted testing. |
 
-The build installs:
-
-```text
-/Applications/OpenJoystickDriver.app
-```
-
-Open that app from `/Applications`. OJD is menu-bar-only; it does not use a
-normal main window.
-
-## First Run
-
-1. Open `OpenJoystickDriver.app`.
-2. Grant **Input Monitoring** to the daemon if macOS asks.
-3. Connect a supported USB controller.
-4. Open the menu-bar item and choose **Input test**.
-5. Move sticks, press buttons, and use **Physical output** to test rumble.
-
-Grant Input Monitoring to this binary:
-
-```text
-/Applications/OpenJoystickDriver.app/Contents/Library/LoginItems/OpenJoystickDriverDaemon.app/Contents/MacOS/OpenJoystickDriverDaemon
-```
-
-Accessibility permission is not required for normal controller output.
-
-Development builds signed ad hoc can lose macOS permission grants after rebuilds
-because TCC tracks the binary code identity. Use an Apple Development identity
-for stable local testing.
-
-## Pick A Compatibility Mode
-
-Start with **Compatibility** mode and the **SDL 2/3** identity.
-
-- Use `SDL 2/3` for Steam, DuckStation, Moonlight/SDL, and most SDL-based apps.
-- Use `Apple GameController` for native macOS apps that read `GCController`.
-- Use `Generic HID` for apps that inspect HID descriptors directly.
-- Use `Xbox 360 HID` or `Xbox One HID` only when testing a picky app that expects
-  a Microsoft-style HID device.
-
-CLI equivalents:
+CLI equivalents (installed app bundle):
 
 ```bash
 /Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless compat sdl2-3
 /Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless output secondary
 ```
 
-```mermaid
-flowchart LR
-  physical[Physical USB controller] --> daemon[OJD daemon]
-  daemon --> input[Input Test]
-  daemon --> compat[Compatibility virtual controller]
-  compat --> apps[Games, emulators, browsers]
-  apps --> rumble[App rumble reports]
-  rumble --> daemon
-  daemon --> physical
-```
+## Troubleshooting
 
-## Useful Commands
+| Symptom | What to do |
+| --- | --- |
+| Menu UI says “running (disconnected)” | Use **Restart Helper** in the menu, or run `--headless restart`. |
+| SDL / browser sees 0 controllers | Ensure Input Monitoring is granted, then re-open the app and re-test. |
+| DriverKit extension install fails | Compatibility mode still works without DriverKit. Use DriverKit only when you need it. |
+
+Useful commands:
 
 ```bash
-./scripts/ojd rebuild dev
-./scripts/ojd rebuild-fast dev
 ./scripts/ojd validate profiles
 ./scripts/ojd diagnose backends --seconds 5
-./scripts/ojd diagnose gamecontroller --seconds 5 --rumble
-./scripts/ojd diagnose sdl3-gamecontroller --seconds 5
-./scripts/ojd diagnose sdl3-hidapi-x360 --seconds 5
+./scripts/ojd diagnose gamecontroller --seconds 5
+./scripts/ojd diagnose sdl3 --seconds 10
 swift test
 ```
 
@@ -120,65 +73,17 @@ From the installed app bundle:
 /Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver --headless restart
 ```
 
-## Controller Profiles
+## Development
 
-Runtime profiles live in:
-
-```text
-Sources/OpenJoystickDriverKit/Resources/Controllers/
-```
-
-Device schemas live in:
-
-```text
-Resources/Schemas/Devices/
-```
-
-Profile rules:
-
-- Use decimal VID, PID, endpoint, and packet values.
-- Use repo URL `$schema` references, not local file URLs.
-- Add a matching device schema for GIP controllers.
-- Keep protocol variants and mapping flags in data where possible.
-
-Validate profile changes with:
+If you're changing parsers/profiles/tests, signing is not required:
 
 ```bash
-./scripts/ojd validate profiles
+brew install libusb
+swift test
 ```
 
-## Architecture In One Minute
+If you're working on the app/daemon, DriverKit, or signing/notarization, start here:
 
-Input:
-
-```text
-USB vendor-specific devices -> LibUSB / SwiftUSB -> GIPParser
-USB/Bluetooth HID devices   -> IOHIDManager      -> DualShock 4 parser or GenericHIDParser
-```
-
-Output:
-
-```text
-DriverKit HID backend       -> private OJD relay / diagnostics
-IOHIDUserDevice backend     -> app-facing compatibility controllers
-```
-
-Each physical controller gets its own `DevicePipeline` actor. The daemon owns
-controller I/O and XPC APIs; the menu-bar app is only the user interface.
-
-If macOS keeps an old DriverKit process alive after an extension update, repair
-it with:
-
-```bash
-./scripts/ojd repair stale-dext
-```
-
-More architecture and contributor detail lives in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Agent Context
-
-- [AGENTS.md](AGENTS.md) - repo working rules
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - runtime boundaries
-- [docs/COMPATIBILITY_LAYERS.md](docs/COMPATIBILITY_LAYERS.md) - feature matrix and mappings
-- [llms.txt](llms.txt) - concise project map
-- [llms-full.txt](llms-full.txt) - expanded implementation context
+- [scripts/README.md](scripts/README.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)

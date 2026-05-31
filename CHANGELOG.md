@@ -7,6 +7,7 @@ All notable changes to OpenJoystickDriver are documented in this file.
 ### Changed
 
 - Reduced background daemon polling while the menu-bar popover is closed.
+- Simplified README and signing documentation.
 
 ### Fixed
 

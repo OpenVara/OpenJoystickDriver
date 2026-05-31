@@ -1,10 +1,23 @@
 # Signing, Profiles, Notarization
 
-This folder contains the build/signing scripts for OpenJoystickDriver.
+This folder contains the build/signing tooling for OpenJoystickDriver.
 
-## One-time setup
+## Task Map
 
-### 1. Install provisioning profiles
+| Goal | Command | Notes |
+| --- | --- | --- |
+| Install profiles into `~/Library/MobileDevice/Provisioning Profiles/` | `./scripts/ojd signing install-profiles` | Copies from `~/Documents/Profiles/` (or `profiles/`). |
+| Check installed profiles (safe output) | `./scripts/ojd signing audit "$HOME/Library/MobileDevice/Provisioning Profiles"/*.provisionprofile` | No identifiers printed. |
+| Generate `.env.dev` + `.env.release` | `./scripts/ojd signing configure` | Re-run after changing certs/profiles. |
+| Diagnose common signing mismatches (safe output) | `./scripts/ojd signing doctor` | Use this before tweaking Xcode settings. |
+| Build a signed dev app into `.build/` | `./scripts/ojd build dev` | Does not install. |
+| Install a signed dev build into `/Applications` | `./scripts/ojd rebuild dev` | App, daemon, and (optionally) dext. |
+| Fast rebuild app only (no dext upgrade) | `./scripts/ojd rebuild-fast dev` | Best when you are iterating while streaming. |
+| Package a release DMG | `./scripts/ojd package release <version>` | Builds, notarizes, staples, and writes a DMG. |
+
+## Initial Setup (Per Machine / Team)
+
+### 1. Provisioning profiles
 
 The scripts look for provisioning profiles at:
 
@@ -30,13 +43,7 @@ Sanity-check what you installed (safe output; no identifiers printed):
 ./scripts/ojd signing audit "$HOME/Library/MobileDevice/Provisioning Profiles"/*.provisionprofile
 ```
 
-If something fails, run the signing doctor (safe output; no Apple ID / no full subjects):
-
-```bash
-./scripts/ojd signing doctor
-```
-
-### 2. Ensure Keychain identities exist
+### 2. Keychain identities
 
 You should see at least:
 
@@ -50,83 +57,22 @@ security find-identity -v -p codesigning
 The Team ID in your provisioning profiles must match the Team ID encoded in your certificate **Subject OU**.
 You must not trust the `(...)` suffix in the Keychain display name as the Team ID.
 
-If Keychain Access shows “not trusted” but `security find-identity` says the identity is valid, you can usually ignore the UI.
+If `security find-identity` shows **0 valid identities**, you are usually missing Apple intermediate CA
+certificates (WWDR / Developer ID). Apple publishes them here:
 
-If `security find-identity` shows **0 valid identities**, you’re missing Apple’s intermediate CA certificates (WWDR / Developer ID).
-Get them from Apple’s Certificate Authority page and import them in Keychain Access (System keychain is fine), then re-check `find-identity`:
-
-```bash
-https://www.apple.com/certificateauthority/
-```
-
-### “Keychain Access shows certs, but security says 0 identities”
-
-If the Keychain UI shows certs + private keys but `security find-identity` prints `0 valid identities found`, your keychain file permissions are wrong.
-
-Fix:
-
-```bash
-chmod 700 "$HOME/Library/Keychains"
-chmod 600 "$HOME/Library/Keychains/login.keychain-db"
-```
-
-Then log out/in (or reboot) and try again.
-
-### Team/certificate mismatch (most common)
-
-If you have a `Developer ID Application` cert for one team, but your `Apple Development` cert is for a different team, xcodebuild will fail with:
-
-- “Provisioning profile … doesn’t include signing certificate …”
-- or “No certificate for team … matching …”
-
-Commands to see what you have (prints only Team IDs):
-
-```bash
-# Team ID in your Apple Development .cer (from ~/Documents/Certificates)
-# NOTE: the Team ID is the certificate Subject OU (not the display-name (...) suffix).
-openssl x509 -inform DER -in "$HOME/Documents/Certificates/development.cer" -noout -subject -nameopt RFC2253 \
-  | sed -nE 's/.*OU=([^,]+).*/\\1/p'
-
-# Team ID inside the DriverKit provisioning profile
-openssl smime -inform der -verify -noverify \
-  -in "$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver_VirtualHIDDevice.provisionprofile" 2>/dev/null \
-  | plutil -extract TeamIdentifier.0 raw -o - -
-```
-
-If those Team IDs differ:
-
-1. Create an **Apple Development** certificate for the **same team** as the provisioning profiles (Developer portal → Certificates → `+` → Apple Development).
-2. Import the downloaded `.cer` into Keychain Access (it must include a private key).
-3. Regenerate the **Apple Development** provisioning profiles (GUI, daemon, dext) selecting that new Apple Development certificate.
-4. Reinstall profiles: `./scripts/ojd signing install-profiles`
-5. Re-generate env files: `./scripts/ojd signing configure`
-
-For the entitlement `com.apple.developer.hid.virtual.device`:
-
-- It must be present on the **Identifier that creates the user-space virtual device (IOHIDUserDevice)**.
-  In this repo that can be:
-  - **Daemon** (normal path): `OpenJoystickDriverDaemon.provisionprofile` (dev) and `OpenJoystickDriverDaemon_DevID.provisionprofile` (release)
-  - **GUI app** (embedded fallback path): `OpenJoystickDriver.provisionprofile` (dev) and `OpenJoystickDriver_DevID.provisionprofile` (release)
-
-The DriverKit `.dext` does **not** use IOHIDUserDevice and does not need `com.apple.developer.hid.virtual.device`.
-
-### If Keychain shows the “wrong” Team ID in the certificate name
-
-Apple certificates encode the team ID in the **Subject OU**. Some tooling/UI also shows an identifier in the
-certificate’s **CN** (the `(...)` part of the display name). If those disagree, use the provisioning profile’s
-`TeamIdentifier` (and the certificate Subject OU) as the source of truth and sign by **SHA1 identity** instead of the display name.
-
-This repo’s `./scripts/ojd signing configure` writes `CODESIGN_IDENTITY` as a 40‑hex SHA1 for that reason.
+- https://www.apple.com/certificateauthority/
 
 ### 3. Generate `.env.dev` and `.env.release`
 
-This repo has a helper that reads your Keychain + installed profiles and writes both env files:
+This repo reads your Keychain + installed profiles and writes both env files:
 
 ```bash
 ./scripts/ojd signing configure
 ```
 
-## Common tasks
+Re-run this after rotating certificates, regenerating profiles, or switching teams.
+
+## Common Tasks
 
 ### Daemon install / restart
 
@@ -154,21 +100,7 @@ Commands (run the app-bundled binary):
 ./scripts/ojd build dext
 ```
 
-### If DriverKit build fails with “No certificate for team … matching …”
-
-If you see an error like:
-
-```text
-No certificate for team '9PQP6CDMQT' matching 'Apple Development: … (XXXXXXXXXX)' found
-```
-
-Do **not** assume your Team ID is wrong. This is often caused by Xcode matching based on the
-certificate display name suffix `(...)`.
-
-Fix:
-
-1) Re-run `./scripts/ojd signing configure` so `CODESIGN_IDENTITY` is a SHA1 fingerprint.
-2) Re-run `./scripts/ojd build dext` (this prefers SHA1 for xcodebuild).
+If DriverKit build fails due to certificate matching, see the Troubleshooting section below.
 
 ## Notarization
 
@@ -219,7 +151,7 @@ It installs `libusb`, validates profiles, imports signing material, builds a
 release app, notarizes it, uploads the release DMG as a workflow artifact, and
 publishes the GitHub Release.
 
-Required repository secrets:
+### Required repository secrets
 
 - `APPLE_DEVELOPMENT_CERT_BASE64`
 - `DEVELOPER_ID_APPLICATION_CERT_BASE64`
@@ -271,3 +203,79 @@ Keep `.build/github-actions-secrets/` private. It contains raw secret values.
 If you already exported separate signing identity files from Keychain Access,
 pass them explicitly with `--apple-development-identity` and
 `--developer-id-identity`.
+
+## Troubleshooting
+
+<details>
+<summary>Keychain Access shows certs, but <code>security find-identity</code> prints 0 identities</summary>
+
+If the Keychain UI shows certs + private keys but `security find-identity` prints
+`0 valid identities found`, your keychain file permissions are wrong.
+
+Fix:
+
+```bash
+chmod 700 "$HOME/Library/Keychains"
+chmod 600 "$HOME/Library/Keychains/login.keychain-db"
+```
+
+Then log out/in (or reboot) and try again.
+
+</details>
+
+<details>
+<summary>Team/certificate mismatch (most common)</summary>
+
+If you have a `Developer ID Application` cert for one team but your `Apple Development`
+cert is for a different team, `xcodebuild` will fail with:
+
+- “Provisioning profile … doesn’t include signing certificate …”
+- “No certificate for team … matching …”
+
+Commands to see what you have (prints only Team IDs):
+
+```bash
+# Team ID in your Apple Development .cer (from ~/Documents/Certificates)
+# NOTE: the Team ID is the certificate Subject OU (not the display-name (...) suffix).
+openssl x509 -inform DER -in "$HOME/Documents/Certificates/development.cer" -noout -subject -nameopt RFC2253 \
+  | sed -nE 's/.*OU=([^,]+).*/\\1/p'
+
+# Team ID inside the DriverKit provisioning profile
+openssl smime -inform der -verify -noverify \
+  -in "$HOME/Library/MobileDevice/Provisioning Profiles/OpenJoystickDriver_VirtualHIDDevice.provisionprofile" 2>/dev/null \
+  | plutil -extract TeamIdentifier.0 raw -o - -
+```
+
+If those Team IDs differ:
+
+1. Create an **Apple Development** certificate for the **same team** as the provisioning profiles.
+2. Import the downloaded `.cer` into Keychain Access (it must include a private key).
+3. Regenerate the Apple Development provisioning profiles (GUI, daemon, dext) selecting that certificate.
+4. Reinstall profiles: `./scripts/ojd signing install-profiles`
+5. Re-generate env files: `./scripts/ojd signing configure`
+
+Entitlement note for `com.apple.developer.hid.virtual.device`:
+
+- It must be present on the identifier that creates the user-space virtual device (IOHIDUserDevice).
+- In this repo that can be the daemon or the GUI app.
+- The DriverKit `.dext` does not use IOHIDUserDevice and does not need this entitlement.
+
+</details>
+
+<details>
+<summary>DriverKit build fails with “No certificate for team … matching …”</summary>
+
+If you see an error like:
+
+```text
+No certificate for team '9PQP6CDMQT' matching 'Apple Development: … (XXXXXXXXXX)' found
+```
+
+This is often caused by Xcode matching based on the certificate display name suffix `(...)`.
+
+Fix:
+
+1. Re-run `./scripts/ojd signing configure` so `CODESIGN_IDENTITY` is a SHA1 fingerprint.
+2. Re-run `./scripts/ojd build dext` (this prefers SHA1 for `xcodebuild`).
+
+</details>
