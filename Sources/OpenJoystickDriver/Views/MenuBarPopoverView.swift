@@ -44,12 +44,6 @@ struct MenuBarPopoverView: View {
       .padding(14)
     }
     .frame(width: 440)
-    .onAppear {
-      Task {
-        await model.syncFromDaemonNow()
-        model.extensionManager.refreshInstallState()
-      }
-    }
     .alert(isPresented: $showUninstallConfirm) {
       Alert(
         title: Text("Uninstall LaunchAgent?"),

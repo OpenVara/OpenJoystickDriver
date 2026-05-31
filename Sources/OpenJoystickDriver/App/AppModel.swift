@@ -131,8 +131,19 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     await poll()
     await refreshVirtualDeviceDiagnostics()
     extensionManager.refreshInstallState()
-    startPolling()
     Task { await checkForUpdates() }
+  }
+
+  func setPollingEnabled(_ enabled: Bool) {
+    if enabled {
+      guard pollTask == nil else { return }
+      startPolling()
+      return
+    }
+
+    pollTask?.cancel()
+    pollTask = nil
+    client.disconnect()
   }
 
   func refreshDaemonStatus() { daemonInstalled = DaemonManager.isInstalled }

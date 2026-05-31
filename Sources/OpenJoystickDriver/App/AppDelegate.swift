@@ -127,6 +127,7 @@ import SwiftUI
     guard popover == nil else { return }
     let pop = NSPopover()
     pop.behavior = .transient
+    pop.delegate = self
     let contentView = MenuBarPopoverView().environmentObject(model)
     let controller = NSHostingController(rootView: contentView)
     pop.contentViewController = controller
@@ -134,4 +135,24 @@ import SwiftUI
     popover = pop
   }
 
+}
+
+extension AppDelegate: NSPopoverDelegate {
+  func popoverDidShow(_ notification: Notification) {
+    model.setPollingEnabled(true)
+    Task { @MainActor in
+      await model.syncFromDaemonNow()
+      model.extensionManager.refreshInstallState()
+    }
+  }
+
+  func popoverDidClose(_ notification: Notification) {
+    model.setPollingEnabled(false)
+
+    // Drop the hosting controller so the SwiftUI tree can be reclaimed.
+    if let pop = notification.object as? NSPopover {
+      pop.contentViewController = nil
+    }
+    popover = nil
+  }
 }
