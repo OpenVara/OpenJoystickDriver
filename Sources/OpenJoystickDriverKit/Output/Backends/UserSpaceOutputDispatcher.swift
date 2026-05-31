@@ -515,8 +515,7 @@ public final class UserSpaceOutputDispatcher: CompatibilityUserSpaceOutputDispat
 }
 
 extension UserSpaceOutputDispatcher: ControllerLifecycleListener {
-  // swiftlint:disable:next async_without_await
-  public func controllerDidStop(_ identifier: DeviceIdentifier) async {
+  public func controllerDidStop(_ identifier: DeviceIdentifier) {
     let old = registryLock.withLock { entries.removeValue(forKey: identifier) }
     if let old {
       IOHIDUserDeviceCancel(old.device)

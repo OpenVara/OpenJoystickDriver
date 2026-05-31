@@ -135,7 +135,7 @@ actor DevicePipeline {
     idleMonitorTask = nil
     await neutralizeOutput()
     if let listener = dispatcher as? any ControllerLifecycleListener {
-      await listener.controllerDidStop(identifier)
+      listener.controllerDidStop(identifier)
     }
     if let handle = usbHandle {
       try? handle.releaseInterface(0)
