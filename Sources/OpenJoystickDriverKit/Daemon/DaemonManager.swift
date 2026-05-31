@@ -91,57 +91,60 @@ public enum DaemonManager: Sendable {
   /// This is used to explain "couldn't communicate with a helper application"
   /// XPC errors, which commonly occur when launchd kills/restarts the job.
   public static func health() -> DaemonHealth {
-    guard isInstalled else { return DaemonHealth(installed: false) }
-    let uid = String(getuid())
-    let target = "gui/\(uid)/\(label)"
+    autoreleasepool {
+      guard isInstalled else { return DaemonHealth(installed: false) }
+      let uid = String(getuid())
+      let target = "gui/\(uid)/\(label)"
 
-    var printOut = ""
-    var printErr: String?
-    do {
-      printOut = try launchctl(["print", target])
-    } catch {
-      printErr = error.localizedDescription
-    }
+      var printOut = ""
+      var printErr: String?
+      do {
+        printOut = try launchctl(["print", target])
+      } catch {
+        printErr = error.localizedDescription
+      }
 
-    let blameOut =
-      (try? launchctl(["blame", target]))?.trimmingCharacters(in: .whitespacesAndNewlines)
+      let blameOut =
+        (try? launchctl(["blame", target]))?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-    let rawPrint: String
-    if let printErr {
-      rawPrint = "launchctl print failed:\n\(printErr)"
-    } else {
-      rawPrint = printOut
-    }
+      let rawPrint: String?
+      if let printErr {
+        rawPrint = "launchctl print failed:\n\(printErr)"
+      } else {
+        // `launchctl print` output can be large; avoid retaining it in the UI model.
+        rawPrint = nil
+      }
 
-    var health = DaemonHealth(
-      installed: true,
-      state: printErr == nil ? nil : "NOT_LOADED",
-      blame: blameOut,
-      rawPrint: rawPrint
-    )
+      var health = DaemonHealth(
+        installed: true,
+        state: printErr == nil ? nil : "NOT_LOADED",
+        blame: blameOut,
+        rawPrint: rawPrint
+      )
 
-    if printErr != nil {
+      if printErr != nil {
+        return health
+      }
+
+      for rawLine in printOut.split(separator: "\n", omittingEmptySubsequences: false) {
+        let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        if line.hasPrefix("active count = ") {
+          health.activeCount = Int(line.dropFirst("active count = ".count))
+        } else if line.hasPrefix("state = ") {
+          health.state = String(line.dropFirst("state = ".count))
+        } else if line.hasPrefix("pid = ") {
+          health.pid = Int(line.dropFirst("pid = ".count))
+        } else if line.hasPrefix("runs = ") {
+          health.runs = Int(line.dropFirst("runs = ".count))
+        } else if line.hasPrefix("immediate reason = ") {
+          health.immediateReason = String(line.dropFirst("immediate reason = ".count))
+        } else if line.hasPrefix("last terminating signal = ") {
+          health.lastTerminatingSignal = String(line.dropFirst("last terminating signal = ".count))
+        }
+      }
+
       return health
     }
-
-    for rawLine in printOut.split(separator: "\n", omittingEmptySubsequences: false) {
-      let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-      if line.hasPrefix("active count = ") {
-        health.activeCount = Int(line.dropFirst("active count = ".count))
-      } else if line.hasPrefix("state = ") {
-        health.state = String(line.dropFirst("state = ".count))
-      } else if line.hasPrefix("pid = ") {
-        health.pid = Int(line.dropFirst("pid = ".count))
-      } else if line.hasPrefix("runs = ") {
-        health.runs = Int(line.dropFirst("runs = ".count))
-      } else if line.hasPrefix("immediate reason = ") {
-        health.immediateReason = String(line.dropFirst("immediate reason = ".count))
-      } else if line.hasPrefix("last terminating signal = ") {
-        health.lastTerminatingSignal = String(line.dropFirst("last terminating signal = ".count))
-      }
-    }
-
-    return health
   }
 
   public struct DaemonHealth: Sendable {

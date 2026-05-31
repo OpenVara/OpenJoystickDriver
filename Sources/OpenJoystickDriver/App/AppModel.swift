@@ -3,6 +3,8 @@ import Foundation
 import OpenJoystickDriverKit
 
 private let appModelPollNanoseconds: UInt64 = 2_000_000_000
+private let daemonHealthPollNanosecondsConnected: UInt64 = 15_000_000_000
+private let daemonHealthPollNanosecondsDisconnected: UInt64 = 2_000_000_000
 
 /// Parsed, displayable representation of connected controller.
 struct DeviceViewModel: Identifiable, Hashable, Sendable {
@@ -74,6 +76,8 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   private let updateChecker = UpdateChecker()
   private var pollTask: Task<Void, Never>?
 
+  private var lastHealthPollNs: UInt64 = 0
+
   // Tracks recent launchd restarts (based on `launchctl print runs = ...`) so the UI can
   // distinguish "stopped" from "restarting" and "crash-looping".
   private var lastDaemonRuns: Int?
@@ -137,6 +141,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
     let snapshot = await Task.detached { DaemonManager.health() }.value
     daemonHealth = snapshot
     noteDaemonHealth(snapshot)
+    lastHealthPollNs = DispatchTime.now().uptimeNanoseconds
   }
 
   /// One-shot refresh used after lifecycle actions (install/start/restart/uninstall).
@@ -403,8 +408,6 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
 
   private func poll() async {
     refreshDaemonStatus()
-    await refreshDaemonHealth()
-
     guard daemonInstalled else {
       daemonConnected = false
       devices = []
@@ -430,12 +433,17 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       virtualDeviceMode = status.virtualDeviceMode ?? VirtualDeviceMode.compatUserSpace.rawValue
       outputMode = status.effectiveOutputMode ?? CompositeOutputDispatcher.Mode.primaryOnly.rawValue
       compatibilityIdentity = status.compatibilityIdentity ?? CompatibilityIdentity.sdl2_3.rawValue
+
+      await maybeRefreshDaemonHealth(isConnected: true)
     } catch {
       daemonConnected = false
       devices = []
       client.disconnect()
       appInputMonitoring = "\(await permissionManager.checkAccess())"
       inputMonitoring = "unknown"
+
+      // When XPC is failing, refresh launchd health immediately so we can explain why.
+      await refreshDaemonHealth()
 
       // If launchd says the job is loaded/running but XPC isn't responding, call that out.
       if let h = daemonHealth, h.pid != nil {
@@ -445,6 +453,15 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       } else {
         daemonError = formatDaemonError(error)
       }
+    }
+  }
+
+  private func maybeRefreshDaemonHealth(isConnected: Bool) async {
+    let now = DispatchTime.now().uptimeNanoseconds
+    let intervalNs = isConnected ? daemonHealthPollNanosecondsConnected
+      : daemonHealthPollNanosecondsDisconnected
+    if daemonHealth == nil || now &- lastHealthPollNs >= intervalNs {
+      await refreshDaemonHealth()
     }
   }
 
