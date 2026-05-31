@@ -5,7 +5,7 @@
 #   ./scripts/ojd diagnose <subcommand>
 #
 # Subcommands:
-#   dext (default), sdl3, sdl3-gamecontroller, sdl3-hidapi-x360, pcsx2-sdl3, pcsx2-gamecontroller, pcsx2-hidapi-x360, pcsx2-live, pcsx2-latency, backends
+#   dext (default), sdl3, sdl3-gamecontroller, sdl3-hidapi-x360, backends
 #
 # Runs all checks regardless of individual failures.
 
@@ -24,12 +24,7 @@ Usage:
   ./scripts/ojd diagnose sdl3 [--seconds N] [--rumble] [other args]
   ./scripts/ojd diagnose sdl3-gamecontroller [--seconds N] [--rumble]
   ./scripts/ojd diagnose sdl3-hidapi-x360 [--seconds N] [--rumble]
-  ./scripts/ojd diagnose pcsx2-sdl3 [--seconds N] [other args]
-  ./scripts/ojd diagnose pcsx2-gamecontroller [--seconds N] [--rumble] [other args]
-  ./scripts/ojd diagnose pcsx2-hidapi-x360 [--seconds N] [--rumble] [other args]
-  ./scripts/ojd diagnose pcsx2-live [--seconds N]
   ./scripts/ojd diagnose gamecontroller [--seconds N] [--rumble]
-  ./scripts/ojd diagnose pcsx2-latency
   ./scripts/ojd diagnose backends [--seconds N]
 TXT
   exit 0
@@ -127,107 +122,6 @@ run_sdl3_hidapi_x360_probe() {
     run_sdl3_probe_native --wait-devices 8 --rumble --expect-rumble "$@"
 }
 
-combined_sdl_mapping_file() {
-  local ROOT="$1"
-  local PCSX2_USER_DB="$HOME/Library/Application Support/PCSX2/game_controller_db.txt"
-  local PCSX2_DB="/Applications/PCSX2.app/Contents/Resources/game_controller_db.txt"
-  local OJD_DB="$ROOT/Resources/SDL/openjoystickdriver.gamecontrollerdb.txt"
-  local OUT="/tmp/ojd-game-controller-db.txt"
-
-  : > "$OUT"
-  if [[ -f "$PCSX2_USER_DB" ]]; then
-    cat "$PCSX2_USER_DB" >> "$OUT"
-  fi
-  if [[ -f "$PCSX2_DB" ]]; then
-    cat "$PCSX2_DB" >> "$OUT"
-  fi
-  if [[ -f "$OJD_DB" ]]; then
-    cat "$OJD_DB" >> "$OUT"
-  fi
-  echo "$OUT"
-}
-
-seconds_arg_or_default() {
-  local default_value="$1"
-  shift
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --seconds)
-        if [[ -n "${2:-}" ]]; then
-          echo "$2"
-          return 0
-        fi
-        ;;
-    esac
-    shift
-  done
-  echo "$default_value"
-}
-
-run_sdl3_probe_pcsx2_x86_64() {
-  local PCSX2_APP="/Applications/PCSX2.app"
-  local PCSX2_SDL3="$PCSX2_APP/Contents/Frameworks/libSDL3.0.dylib"
-  local ROOT SRC OUT
-  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-  SRC="$ROOT/tools/sdl3-gamepad-probe/main.c"
-  OUT="/tmp/ojd-sdl3-probe-pcsx2-x86_64"
-  local SDKROOT
-  SDKROOT="$(select_macos_sdk)" || return $?
-
-  [[ -d "$PCSX2_APP" ]] || die "PCSX2 not found at: $PCSX2_APP"
-  [[ -f "$PCSX2_SDL3" ]] || die "PCSX2 SDL3 dylib not found at: $PCSX2_SDL3"
-  [[ -f "$SRC" ]] || die "Missing probe source: $SRC"
-
-  echo "Building SDL3 probe (PCSX2/Rosetta x86_64)..."
-  SDKROOT="$SDKROOT" clang -arch x86_64 -x objective-c -isysroot "$SDKROOT" "$SRC" \
-    -I/opt/homebrew/include -I/opt/homebrew/include/SDL3 \
-    -L"$PCSX2_APP/Contents/Frameworks" -lSDL3.0 \
-    -framework Foundation -framework GameController \
-    -Wl,-headerpad_max_install_names \
-    -o "$OUT"
-
-  echo "Patching dylib path so it loads PCSX2's SDL3..."
-  install_name_tool -change "@executable_path/../Frameworks/libSDL3.0.dylib" "$PCSX2_SDL3" "$OUT" || true
-
-  echo
-  echo "Running: $OUT $*"
-  echo "Tip: Input Monitoring must be granted to the terminal app you are using."
-  echo
-  local probe_seconds probe_limit
-  probe_seconds="$(seconds_arg_or_default 10 "$@")"
-  probe_limit="$((probe_seconds + 15))"
-  if [[ "${OJD_PCSX2_SDL3_GAMECONTROLLER:-0}" == "1" ]]; then
-    SDL_JOYSTICK_MFI=1 \
-      SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1 \
-      SDL_JOYSTICK_IOKIT=0 \
-      SDL_JOYSTICK_HIDAPI=0 \
-      SDL_JOYSTICK_HIDAPI_XBOX=0 \
-      SDL_JOYSTICK_HIDAPI_XBOX_360=0 \
-      SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS=0 \
-      SDL_JOYSTICK_HIDAPI_XBOX_ONE=0 \
-      SDL_JOYSTICK_HIDAPI_GIP=0 \
-      run_limited_command "$probe_limit" "$OUT" "$@"
-  elif [[ "${OJD_PCSX2_SDL3_HIDAPI_X360:-0}" == "1" ]]; then
-    SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=1 \
-      SDL_JOYSTICK_MFI=0 \
-      SDL_JOYSTICK_IOKIT=0 \
-      SDL_JOYSTICK_HIDAPI=1 \
-      SDL_JOYSTICK_HIDAPI_XBOX=1 \
-      SDL_JOYSTICK_HIDAPI_XBOX_360=1 \
-      SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS=0 \
-      SDL_JOYSTICK_HIDAPI_XBOX_ONE=0 \
-      SDL_JOYSTICK_HIDAPI_GIP=0 \
-      run_limited_command "$probe_limit" "$OUT" "$@"
-  else
-    SDL_JOYSTICK_HIDAPI_XBOX=0 \
-      SDL_JOYSTICK_HIDAPI_XBOX_360=0 \
-      SDL_JOYSTICK_HIDAPI_XBOX_360_WIRELESS=0 \
-      SDL_JOYSTICK_HIDAPI_XBOX_ONE=0 \
-      SDL_JOYSTICK_HIDAPI_GIP=0 \
-      run_limited_command "$probe_limit" "$OUT" "$@"
-  fi
-}
-
 select_macos_sdk() {
   local sdk
   sdk="$(xcrun --show-sdk-path 2>/dev/null || true)"
@@ -270,77 +164,6 @@ run_limited_command() {
     elapsed=$((elapsed + 1))
   done
   wait "$pid"
-}
-
-run_pcsx2_latency_triage() {
-  local APP_BIN="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver"
-  local ROOT
-  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-  local CLI_BIN="$ROOT/.build/debug/OpenJoystickDriver"
-  if [[ ! -x "$CLI_BIN" ]]; then
-    CLI_BIN="$APP_BIN"
-  fi
-  local PCSX2_DB="/Applications/PCSX2.app/Contents/Resources/game_controller_db.txt"
-
-  echo "=== OpenJoystickDriver vs SDL3 latency triage ==="
-  echo
-
-  if [[ -x "$CLI_BIN" ]]; then
-    echo "0) OJD daemon status (shows mode/identity/output):"
-    run_limited_command 10 "$CLI_BIN" --headless status || true
-    echo
-    echo "1) Virtual device self-test (press buttons while it runs):"
-    run_limited_command 10 "$CLI_BIN" --headless selftest 5 || true
-    echo
-  else
-    echo "1) SKIP: OpenJoystickDriver CLI not found at:"
-    echo "   $APP_BIN"
-    echo "   Fix: build+install the app bundle, then re-run this script."
-    echo
-  fi
-
-  echo "2) SDL3 probe (native):"
-  run_sdl3_probe_native --seconds 10 --mappings-file "$(combined_sdl_mapping_file "$ROOT")" --expect-single-neutral-ojd || true
-  echo
-
-  echo "3) SDL3 probe (PCSX2/Rosetta x86_64, uses PCSX2's bundled SDL3):"
-  run_sdl3_probe_pcsx2_x86_64 --seconds 10 --mappings-file "$(combined_sdl_mapping_file "$ROOT")" --expect-single-neutral-ojd || true
-}
-
-run_pcsx2_gamecontroller_probe() {
-  local ROOT
-  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-  configure_ojd_gamecontroller_route
-  OJD_PCSX2_SDL3_GAMECONTROLLER=1 \
-    run_sdl3_probe_pcsx2_x86_64 --mappings-file "$(combined_sdl_mapping_file "$ROOT")" --gc-prewarm --wait-devices 8 --rumble --expect-rumble "$@"
-}
-
-run_pcsx2_hidapi_x360_probe() {
-  local ROOT
-  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-  configure_ojd_hidapi_x360_route
-  OJD_PCSX2_SDL3_HIDAPI_X360=1 \
-    run_sdl3_probe_pcsx2_x86_64 --mappings-file "$(combined_sdl_mapping_file "$ROOT")" --wait-devices 8 --rumble --expect-rumble "$@"
-}
-
-run_pcsx2_live_probe() {
-  local seconds="${1:-8}"
-  local APP_BIN="/Applications/OpenJoystickDriver.app/Contents/MacOS/OpenJoystickDriver"
-  local ROOT
-  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-  local CLI_BIN="$ROOT/.build/debug/OpenJoystickDriver"
-  if [[ ! -x "$CLI_BIN" ]]; then
-    CLI_BIN="$APP_BIN"
-  fi
-
-  [[ -x "$CLI_BIN" ]] || die "OpenJoystickDriver CLI not found at $CLI_BIN or $APP_BIN"
-
-  echo "=== PCSX2/Rosetta SDL3 live input probe ==="
-  echo "Start this probe, then run this in another terminal while it listens:"
-  echo "  $CLI_BIN --headless selftest 4"
-  echo
-
-  run_sdl3_probe_pcsx2_x86_64 --seconds "$seconds" --mappings-file "$(combined_sdl_mapping_file "$ROOT")"
 }
 
 run_gamecontroller_probe() {
@@ -419,18 +242,12 @@ run_backend_acceptance_loop() {
   echo
 
   echo "4) SDL3 consumer probe:"
-  run_limited "$step_timeout" /usr/bin/env bash "$0" sdl3 --seconds "$seconds" --mappings-file "$(combined_sdl_mapping_file "$ROOT")" --expect-single-neutral-ojd || true
+  run_limited "$step_timeout" /usr/bin/env bash "$0" sdl3 --seconds "$seconds" \
+    --mappings-file "$ROOT/Resources/SDL/openjoystickdriver.gamecontrollerdb.txt" \
+    --expect-single-neutral-ojd || true
   echo
 
-  echo "5) PCSX2/Rosetta consumer probe:"
-  if [[ -d "/Applications/PCSX2.app" ]]; then
-    run_limited "$step_timeout" run_sdl3_probe_pcsx2_x86_64 --seconds "$seconds" --mappings-file "$(combined_sdl_mapping_file "$ROOT")" --expect-single-neutral-ojd || true
-  else
-    echo "SKIP: PCSX2 not found at /Applications/PCSX2.app"
-  fi
-  echo
-
-  echo "6) GameController.framework consumer probe:"
+  echo "5) GameController.framework consumer probe:"
   run_limited "$step_timeout" /usr/bin/env bash "$0" gamecontroller --seconds "$seconds" || true
 }
 
@@ -446,31 +263,6 @@ fi
 
 if [[ "$cmd" == "sdl3-hidapi-x360" ]]; then
   run_sdl3_hidapi_x360_probe "$@"
-  exit 0
-fi
-
-if [[ "$cmd" == "pcsx2-sdl3" ]]; then
-  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-  run_sdl3_probe_pcsx2_x86_64 --mappings-file "$(combined_sdl_mapping_file "$ROOT")" "$@"
-  exit 0
-fi
-
-if [[ "$cmd" == "pcsx2-gamecontroller" ]]; then
-  run_pcsx2_gamecontroller_probe "$@"
-  exit 0
-fi
-
-if [[ "$cmd" == "pcsx2-hidapi-x360" ]]; then
-  run_pcsx2_hidapi_x360_probe "$@"
-  exit 0
-fi
-
-if [[ "$cmd" == "pcsx2-live" ]]; then
-  seconds="8"
-  if [[ "${1:-}" == "--seconds" && -n "${2:-}" ]]; then
-    seconds="$2"
-  fi
-  run_pcsx2_live_probe "$seconds"
   exit 0
 fi
 
@@ -494,11 +286,6 @@ if [[ "$cmd" == "gamecontroller" ]]; then
     esac
   done
   run_gamecontroller_probe "$seconds" "$rumble"
-  exit 0
-fi
-
-if [[ "$cmd" == "pcsx2-latency" ]]; then
-  run_pcsx2_latency_triage
   exit 0
 fi
 
