@@ -33,6 +33,16 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
 ///
 /// Polls daemon via XPC every 2 seconds.
 @MainActor final class AppModel: ObservableObject {
+  enum DaemonUIState: Equatable, Sendable {
+    case missing
+    case stopped
+    case runningConnected
+    case runningDisconnected
+    case restarting
+    case crashLooping
+    case unknown
+  }
+
   @Published var daemonConnected = false
   @Published var daemonInstalled = false
   @Published var daemonRestarting = false
@@ -64,7 +74,49 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   private let updateChecker = UpdateChecker()
   private var pollTask: Task<Void, Never>?
 
+  // Tracks recent launchd restarts (based on `launchctl print runs = ...`) so the UI can
+  // distinguish "stopped" from "restarting" and "crash-looping".
+  private var lastDaemonRuns: Int?
+  private var lastDaemonPid: Int?
+  private var daemonStartEventsNs: [UInt64] = []
+
   init(developerMode: Bool = false) { self.developerMode = developerMode }
+
+  var daemonUIState: DaemonUIState {
+    if daemonRestarting { return .restarting }
+    guard daemonInstalled else { return .missing }
+    guard let h = daemonHealth, h.installed else { return daemonConnected ? .runningConnected : .unknown }
+
+    if h.isInefficientKillLoop { return .crashLooping }
+    if recentDaemonStartCount(windowSeconds: 10) >= 3 { return .crashLooping }
+    if recentDaemonStartCount(windowSeconds: 4) > 0 && !daemonConnected { return .restarting }
+
+    if daemonConnected { return .runningConnected }
+    if h.pid != nil { return .runningDisconnected }
+    if (h.state ?? "").uppercased() == "NOT_LOADED" { return .stopped }
+    return .unknown
+  }
+
+  var daemonStatusLabel: String {
+    switch daemonUIState {
+    case .missing: return "missing"
+    case .stopped: return "stopped"
+    case .runningConnected: return "running"
+    case .runningDisconnected: return "running (disconnected)"
+    case .restarting: return "restarting…"
+    case .crashLooping: return "crash-looping"
+    case .unknown: return daemonConnected ? "running" : "unknown"
+    }
+  }
+
+  var daemonSuggestedActionLabel: String? {
+    switch daemonUIState {
+    case .missing: return "Install Helper"
+    case .stopped: return "Start Helper"
+    case .runningDisconnected, .restarting, .crashLooping: return "Restart Helper"
+    case .runningConnected, .unknown: return nil
+    }
+  }
 
   func start() async {
     refreshDaemonStatus()
@@ -82,6 +134,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   func refreshDaemonHealth() async {
     let snapshot = await Task.detached { DaemonManager.health() }.value
     daemonHealth = snapshot
+    noteDaemonHealth(snapshot)
   }
 
   /// One-shot refresh used after lifecycle actions (install/start/restart/uninstall).
@@ -358,6 +411,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
       virtualDeviceDiagnostics = nil
       appInputMonitoring = "\(await permissionManager.checkAccess())"
       inputMonitoring = "unknown"
+      resetDaemonHealthTrend()
       return
     }
 
@@ -390,6 +444,45 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
         daemonError = formatDaemonError(error)
       }
     }
+  }
+
+  private func noteDaemonHealth(_ snapshot: DaemonManager.DaemonHealth) {
+    let now = DispatchTime.now().uptimeNanoseconds
+    if !snapshot.installed || (snapshot.state ?? "").uppercased() == "NOT_LOADED" {
+      resetDaemonHealthTrend()
+      lastDaemonRuns = snapshot.runs
+      lastDaemonPid = snapshot.pid
+      return
+    }
+
+    if let runs = snapshot.runs {
+      if let last = lastDaemonRuns, runs > last {
+        for _ in 0..<(runs - last) { daemonStartEventsNs.append(now) }
+      }
+      lastDaemonRuns = runs
+    }
+
+    if let pid = snapshot.pid {
+      if let lastPid = lastDaemonPid, pid != lastPid {
+        daemonStartEventsNs.append(now)
+      }
+      lastDaemonPid = pid
+    }
+
+    let windowNs: UInt64 = 15 * 1_000_000_000
+    daemonStartEventsNs.removeAll { now &- $0 > windowNs }
+  }
+
+  private func recentDaemonStartCount(windowSeconds: UInt64) -> Int {
+    let now = DispatchTime.now().uptimeNanoseconds
+    let windowNs = windowSeconds * 1_000_000_000
+    return daemonStartEventsNs.filter { now &- $0 <= windowNs }.count
+  }
+
+  private func resetDaemonHealthTrend() {
+    daemonStartEventsNs.removeAll(keepingCapacity: true)
+    lastDaemonRuns = nil
+    lastDaemonPid = nil
   }
 
   private func ensureRunningFromApplications() -> Bool {

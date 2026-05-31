@@ -79,16 +79,25 @@ struct MenuBarPopoverView: View {
   }
 
   private var readinessCard: some View {
-    let daemonStatusLabel =
-      model.daemonRestarting
-      ? "restarting…"
-      : (model.daemonConnected ? "running" : (model.daemonInstalled ? "installed" : "missing"))
     let permissionsReady =
       model.appInputMonitoring == "granted" && model.inputMonitoring == "granted"
     let ready = model.daemonConnected && permissionsReady
     let title = ready ? "Ready" : "Setup needs attention"
     let summary: String = {
-      if model.daemonRestarting { return "The helper is restarting." }
+      switch model.daemonUIState {
+      case .restarting:
+        return "The helper is restarting."
+      case .crashLooping:
+        return "The helper is crash-looping. Restart or reinstall it."
+      case .missing:
+        return "Install the helper to read controller input."
+      case .stopped:
+        return "Start the helper to connect controllers."
+      case .runningDisconnected:
+        return "The helper is running but disconnected. Restart the helper."
+      case .runningConnected, .unknown:
+        break
+      }
       if !model.daemonInstalled { return "Install the helper to read controller input." }
       if !model.daemonConnected { return "Start the helper to connect controllers." }
       if model.appInputMonitoring != "granted" {
@@ -113,7 +122,7 @@ struct MenuBarPopoverView: View {
             .fixedSize(horizontal: false, vertical: true)
         }
         Spacer()
-        Text(daemonStatusLabel)
+        Text(model.daemonStatusLabel)
           .font(.caption.weight(.semibold))
           .padding(.horizontal, 8)
           .padding(.vertical, 4)
@@ -156,14 +165,25 @@ struct MenuBarPopoverView: View {
       .controlSize(.small)
       .padding(.top, 2)
     } else if !model.daemonConnected {
-      SwiftUI.Button("Start Helper") {
-        Task {
-          await model.startDaemon()
-          await model.syncFromDaemonNow()
+      if model.daemonUIState == .stopped || model.daemonUIState == .unknown {
+        SwiftUI.Button("Start Helper") {
+          Task {
+            await model.startDaemon()
+            await model.syncFromDaemonNow()
+          }
         }
+        .controlSize(.small)
+        .padding(.top, 2)
+      } else {
+        SwiftUI.Button("Restart Helper") {
+          Task {
+            await model.restartDaemon()
+            await model.syncFromDaemonNow()
+          }
+        }
+        .controlSize(.small)
+        .padding(.top, 2)
       }
-      .controlSize(.small)
-      .padding(.top, 2)
     } else if model.appInputMonitoring != "granted" {
       SwiftUI.Button("Request Access") {
         Task { await model.requestAppInputMonitoringAccess() }
@@ -254,7 +274,12 @@ struct MenuBarPopoverView: View {
               }
             }
             .controlSize(.small)
-            .disabled(model.daemonConnected)
+            .disabled(
+              model.daemonUIState == .runningConnected
+                || model.daemonUIState == .runningDisconnected
+                || model.daemonUIState == .restarting
+                || model.daemonUIState == .crashLooping
+            )
             SwiftUI.Button("Restart") {
               Task {
                 await model.restartDaemon()
