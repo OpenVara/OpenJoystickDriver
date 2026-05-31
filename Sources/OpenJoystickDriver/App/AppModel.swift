@@ -85,7 +85,9 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   var daemonUIState: DaemonUIState {
     if daemonRestarting { return .restarting }
     guard daemonInstalled else { return .missing }
-    guard let h = daemonHealth, h.installed else { return daemonConnected ? .runningConnected : .unknown }
+    guard let h = daemonHealth, h.installed else {
+      return daemonConnected ? .runningConnected : .unknown
+    }
 
     if h.isInefficientKillLoop { return .crashLooping }
     if recentDaemonStartCount(windowSeconds: 10) >= 3 { return .crashLooping }

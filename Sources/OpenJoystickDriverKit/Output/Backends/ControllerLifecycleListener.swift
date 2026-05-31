@@ -8,4 +8,3 @@ import Foundation
 public protocol ControllerLifecycleListener: AnyObject, Sendable {
   func controllerDidStop(_ identifier: DeviceIdentifier) async
 }
-

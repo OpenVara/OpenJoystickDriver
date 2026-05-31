@@ -363,7 +363,11 @@ public final class UserSpaceOutputDispatcher: CompatibilityUserSpaceOutputDispat
     }
   }
 
-  private func noteFailureAndMaybeRecreate(entry: Entry, identifier: DeviceIdentifier, error: IOReturn) {
+  private func noteFailureAndMaybeRecreate(
+    entry: Entry,
+    identifier: DeviceIdentifier,
+    error: IOReturn
+  ) {
     let now = DispatchTime.now().uptimeNanoseconds
     let shouldRecreate = entry.lock.withLock { () -> Bool in
       if entry.nextRecreateAttemptNs > now { return false }
@@ -511,6 +515,7 @@ public final class UserSpaceOutputDispatcher: CompatibilityUserSpaceOutputDispat
 }
 
 extension UserSpaceOutputDispatcher: ControllerLifecycleListener {
+  // swiftlint:disable:next async_without_await
   public func controllerDidStop(_ identifier: DeviceIdentifier) async {
     let old = registryLock.withLock { entries.removeValue(forKey: identifier) }
     if let old {
