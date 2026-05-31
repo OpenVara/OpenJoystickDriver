@@ -11,14 +11,14 @@ app, or native macOS app.
 
 ## Status
 
-| Item | Status | Notes |
-| --- | --- | --- |
-| GameSir G7 SE | ✅ | Hardware verified through GIP and Xbox One HID compatibility. |
-| Flydigi Vader 5S | ✅ | Uses GIP and needs `setConfiguration(1)` before claim. |
-| Sony DualShock 4 (USB/Bluetooth) | ✅ | Input and physical rumble are implemented. |
-| Xbox 360 wired (USB) | ✅ | Parser and profiles exist; hardware coverage varies by model. |
-| More xpad-derived Xbox batches | 🚧 | Profiles exist but need local hardware checks. |
-| DualShock 3 / DualSense / Switch Pro | ❌ | Not implemented. |
+| Item                                 | Status | Notes                                                         |
+| ------------------------------------ | ------ | ------------------------------------------------------------- |
+| GameSir G7 SE                        | ✅      | Hardware verified through GIP and Xbox One HID compatibility. |
+| Flydigi Vader 5S                     | ✅      | Uses GIP and needs `setConfiguration(1)` before claim.        |
+| Sony DualShock 4 (USB/Bluetooth)     | ✅      | Input and physical rumble are implemented.                    |
+| Xbox 360 wired (USB)                 | ✅      | Parser and profiles exist; hardware coverage varies by model. |
+| More xpad-derived Xbox batches       | 🚧      | Profiles exist but need local hardware checks.                |
+| DualShock 3 / DualSense / Switch Pro | ❌      | Not implemented.                                              |
 
 For the full feature matrix, mapping notes, and per-mode caveats, see
 [docs/COMPATIBILITY_LAYERS.md](docs/COMPATIBILITY_LAYERS.md).
@@ -33,12 +33,12 @@ For the full feature matrix, mapping notes, and per-mode caveats, see
 
 ## Choose An Output Mode
 
-| What you are trying to run | Recommended | Why |
-| --- | --- | --- |
-| Most games, Steam, emulators, SDL apps | Compatibility + `SDL 2/3` | Stable app-facing identity and mapping. |
-| Native macOS apps using `GCController` | Compatibility + `Apple GameController` | Targets GameController.framework consumers. |
-| Apps that inspect HID descriptors | Compatibility + `Generic HID` | Descriptor-driven HID surface. |
-| A picky app expecting Microsoft HID | Compatibility + `Xbox 360 HID` or `Xbox One HID` | Experimental spoof identities for targeted testing. |
+| What you are trying to run             | Recommended                                      | Why                                                 |
+| -------------------------------------- | ------------------------------------------------ | --------------------------------------------------- |
+| Most games, Steam, emulators, SDL apps | Compatibility + `SDL 2/3`                        | Stable app-facing identity and mapping.             |
+| Native macOS apps using `GCController` | Compatibility + `Apple GameController`           | Targets GameController.framework consumers.         |
+| Apps that inspect HID descriptors      | Compatibility + `Generic HID`                    | Descriptor-driven HID surface.                      |
+| A picky app expecting Microsoft HID    | Compatibility + `Xbox 360 HID` or `Xbox One HID` | Experimental spoof identities for targeted testing. |
 
 CLI equivalents (installed app bundle):
 
@@ -49,11 +49,11 @@ CLI equivalents (installed app bundle):
 
 ## Troubleshooting
 
-| Symptom | What to do |
-| --- | --- |
-| Menu UI says “running (disconnected)” | Use **Restart Helper** in the menu, or run `--headless restart`. |
-| SDL / browser sees 0 controllers | Ensure Input Monitoring is granted, then re-open the app and re-test. |
-| DriverKit extension install fails | Compatibility mode still works without DriverKit. Use DriverKit only when you need it. |
+| Symptom                               | What to do                                                                             |
+| ------------------------------------- | -------------------------------------------------------------------------------------- |
+| Menu UI says “running (disconnected)” | Use **Restart Helper** in the menu, or run `--headless restart`.                       |
+| SDL / browser sees 0 controllers      | Ensure Input Monitoring is granted, then re-open the app and re-test.                  |
+| DriverKit extension install fails     | Compatibility mode still works without DriverKit. Use DriverKit only when you need it. |
 
 Useful commands:
 
@@ -87,3 +87,17 @@ If you're working on the app/daemon, DriverKit, or signing/notarization, start h
 - [scripts/README.md](scripts/README.md)
 - [CONTRIBUTING.md](CONTRIBUTING.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=xsyetopz%2FOpenJoystickDriver&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=xsyetopz/OpenJoystickDriver&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=xsyetopz/OpenJoystickDriver&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=xsyetopz/OpenJoystickDriver&type=date&legend=top-left" />
+ </picture>
+</a>
+
+# License
+
+[MIT](LICENSE)
