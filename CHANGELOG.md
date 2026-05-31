@@ -2,6 +2,16 @@
 
 All notable changes to OpenJoystickDriver are documented in this file.
 
+## 0.4.1
+
+### Changed
+
+- Reduced background daemon polling while the menu-bar popover is closed.
+
+### Fixed
+
+- Reduced launchd health sampling overhead and avoided retaining large `launchctl print` output.
+
 ## 0.4.0
 
 ### Added

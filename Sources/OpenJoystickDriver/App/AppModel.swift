@@ -68,7 +68,7 @@ struct DeviceViewModel: Identifiable, Hashable, Sendable {
   var developerMode: Bool
 
   var appVersion: String {
-    Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.4.0"
+    Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.4.1"
   }
 
   private let client = XPCClient()
