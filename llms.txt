@@ -7,7 +7,7 @@ DriverKit HID or IOHIDUserDevice compatibility mode.
 ## Important Paths
 
 - `Package.swift`: SwiftPM package graph, Swift tools 6.2.
-- `ARCHITECTURE.md`: runtime boundaries and extension rules.
+- `docs/ARCHITECTURE.md`: runtime boundaries and extension rules.
 - `Sources/OpenJoystickDriverKit/`: core daemon library, parsers, profiles,
   virtual backends, XPC/service logic.
 - `Sources/OpenJoystickDriver/`: SwiftUI menu bar app and headless CLI.
@@ -28,7 +28,7 @@ DriverKit HID or IOHIDUserDevice compatibility mode.
 - Compatibility profiles are `sdl2-3`, `apple-gamecontroller`, `generic-hid`,
   `x360-hid`, and `xone-hid`. `sdl2-3` is the default for SDL consumers;
   `apple-gamecontroller` is for native GameController.framework consumers.
-  Detailed Browser Gamepad API and SDL mappings live in `COMPATIBILITY_LAYERS.md`.
+  Detailed Browser Gamepad API and SDL mappings live in `docs/COMPATIBILITY_LAYERS.md`.
 - PCSX2 should use SDL 2/3 Compatibility with user-space-only output.
   The mapped user-space PID differs from DriverKit so stale dext copies stay unmapped.
   SDL-known third-party VID/PIDs are avoided because macOS GameController can
@@ -41,7 +41,7 @@ DriverKit HID or IOHIDUserDevice compatibility mode.
   Windows XInput/XUSB emulation. For native macOS haptics, prefer
   `apple-gamecontroller` and validate with
   `./scripts/ojd diagnose gamecontroller --seconds 5 --rumble`.
-  Detailed mappings live in `COMPATIBILITY_LAYERS.md`.
+  Detailed mappings live in `docs/COMPATIBILITY_LAYERS.md`.
 - Use `./scripts/ojd launch pcsx2` when PCSX2's bundled SDL database lacks the
   OJD mapping; it sets SDL mapping override environment variables and applies
   the known-good daemon routing before launch.

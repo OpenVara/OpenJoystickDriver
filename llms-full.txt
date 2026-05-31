@@ -100,7 +100,7 @@ Validate profile/schema consistency with:
 ## Documentation and Agent Files
 
 - `README.md`: human entry point.
-- `ARCHITECTURE.md`: runtime boundaries, extension rules, and validation contract.
+- `docs/ARCHITECTURE.md`: runtime boundaries, extension rules, and validation contract.
 - `llms.txt`: concise LLM context.
 - `llms-full.txt`: expanded LLM context.
 - `AGENTS.md`: authored coding-agent instructions.
@@ -144,7 +144,7 @@ the Xbox 360 report layout. It is descriptor-backed, but it is not true Windows
 XInput/XUSB emulation. For native macOS haptics, prefer
 `apple-gamecontroller` and validate with
 `./scripts/ojd diagnose gamecontroller --seconds 5 --rumble`.
-Detailed mappings live in `COMPATIBILITY_LAYERS.md`.
+Detailed mappings live in `docs/COMPATIBILITY_LAYERS.md`.
 If the PCSX2 app bundle database lacks the OJD mapping, launch it through
 `./scripts/ojd launch pcsx2`; this sets `SDL_GAMECONTROLLERCONFIG` and
 `SDL_GAMECONTROLLERCONFIG_FILE` without modifying the signed app bundle, and
@@ -159,7 +159,7 @@ focused instead of assuming `SDL-0`.
 GameSir G7 SE was manually verified through hardwaretester.com Gamepad API in
 Xbox One HID compatibility mode as a standard `Xbox Wireless Controller`
 (`VID 045e`, `PID 02ea`). Detailed Browser Gamepad API and SDL compatibility
-mappings live in `COMPATIBILITY_LAYERS.md`. If a mapping is wrong, inspect the
+mappings live in `docs/COMPATIBILITY_LAYERS.md`. If a mapping is wrong, inspect the
 selected compatibility report format and consumer mapping before changing the
 physical controller GIP profile.
 

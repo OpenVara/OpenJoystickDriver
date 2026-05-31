@@ -98,7 +98,7 @@ Sources/OpenJoystickDriverDaemon/ Background daemon executable
 Sources/OpenJoystickDriver/       GUI app (SwiftUI, menu bar) + CLI (--headless)
 Tests/OpenJoystickDriverKitTests/ Unit tests (no hardware required)
 Resources/Schemas/                JSON schemas and per-device schema files
-COMPATIBILITY_LAYERS.md           Consumer-visible compatibility mappings
+docs/COMPATIBILITY_LAYERS.md      Consumer-visible compatibility mappings
 scripts/                          Build, sign, install, uninstall helpers
 ```
 

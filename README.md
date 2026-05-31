@@ -21,7 +21,7 @@ app, or native macOS app.
 - ❌ Sony DualShock 3, Sony DualSense, non-DS4 Bluetooth, and Switch Pro are not implemented.
 
 For the full feature matrix, mapping notes, and per-mode caveats, see
-[COMPATIBILITY_LAYERS.md](COMPATIBILITY_LAYERS.md).
+[docs/COMPATIBILITY_LAYERS.md](docs/COMPATIBILITY_LAYERS.md).
 
 ## Install For Local Development
 
@@ -189,12 +189,12 @@ it with:
 ./scripts/ojd repair stale-dext
 ```
 
-More architecture and contributor detail lives in [ARCHITECTURE.md](ARCHITECTURE.md).
+More architecture and contributor detail lives in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Agent Context
 
 - [AGENTS.md](AGENTS.md) - repo working rules
-- [ARCHITECTURE.md](ARCHITECTURE.md) - runtime boundaries
-- [COMPATIBILITY_LAYERS.md](COMPATIBILITY_LAYERS.md) - feature matrix and mappings
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - runtime boundaries
+- [docs/COMPATIBILITY_LAYERS.md](docs/COMPATIBILITY_LAYERS.md) - feature matrix and mappings
 - [llms.txt](llms.txt) - concise project map
 - [llms-full.txt](llms-full.txt) - expanded implementation context

@@ -97,7 +97,7 @@ All notable changes to OpenJoystickDriver are documented in this file.
   labels.
 - Updated README into a shorter user-first guide.
 - Moved detailed compatibility information into an emoji-based feature matrix in
-  `COMPATIBILITY_LAYERS.md`.
+  `docs/COMPATIBILITY_LAYERS.md`.
 - Clarified Sony controller names: DualShock 4 is supported over USB; DualShock
   3 and DualSense are not implemented.
 
