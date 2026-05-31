@@ -102,7 +102,8 @@ swift test
   rule; document the reason in a same-line comment.
 - **Decimal JSON only.** You must use decimal integers for VID/PID, command codes,
   and all other numeric values. You must not use hex numbers in JSON.
-- **`debugPrint` only.** You must not use `print` or `swift-log`.
+- **Logging.** Prefer the existing lightweight `print`-style diagnostics. You
+  must not add a new logging dependency without repo-wide justification.
 - **Fault isolation.** One parser error must not affect other controllers. You
   must log and skip parser errors; you must not propagate them upward.
 - **macOS 10.15 runtime target.** Avoid broad availability rewrites unless the

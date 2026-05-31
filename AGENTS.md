@@ -12,3 +12,4 @@ Treat the user request as the task; preserve existing behavior. Work from repo e
 
 Validate changes with `rtk ./scripts/ojd validate profiles` and `rtk test swift test`.
 
+Full instructions: `docs/AGENTS_FULL.md`.

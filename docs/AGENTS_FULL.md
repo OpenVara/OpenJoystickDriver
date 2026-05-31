@@ -27,8 +27,7 @@ tests, or manual hardware notes in this repo support it.
   compatibility mode.
 - Flydigi Vader 5S is supported through the GIP path and needs
   `setConfiguration(1)` before claim plus a post-handshake settle delay.
-- DualShock 4 USB/Bluetooth parser support exists, but this repo has no local
-  hardware verification for it.
+- DualShock 4 USB/Bluetooth input and physical rumble are hardware verified.
 - Non-DS4 Bluetooth, DualSense, and Switch Pro support are not implemented.
 
 For the current user-facing feature matrix, see `docs/COMPATIBILITY_LAYERS.md`.
@@ -107,4 +106,3 @@ not as evidence that the controller profile mapping is wrong.
 - `llms-full.txt` is expanded LLM context.
 - `CLAUDE.md`, `GEMINI.md`, and `.github/copilot-instructions.md` should remain
   symlinks to `AGENTS.md`.
-
