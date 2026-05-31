@@ -1,5 +1,13 @@
 // swift-tools-version:6.2
+import Foundation
 import PackageDescription
+
+let useLocalSwiftUSB = ProcessInfo.processInfo.environment["OJD_USE_LOCAL_SWIFTUSB"] == "1"
+let localSwiftUSBPath = "../SwiftUSB"
+let swiftUSBDependency: Package.Dependency =
+  useLocalSwiftUSB && FileManager.default.fileExists(atPath: localSwiftUSBPath)
+    ? .package(path: localSwiftUSBPath)
+    : .package(url: "https://github.com/xsyetopz/SwiftUSB.git", from: "0.1.0")
 
 let package = Package(
   name: "OpenJoystickDriver",
@@ -8,7 +16,7 @@ let package = Package(
     .library(name: "OpenJoystickDriverKit", targets: ["OpenJoystickDriverKit"]),
   ],
   dependencies: [
-   .package(url: "https://github.com/xsyetopz/SwiftUSB.git", from: "0.1.0")
+    swiftUSBDependency,
   ],
   targets: [
     .target(
