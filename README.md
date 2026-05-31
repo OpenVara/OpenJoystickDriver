@@ -18,7 +18,8 @@ app, or native macOS app.
 - ✅ App-facing compatibility modes: SDL 2/3, Apple GameController, Generic HID,
   Xbox 360 HID, and Xbox One HID.
 - 🚧 More xpad-derived Xbox profiles exist but still need local hardware checks.
-- ❌ Sony DualShock 3, Sony DualSense, non-DS4 Bluetooth, and Switch Pro are not implemented.
+- ❌ Sony DualShock 3, Sony DualSense, non-DS4 Bluetooth, and Switch Pro are not
+  implemented.
 
 For the full feature matrix, mapping notes, and per-mode caveats, see
 [docs/COMPATIBILITY_LAYERS.md](docs/COMPATIBILITY_LAYERS.md).
@@ -72,7 +73,7 @@ for stable local testing.
 
 ## Pick A Compatibility Mode
 
-Most users should start with **Compatibility** mode and the **SDL 2/3** identity.
+Start with **Compatibility** mode and the **SDL 2/3** identity.
 
 - Use `SDL 2/3` for Steam, PCSX2, DuckStation, Moonlight/SDL, and most emulator
   or game-launcher paths.

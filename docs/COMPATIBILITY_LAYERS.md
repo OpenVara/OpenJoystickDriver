@@ -1,7 +1,7 @@
 # Compatibility Layers
 
-This page lists what each OJD output mode is for. README stays short; detailed
-mapping and caveats live here.
+Use this page to choose an OJD output mode. Keep detailed mappings and caveats
+here, and keep README short.
 
 ## Legend
 
@@ -62,7 +62,8 @@ CLI examples:
 
 ## App Rumble
 
-OJD can forward app rumble to the physical controller when both sides support it.
+OJD forwards app rumble to the physical controller only when both sides support
+it.
 
 | App-facing report                                                        | Status | Physical target                                          |
 | ------------------------------------------------------------------------ | ------ | -------------------------------------------------------- |
@@ -162,7 +163,7 @@ builds have not enumerated OJD through that path in local testing.
 
 ## Manual Checks
 
-Before calling a mapping fully verified, check the exact app and mode:
+Before marking a mapping verified, you must check the exact app and mode:
 
 1. Browser Gamepad API: buttons and axes match the active identity table.
 2. SDL 2/3: `A2` and `A5` idle at zero, D-pad releases cleanly.

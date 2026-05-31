@@ -1,4 +1,4 @@
-# OpenJoystickDriver Agent Instructions
+# AGENTS.md
 
 OpenJoystickDriver is a macOS userspace gamepad driver. Keep changes grounded in
 current source, controller profile schemas, and observed hardware behavior.
@@ -10,10 +10,10 @@ current source, controller profile schemas, and observed hardware behavior.
 - JSON schemas: `Resources/Schemas/*.schema.json`
 - Build/signing scripts: `scripts/ojd` and `scripts/ojd-*.sh`
 - Swift package graph: `Package.swift`
-- DriverKit project: `OpenJoystickVirtualHIDDevice/`
+- DriverKit project: `DriverKitExtension/`
 
-Do not document behavior as supported unless production code, schemas, tests, or
-manual hardware notes in this repo support it.
+You must not document behavior as supported unless production code, schemas,
+tests, or manual hardware notes in this repo support it.
 
 ## Current Hardware Notes
 
@@ -21,9 +21,11 @@ manual hardware notes in this repo support it.
   compatibility mode.
 - Flydigi Vader 5S is supported through the GIP path and needs
   `setConfiguration(1)` before claim plus a post-handshake settle delay.
-- DualShock 4 USB/Bluetooth parser support exists, but this repo does not currently have
-  local hardware verification for it.
+- DualShock 4 USB/Bluetooth parser support exists, but this repo has no local
+  hardware verification for it.
 - Non-DS4 Bluetooth, DualSense, and Switch Pro support are not implemented.
+
+For the current user-facing feature matrix, see `docs/COMPATIBILITY_LAYERS.md`.
 
 ## Edit Rules
 
@@ -33,8 +35,8 @@ manual hardware notes in this repo support it.
   `Sources/OpenJoystickDriverKit/Resources/Controllers/`.
 - Add a matching `Resources/Schemas/Devices/*.json` file for GIP controllers.
 - Use decimal VID, PID, endpoint, and packet values in JSON files.
-- Keep protocol variants and mapping flags in data where possible; do not bake
-  device quirks into parser code unless the protocol requires it.
+- Keep protocol variants and mapping flags in data where possible; you must not
+  bake device quirks into parser code unless the protocol requires it.
 - Avoid broad rewrites of signing, DriverKit, or daemon lifecycle code without
   targeted validation.
 
@@ -49,6 +51,10 @@ rtk test swift test
 rtk err bash -n scripts/ojd scripts/ojd-*.sh
 ```
 
+If `swift test` fails with a SwiftPM module-cache mismatch (for example
+`_Testing_Foundation` minimum deployment target errors), run
+`./scripts/ojd repair swiftpm-module-cache` and rerun the test.
+
 For backend/runtime changes, also use compact diagnostics:
 
 ```bash
@@ -59,7 +65,7 @@ rtk ./scripts/ojd diagnose sdl3 --seconds 10
 
 Use `rtk summary <cmd>` for one-off noisy runtime probes, `rtk log` or
 `rtk pipe --filter ...` for captured logs, and `rtk run <cmd>` only when raw
-execution should intentionally avoid filtering and tracking. Do not use
+execution should intentionally avoid filtering and tracking. You must not use
 `rtk proxy` for routine tests, validation, app binary runs, `launchctl`, or
 `log show` diagnostics.
 

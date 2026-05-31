@@ -21,46 +21,15 @@ DriverKit HID or IOHIDUserDevice compatibility mode.
 - `scripts/ojd`: supported developer command surface.
 - `scripts/README.md`: signing, provisioning, and notarization notes.
 
-## Current Device State
+## Current Status (Authoritative)
 
-- GameSir G7 SE: GIP USB path works; Xbox One HID compatibility reports are
-  hardware verified through browser Gamepad API.
-- Compatibility profiles are `sdl2-3`, `apple-gamecontroller`, `generic-hid`,
-  `x360-hid`, and `xone-hid`. `sdl2-3` is the default for SDL consumers;
-  `apple-gamecontroller` is for native GameController.framework consumers.
-  Detailed Browser Gamepad API and SDL mappings live in `docs/COMPATIBILITY_LAYERS.md`.
-- PCSX2 should use SDL 2/3 Compatibility with user-space-only output.
-  The mapped user-space PID differs from DriverKit so stale dext copies stay unmapped.
-  SDL-known third-party VID/PIDs are avoided because macOS GameController can
-  claim those virtual devices before SDL's IOKit backend enumerates them.
-- If a stale DriverKit process remains after sysext upgrade, run
-  `./scripts/ojd repair stale-dext`; it kills only OJD dext processes whose
-  executable path does not match the newest installed system-extension copy.
-- Xbox 360 compatibility is an experimental Microsoft-style HID identity using
-  the Xbox 360 report layout. It is descriptor-backed, but it is not true
-  Windows XInput/XUSB emulation. For native macOS haptics, prefer
-  `apple-gamecontroller` and validate with
-  `./scripts/ojd diagnose gamecontroller --seconds 5 --rumble`.
-  Detailed mappings live in `docs/COMPATIBILITY_LAYERS.md`.
-- Use `./scripts/ojd launch pcsx2` when PCSX2's bundled SDL database lacks the
-  OJD mapping; it sets SDL mapping override environment variables and applies
-  the known-good daemon routing before launch.
-- For normal PCSX2 launches, `./scripts/ojd install pcsx2-sdl-db` installs a
-  merged user-data SDL database and `./scripts/ojd install pcsx2-profile`
-  installs a starting input profile. Focus-routed builds can expose multiple
-  OJD SDL instances, so PCSX2 should bind the one that only responds while the
-  PCSX2 window is focused instead of assuming `SDL-0`.
-- Flydigi Vader 5S: GIP USB path supported with endpoint configuration,
-  `setConfiguration(1)` before claim, and post-handshake settle delay.
-- xpad.c Xbox batches: Xbox 360 wired-style profiles use the `Xbox360` parser;
-  selected Xbox One profiles use GIP startup-packet metadata for xpad.c init
-  needs such as Xbox One S power init, Elite 2 extra input, HORI ACK, and PowerA
-  rumble kick/stop. These profiles are not locally hardware verified. README.md
-  carries attribution to Linux `drivers/input/joystick/xpad.c`.
-- DualShock 4 v1/v2: USB/Bluetooth HID parser profiles exist, not locally hardware
-  verified in this repo.
-- Generic USB HID gamepads: basic fallback.
-- Non-DS4 Bluetooth, DualSense, and Switch Pro: not implemented.
+- User-facing device/mode matrix: `docs/COMPATIBILITY_LAYERS.md`.
+- Hardware verification notes and user setup: `README.md`.
+- Repo change rules and validation commands: `AGENTS.md`.
+- Deeper implementation notes (PCSX2 quirks, xpad-derived profiles): `llms-full.txt`.
+
+You must keep controller support status out of `llms*.txt`. Update `README.md`
+and `docs/COMPATIBILITY_LAYERS.md` instead.
 
 ## Core Commands
 

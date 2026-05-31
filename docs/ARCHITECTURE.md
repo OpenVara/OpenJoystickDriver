@@ -16,7 +16,7 @@ Physical USB/HID device
 ```
 
 The pipeline boundary is per controller. One device failing to parse, reconnect,
-or send output should not take down another connected controller.
+or send output must not take down another connected controller.
 
 ## Controller Profiles
 
@@ -33,10 +33,10 @@ Resources/Schemas/Devices/
 ```
 
 The runtime catalog loads controller profiles directly. The old monolithic
-device catalog shape is not a supported runtime input. New devices should add
+device catalog shape is not a supported runtime input. New devices must add
 one controller profile plus, for GIP devices, a matching device schema.
 
-Device-specific USB behavior belongs in data:
+Device-specific USB behavior must live in data:
 
 - endpoint addresses
 - `setConfiguration(1)` before claim
@@ -46,7 +46,7 @@ Device-specific USB behavior belongs in data:
 - GIP startup packet sequence
 - preferred virtual output backends
 
-Parser code should only carry behavior required by a protocol family.
+Parser code must only carry behavior required by a protocol family.
 
 ## Protocol Extensions
 
@@ -136,3 +136,7 @@ Runtime validation for backend changes:
 
 DriverKit approval, TCC permissions, physical rumble, and real controller input
 remain hardware/runtime checks. CI cannot prove them end to end.
+
+## Design Notes
+
+Architecture background: `docs/INPUT_COMPATIBILITY_SOURCE_STUDY.md`.

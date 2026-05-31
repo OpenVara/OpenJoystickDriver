@@ -2,15 +2,15 @@
 
 ## Project Purpose
 
-OpenJoystickDriver is a macOS userspace gamepad driver. It exists because macOS
-does not provide a broad, xpad-like userspace-friendly controller stack for
-modern gamepads. The project reads physical USB controllers, normalizes reports,
-and exposes virtual controller output for games, emulators, browsers, and engine
-integration testing.
+OpenJoystickDriver is a macOS userspace gamepad driver. It provides an xpad-like
+userspace-friendly controller stack for modern gamepads on macOS. The project
+reads physical USB controllers, normalizes reports, and exposes virtual
+controller output for games, emulators, browsers, and engine integration
+testing.
 
 Primary users:
 
-- macOS players using controllers unsupported or poorly handled by native stacks.
+- macOS players using controllers not supported or poorly handled by native stacks.
 - Emulator users, especially SDL/GameController.framework consumers.
 - Game studios and engine integrators that need predictable controller input.
 - Contributors adding controller profiles and protocol support.
@@ -32,7 +32,7 @@ IOHIDUserDevice backend     -> consumer-facing virtual controller profiles
 ```
 
 Each controller is processed by an isolated `DevicePipeline` actor. One
-controller failing should not take down another controller pipeline. The daemon
+controller failing must not take down another controller pipeline. The daemon
 owns runtime input/output. The GUI and CLI communicate with the daemon through
 XPC status/control APIs.
 
@@ -52,7 +52,8 @@ XPC status/control APIs.
   for the generic user-space OJD device. SDL3/PCSX2 needs `platform:macOS`;
   `platform:Mac OS X` is SDL2-era and can be ignored by SDL 3.2.x.
 - `Tests/OpenJoystickDriverKitTests/`: package tests for core behavior.
-- Hardware-facing checks live in package tests or `./scripts/ojd diagnose ...` commands and should skip cleanly without local device access.
+- Hardware-facing checks live in package tests or `./scripts/ojd diagnose ...`
+  commands and must skip cleanly without local device access.
 
 ## Controller and Schema Model
 
@@ -78,14 +79,14 @@ Rules:
 
 - Use repo raw GitHub URLs for `$schema`, for example
   `https://raw.githubusercontent.com/xsyetopz/OpenJoystickDriver/main/Resources/Schemas/controller-profile.schema.json`.
-- Do not commit local file URL schema references.
+- You must not commit local file URL schema references.
 - Use decimal integers for VID, PID, endpoint addresses, packet bytes, and USB
   class values.
 - GIP controller profiles for locally verified hardware must have matching
   device schemas.
 - Device-specific USB behavior belongs in data, such as
   `input.usb.configuration` or `input.usb.post_handshake_settle_ms`.
-- Protocol family and mapping differences should be represented as
+- Protocol family and mapping differences must be represented as
   `protocol.variant` and `protocol.mapping_flags` where possible, following the
   Linux `xpad.c` style of data-driven device families.
 - GIP startup differences belong in `protocol.startup_packets`, not parser
@@ -108,75 +109,38 @@ Validate profile/schema consistency with:
 - `GEMINI.md`: symlink to `AGENTS.md`.
 - `.github/copilot-instructions.md`: symlink to `../AGENTS.md`.
 
-Edit `AGENTS.md` only for agent instructions. Keep the symlinks intact.
+You must edit `AGENTS.md` only for agent instructions. Keep the symlinks intact.
 
-## Current Devices
+## Current Support and Device Data
 
-| Device | VID | PID | Protocol | State |
-| --- | ---: | ---: | --- | --- |
-| GameSir G7 SE Controller for Xbox | 13623 | 4112 | GIP, xboxOne variant | Hardware verified |
-| Flydigi Vader 5S | 14295 | 10241 | GIP, xboxOne variant | Supported with device-specific USB config |
-| xpad.c Xbox 360 batch | varies | varies | Xbox360 | Profiled, not locally hardware verified |
-| xpad.c Xbox One batch | varies | varies | GIP, xboxOne variant | Profiled with source-backed startup packets, not locally hardware verified |
-| DualShock 4 v1 | 1356 | 1476 | DS4 USB/Bluetooth HID | Implemented, not locally hardware verified |
-| DualShock 4 v2 | 1356 | 2508 | DS4 USB/Bluetooth HID | Implemented, not locally hardware verified |
+Authoritative user-facing support status and mappings live in:
 
-The xpad.c Xbox batches are attributed in README.md to Linux
-`drivers/input/joystick/xpad.c`; preserve that attribution when adding more
-xpad-derived controller metadata or GIP startup-packet selections.
+- `docs/COMPATIBILITY_LAYERS.md`
+- `README.md`
 
-Compatibility profiles are `sdl2-3`, `apple-gamecontroller`, `generic-hid`,
-`x360-hid`, and `xone-hid`. `sdl2-3` is the default OJD-owned identity for SDL
-consumers such as Steam and PCSX2. `apple-gamecontroller` is the Xbox-compatible
-HID surface accepted by Apple's GameController.framework as a native
-`GCController`. `generic-hid` is for descriptor-driven apps. `x360-hid` and
-`xone-hid` are experimental hardware-spoof profiles.
-PCSX2 should use SDL 2/3 Compatibility with user-space-only output. The mapped
-user-space PID differs from DriverKit so stale dext copies stay unmapped.
-Do not replace this with an SDL-known third-party VID/PID: macOS
-GameController.framework can claim those virtual identities before SDL's IOKit
-backend enumerates them.
-If a stale DriverKit process remains after sysext upgrade, run
-`./scripts/ojd repair stale-dext`; it kills only OJD dext processes whose
-executable path does not match the newest installed system-extension copy.
-Xbox 360 compatibility is an experimental Microsoft-style HID identity using
-the Xbox 360 report layout. It is descriptor-backed, but it is not true Windows
-XInput/XUSB emulation. For native macOS haptics, prefer
-`apple-gamecontroller` and validate with
-`./scripts/ojd diagnose gamecontroller --seconds 5 --rumble`.
-Detailed mappings live in `docs/COMPATIBILITY_LAYERS.md`.
-If the PCSX2 app bundle database lacks the OJD mapping, launch it through
-`./scripts/ojd launch pcsx2`; this sets `SDL_GAMECONTROLLERCONFIG` and
-`SDL_GAMECONTROLLERCONFIG_FILE` without modifying the signed app bundle, and
-best-effort applies `compat sdl2-3` plus `output secondary` before launch.
-For normal PCSX2 launches, `./scripts/ojd install pcsx2-sdl-db` installs a
-merged user-data SDL database at `~/Library/Application Support/PCSX2`, and
-`./scripts/ojd install pcsx2-profile` installs an `OpenJoystickDriver` input
-profile template. Focus-routed builds can expose multiple OJD SDL instances, so
-PCSX2 should bind the OJD instance that only responds while the PCSX2 window is
-focused instead of assuming `SDL-0`.
+Authoritative device identifiers and per-device quirks live in:
 
-GameSir G7 SE was manually verified through hardwaretester.com Gamepad API in
-Xbox One HID compatibility mode as a standard `Xbox Wireless Controller`
-(`VID 045e`, `PID 02ea`). Detailed Browser Gamepad API and SDL compatibility
-mappings live in `docs/COMPATIBILITY_LAYERS.md`. If a mapping is wrong, inspect the
-selected compatibility report format and consumer mapping before changing the
-physical controller GIP profile.
+- `Sources/OpenJoystickDriverKit/Resources/Controllers/`
+- `Resources/Schemas/Devices/`
 
-## Flydigi Vader 5S Notes
+You must not duplicate controller support status in `llms*.txt`. Update
+`README.md` and `docs/COMPATIBILITY_LAYERS.md` first.
 
-The Vader 5S profile uses:
+Implementation notes:
 
-- USB vendor-specific class `255`
-- interface `0`
-- IN endpoint `129`
-- OUT endpoint `1`
-- `setConfiguration(1)` before claim
-- `post_handshake_settle_ms` of `200`
-- GIP `xboxOne` variant
-
-Keep those details in the controller profile and device schema unless new
-hardware evidence contradicts them.
+- Compatibility profile IDs are `sdl2-3`, `apple-gamecontroller`, `generic-hid`,
+  `x360-hid`, and `xone-hid`.
+- PCSX2 must use SDL 2/3 Compatibility with user-space-only output. The
+  user-space PID must differ from DriverKit so stale dext copies stay unmapped.
+  You must not replace this with an SDL-known third-party VID/PID: macOS
+  GameController.framework can claim those identities before SDL's IOKit backend
+  enumerates them.
+- If a stale DriverKit process remains after a system-extension upgrade, run
+  `./scripts/ojd repair stale-dext`. It kills only OJD dext processes whose
+  executable path does not match the newest installed system-extension copy.
+- README attributes xpad-derived controller metadata to Linux
+  `drivers/input/joystick/xpad.c`. You must preserve that attribution when
+  adding more xpad-derived metadata or GIP startup-packet selections.
 
 ## Build, Test, and Diagnostics
 

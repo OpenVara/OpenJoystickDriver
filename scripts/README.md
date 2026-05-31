@@ -4,7 +4,7 @@ This folder contains the build/signing scripts for OpenJoystickDriver.
 
 ## One-time setup
 
-### 1) Install provisioning profiles
+### 1. Install provisioning profiles
 
 The scripts look for provisioning profiles at:
 
@@ -36,7 +36,7 @@ If something fails, run the signing doctor (safe output; no Apple ID / no full s
 ./scripts/ojd signing doctor
 ```
 
-### 2) Ensure Keychain identities exist
+### 2. Ensure Keychain identities exist
 
 You should see at least:
 
@@ -48,7 +48,7 @@ security find-identity -v -p codesigning
 ```
 
 The Team ID in your provisioning profiles must match the Team ID encoded in your certificate **Subject OU**.
-Do not trust the `(...)` suffix in the Keychain display name as the Team ID.
+You must not trust the `(...)` suffix in the Keychain display name as the Team ID.
 
 If Keychain Access shows “not trusted” but `security find-identity` says the identity is valid, you can usually ignore the UI.
 
@@ -118,7 +118,7 @@ certificate’s **CN** (the `(...)` part of the display name). If those disagree
 
 This repo’s `./scripts/ojd signing configure` writes `CODESIGN_IDENTITY` as a 40‑hex SHA1 for that reason.
 
-### 3) Generate `.env.dev` and `.env.release`
+### 3. Generate `.env.dev` and `.env.release`
 
 This repo has a helper that reads your Keychain + installed profiles and writes both env files:
 
