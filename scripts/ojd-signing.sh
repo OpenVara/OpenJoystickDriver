@@ -4,7 +4,7 @@
 # Human-facing entrypoint:
 #   ./scripts/ojd signing <subcommand>
 #
-# Default behavior (no args): generates `scripts/.env.dev` and `scripts/.env.release`.
+# Default behavior (no args): generates `.env.dev` and `.env.release` in the project root.
 #
 # Goals:
 # - No manual copy/paste of identities or Team IDs
@@ -24,6 +24,7 @@ if [[ "$cmd" == "-h" || "$cmd" == "--help" || "$cmd" == "help" ]]; then
   cat <<'TXT'
 Usage:
   ./scripts/ojd signing install-profiles [~/Documents/Profiles]
+  ./scripts/ojd signing ci-release-setup
   ./scripts/ojd signing configure
   ./scripts/ojd signing doctor
   ./scripts/ojd signing audit [paths...]
@@ -62,6 +63,90 @@ cmd_install_profiles() {
 
   echo "Installed profiles to: $DST"
   ls -la "$DST" | awk '/OpenJoystickDriver/ {print "  " $9}'
+}
+
+cmd_ci_release_setup() {
+  # Import release signing material from GitHub Actions secrets.
+  #
+  # CI entrypoint:
+  #   ./scripts/ojd signing ci-release-setup
+  #
+  # Required environment variables:
+  #   APPLE_DEVELOPMENT_CERT_BASE64
+  #   DEVELOPER_ID_APPLICATION_CERT_BASE64
+  #   CERTIFICATE_SECRET
+  #   KEYCHAIN_SECRET
+  #   RUNNER_TEMP
+  #   OPENJOYSTICKDRIVER_GUI_DEVID_PROFILE_BASE64
+  #   OPENJOYSTICKDRIVER_DAEMON_DEVID_PROFILE_BASE64
+  #   OPENJOYSTICKDRIVER_DEXT_PROFILE_BASE64
+
+  require_var() {
+    local name="$1"
+    [[ -n "${!name:-}" ]] || die "Missing required environment variable: $name"
+  }
+
+  write_base64_file() {
+    local name="$1" out="$2"
+    require_var "$name"
+    printf '%s' "${!name}" | base64 --decode >"$out"
+  }
+
+  require_var APPLE_DEVELOPMENT_CERT_BASE64
+  require_var DEVELOPER_ID_APPLICATION_CERT_BASE64
+  require_var CERTIFICATE_SECRET
+  require_var KEYCHAIN_SECRET
+  require_var RUNNER_TEMP
+  require_var OPENJOYSTICKDRIVER_GUI_DEVID_PROFILE_BASE64
+  require_var OPENJOYSTICKDRIVER_DAEMON_DEVID_PROFILE_BASE64
+  require_var OPENJOYSTICKDRIVER_DEXT_PROFILE_BASE64
+
+  local keychain_path="$RUNNER_TEMP/openjoystickdriver-release.keychain-db"
+  local profiles_dir="$HOME/Library/MobileDevice/Provisioning Profiles"
+  local payload_dir="$RUNNER_TEMP/openjoystickdriver-release-payloads"
+
+  mkdir -p "$profiles_dir" "$payload_dir"
+
+  echo "Creating temporary signing keychain..."
+  security create-keychain -p "$KEYCHAIN_SECRET" "$keychain_path"
+  security set-keychain-settings -lut 21600 "$keychain_path"
+  security unlock-keychain -p "$KEYCHAIN_SECRET" "$keychain_path"
+  security list-keychains -d user -s "$keychain_path" "$HOME/Library/Keychains/login.keychain-db"
+
+  local apple_dev_payload="$payload_dir/apple-development-cert.blob"
+  local developer_id_payload="$payload_dir/developer-id-application-cert.blob"
+  write_base64_file APPLE_DEVELOPMENT_CERT_BASE64 "$apple_dev_payload"
+  write_base64_file DEVELOPER_ID_APPLICATION_CERT_BASE64 "$developer_id_payload"
+
+  echo "Importing signing certificates..."
+  security import "$apple_dev_payload" -f pkcs12 -k "$keychain_path" -P "$CERTIFICATE_SECRET" -T /usr/bin/codesign -T /usr/bin/security
+  security import "$developer_id_payload" -f pkcs12 -k "$keychain_path" -P "$CERTIFICATE_SECRET" -T /usr/bin/codesign -T /usr/bin/security
+  security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_SECRET" "$keychain_path"
+
+  echo "Installing provisioning profiles..."
+  write_base64_file OPENJOYSTICKDRIVER_GUI_DEVID_PROFILE_BASE64 "$profiles_dir/OpenJoystickDriver_DevID.provisionprofile"
+  write_base64_file OPENJOYSTICKDRIVER_DAEMON_DEVID_PROFILE_BASE64 "$profiles_dir/OpenJoystickDriverDaemon_DevID.provisionprofile"
+  write_base64_file OPENJOYSTICKDRIVER_DEXT_PROFILE_BASE64 "$profiles_dir/OpenJoystickDriver_VirtualHIDDevice.provisionprofile"
+
+  echo "Generating release signing environment..."
+  (
+    cd "$PROJECT_DIR"
+    GUI_DEV_PROFILE="$profiles_dir/OpenJoystickDriver_DevID.provisionprofile" \
+      DAEMON_DEV_PROFILE="$profiles_dir/OpenJoystickDriverDaemon_DevID.provisionprofile" \
+      ./scripts/ojd signing configure
+  )
+
+  local release_env_file="$PROJECT_DIR/.env.release"
+  if [[ ! -f "$release_env_file" ]] \
+    || ! grep -q '^CODESIGN_IDENTITY=' "$release_env_file" \
+    || ! grep -q '^GUI_CODESIGN_IDENTITY=' "$release_env_file" \
+    || ! grep -q '^DAEMON_CODESIGN_IDENTITY=' "$release_env_file"; then
+    die "Release signing is not configured; fix the certificate/profile mismatch reported above."
+  fi
+
+  echo "Release signing setup complete."
+  echo "Safe identity summary:"
+  security find-identity -v -p codesigning "$keychain_path" | awk '/Apple Development:|Developer ID Application:/ {print "  " $2}'
 }
 
 cmd_audit() {
@@ -405,6 +490,7 @@ PY
 
 case "$cmd" in
   install-profiles) cmd_install_profiles "${1:-}"; exit 0 ;;
+  ci-release-setup) cmd_ci_release_setup; exit 0 ;;
   audit) cmd_audit "$@"; exit 0 ;;
   cert-info) cmd_cert_info "$@"; exit 0 ;;
   profile-info) cmd_profile_info "$@"; exit 0 ;;

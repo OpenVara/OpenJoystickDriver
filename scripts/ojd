@@ -27,12 +27,13 @@ Commands:
   bump-version <version>      Update release version references
 
   signing install-profiles    Copy profiles from ~/Documents/Profiles into MobileDevice
-  signing configure            Generate scripts/.env.dev + scripts/.env.release from Keychain + profiles
+  signing configure            Generate .env.dev + .env.release from Keychain + profiles
   signing doctor               Diagnose common cert/profile mismatch errors (safe output)
   signing audit [paths...]     Audit profiles without leaking identifiers
   signing cert-info <cer>      Show safe-ish .cer info (Team ID = Subject OU)
   signing profile-info <pp>    Show safe-ish profile embedded cert info
   signing import-embedded <pp> Import embedded cert from a profile into Keychain
+  signing ci-release-setup     Import GitHub Actions release secrets (CI only)
   signing export-github-secrets
                                Write/import GitHub Actions release secrets
 
@@ -55,6 +56,7 @@ Commands:
   diagnose pcsx2-latency      Compare native SDL3 vs PCSX2/Rosetta SDL3 input timing
   diagnose backends           Run current backend acceptance loop
   repair stale-dext           Kill stale DriverKit process copies after upgrade
+  repair swiftpm-module-cache Clear SwiftPM module caches under `.build/` (fixes toolchain/target mismatches)
   validate profiles           Validate bundled controller profiles
   launch pcsx2                Launch PCSX2 with the OpenJoystickDriver SDL mapping override
   launch sdl-gamecontroller <app>
@@ -147,6 +149,9 @@ case "$cmd" in
   signing)
     sub="${1:-}"; shift || true
     case "$sub" in
+      ""|-h|--help|help)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-signing.sh" help
+        ;;
       install-profiles)
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-signing.sh" install-profiles "${1:-}"
         ;;
@@ -168,11 +173,14 @@ case "$cmd" in
       import-embedded)
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-signing.sh" import-embedded "$@"
         ;;
+      ci-release-setup)
+        exec /usr/bin/env bash "$SCRIPT_DIR/ojd-signing.sh" ci-release-setup "$@"
+        ;;
       export-github-secrets)
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-github-secrets.sh" "$@"
         ;;
       *)
-        die "Unknown: signing $sub (expected: install-profiles | configure | doctor | audit | cert-info | profile-info | import-embedded | export-github-secrets)"
+        die "Unknown: signing $sub (expected: install-profiles | configure | doctor | audit | cert-info | profile-info | import-embedded | ci-release-setup | export-github-secrets)"
         ;;
     esac
     ;;
@@ -240,8 +248,25 @@ case "$cmd" in
       stale-dext)
         exec /usr/bin/env bash "$SCRIPT_DIR/ojd-repair-stale-dext.sh" "$@"
         ;;
+      swiftpm-module-cache)
+        (
+          cd "$PROJECT_DIR"
+          if [[ ! -d ".build" ]]; then
+            echo "No .build directory; nothing to clean."
+            exit 0
+          fi
+
+          removed=0
+          while IFS= read -r -d '' dir; do
+            rm -rf "$dir"
+            removed=$((removed + 1))
+          done < <(find ".build" -type d -name 'ModuleCache' -print0 2>/dev/null || true)
+
+          echo "Removed $removed SwiftPM module cache directories."
+        )
+        ;;
       *)
-        die "Unknown: repair $sub (expected: stale-dext)"
+        die "Unknown: repair $sub (expected: stale-dext | swiftpm-module-cache)"
         ;;
     esac
     ;;
